@@ -1,0 +1,9 @@
+tests: tests/**/*.spec.ts
+browser:
+  engine: chromium
+  headless: true
+  timeout: 15000
+output:
+  dir: ./skeptic-output
+  reporters:
+    - json
