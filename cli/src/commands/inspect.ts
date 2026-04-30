@@ -4,12 +4,14 @@
 //  and the cross-process-vs-volatile-ref footer are original.)
 
 import { setTimeout as delay } from "node:timers/promises";
+import { resolve as resolvePath } from "node:path";
 import type { Browser, BrowserContext, Page } from "playwright";
 import { loadPlaywright } from "../utils/playwright-loader.js";
 import { getDeviceProfile } from "../config/device-profiles.js";
 import { logger } from "../utils/logger.js";
 import { ExecutionContext } from "../executor/context.js";
 import { snapshot, type SnapshotOptions } from "../api/snapshot.js";
+import type { AnnotationMapEntry } from "../api/screenshot.js";
 import type { AriaRefEntry } from "../executor/aria-ref-types.js";
 
 export interface InspectCommandOptions {
@@ -22,7 +24,11 @@ export interface InspectCommandOptions {
   wait?: string;
   connect?: string;
   withPlaywrightHints?: boolean;
-  // TODO(B4): --annotated and --annotate-output land with annotated-screenshot bundle.
+  /** When set, capture an annotated PNG (numbered badges over each interactive ref)
+   *  in addition to the YAML tree. Pairs with `--annotate-output` to override the
+   *  default `./skeptic-inspect-<ts>.png` path. */
+  annotated?: boolean;
+  annotateOutput?: string;
 }
 
 interface InspectJsonOutput {
@@ -43,6 +49,8 @@ interface InspectJsonOutput {
     aria: number;
     cursorInteractive: number;
   };
+  annotations?: AnnotationMapEntry[];
+  annotatedPath?: string;
 }
 
 const DEFAULT_WAIT_MS = 1500;
@@ -97,10 +105,28 @@ export const runInspect = async (
     };
     const tree = await snapshot(page, ctx, snapshotOpts);
 
+    let annotations: AnnotationMapEntry[] | undefined;
+    let annotatedPath: string | undefined;
+    if (opts.annotated) {
+      const outPath = resolvePath(
+        opts.annotateOutput ?? `./skeptic-inspect-${Date.now()}.png`,
+      );
+      // Reuse the fixture's annotation pipeline so PNG layout, cleanup-in-finally,
+      // and the PII-safe annotation-map shape stay byte-identical between the
+      // `screenshot()` fixture method and `skeptic inspect --annotated`.
+      const { captureAnnotatedScreenshot } = await import("../api/screenshot.js");
+      const result = await captureAnnotatedScreenshot(page, outPath, {
+        fullPage: false,
+        scope: opts.selector ?? "body",
+      });
+      annotations = result.annotations;
+      annotatedPath = result.path;
+    }
+
     if (opts.json) {
-      emitJson(url, tree, opts);
+      emitJson(url, tree, opts, annotations, annotatedPath);
     } else {
-      emitYaml(tree, opts);
+      emitYaml(tree, opts, annotations, annotatedPath);
     }
   } finally {
     try {
@@ -202,7 +228,12 @@ const buildPlaywrightHint = (entry: AriaRefEntry): string | undefined => {
   return `page.getByRole(${JSON.stringify(entry.role)}${namePart})${nthPart}`;
 };
 
-const emitYaml = (tree: RenderedTree, opts: InspectCommandOptions): void => {
+const emitYaml = (
+  tree: RenderedTree,
+  opts: InspectCommandOptions,
+  annotations?: AnnotationMapEntry[],
+  annotatedPath?: string,
+): void => {
   // Emit the rendered tree first.
   process.stdout.write(tree.yaml);
   if (!tree.yaml.endsWith("\n")) process.stdout.write("\n");
@@ -223,6 +254,20 @@ const emitYaml = (tree: RenderedTree, opts: InspectCommandOptions): void => {
     }
   }
 
+  // Annotated-PNG ladder. One line per labeled badge — agent-browser-compatible
+  // shape: `[<label>] @<ref> <role> "<name>" /url: <href>`.
+  if (annotations && annotations.length > 0) {
+    process.stdout.write("\nAnnotations:\n");
+    for (const a of annotations) {
+      const refEntry = tree.refs.get(a.ref);
+      const namePart =
+        refEntry && refEntry.name && refEntry.name.length > 0 ? ` "${refEntry.name}"` : ` ""`;
+      const urlPart = refEntry?.href ? ` /url: ${refEntry.href}` : "";
+      process.stdout.write(`  [${a.label}] @${a.ref} ${a.role}${namePart}${urlPart}\n`);
+    }
+    if (annotatedPath) process.stdout.write(`\nAnnotated PNG: ${annotatedPath}\n`);
+  }
+
   // Footer.
   const total = tree.ariaRefCount + tree.cursorInteractiveCount;
   process.stdout.write(
@@ -232,7 +277,13 @@ const emitYaml = (tree: RenderedTree, opts: InspectCommandOptions): void => {
   );
 };
 
-const emitJson = (url: string, tree: RenderedTree, opts: InspectCommandOptions): void => {
+const emitJson = (
+  url: string,
+  tree: RenderedTree,
+  opts: InspectCommandOptions,
+  annotations?: AnnotationMapEntry[],
+  annotatedPath?: string,
+): void => {
   const out: InspectJsonOutput = {
     url,
     yaml: tree.yaml,
@@ -258,6 +309,10 @@ const emitJson = (url: string, tree: RenderedTree, opts: InspectCommandOptions):
       cursorInteractive: tree.cursorInteractiveCount,
     },
   };
+  if (annotations && annotations.length > 0) {
+    out.annotations = annotations;
+  }
+  if (annotatedPath) out.annotatedPath = annotatedPath;
   process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
 };
 

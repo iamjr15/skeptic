@@ -34,8 +34,14 @@ export default defineConfig({
   // output uses a `__require` stub that throws on Node built-ins.
   // The shebang already lives at the top of bin/skeptic.ts; esbuild preserves
   // entry shebangs.
+  // The license comment lands first (some bundlers reorder; keeping it at the
+  // head of the banner ensures it's the very first line of every emitted .mjs).
+  // The createRequire shim that follows is load-bearing for SEA-mode
+  // `node:sea` resolution and for CJS deps that call `require("events")`
+  // internally — do not remove or split.
   banner: {
     js: [
+      "/*! @license skeptic-cli — see LICENSES.md for third-party attributions */",
       "import { createRequire as __skepticCreateRequire } from 'node:module';",
       "const require = __skepticCreateRequire(import.meta.url);",
     ].join("\n"),

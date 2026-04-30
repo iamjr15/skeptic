@@ -4,7 +4,7 @@
  *
  *   list_flows     → list_tests       (discovery only — never executes)
  *   validate_flow  → validate_tests   (tsx import sanity + tsc --noEmit)
- *   generate_flow  → generate_test    (B5.5 stub — emits a hand-rolled template)
+ *   generate_flow  → generate_test    (AI-driven; routes through generateFromDescription)
  *   run_flow       → run_test         (thin RPC over the runner)
  *
  * Discovery (`list_tests`/`validate_tests`) imports specs in throwaway workers
@@ -40,6 +40,10 @@ import {
   mergeImportErrors,
   type SpecValidateFileResult,
 } from "./spec-validation.js";
+import type { AIClient } from "../ai/ai-client.js";
+import { createAIClient, AIFeatureNotBuiltError } from "../ai/client-factory.js";
+import { missingClientMessage } from "../ai/security.js";
+import { generateFromDescription } from "../ai/flow-generator.js";
 
 interface ListTestsResult {
   files: Array<{
@@ -223,39 +227,24 @@ const manifestsToListResult = (manifests: FileManifest[]): ListTestsResult => ({
 });
 
 /**
- * B5.5 placeholder: the AI-driven generator lands later. For now `generate_test`
- * emits a deterministic hand-rolled template so agents can wire up the call
- * shape without waiting on the AI side. The note string makes the stub status
- * explicit in the response so callers don't ship its output as final.
+ * Build a `generate_test` response for the no-AI fallback path. We don't crash
+ * the MCP call — agents asking for code generation against a binary that
+ * lacks AI need a structured signal they can react to (e.g. surface a config
+ * hint to the user) without losing the response frame.
  */
-const buildStubTest = (description: string, url: string | undefined): GenerateTestResult => {
-  const safeName = description.replace(/[^a-zA-Z0-9 _-]/g, "").trim() || "generated test";
-  const targetUrl = url ?? "https://example.com";
-  const filename = `${safeName.replace(/\s+/g, "-").toLowerCase()}.spec.ts`;
-  const source = [
-    `// B5.5: AI-driven generation lands here. TODO.`,
-    `// Description: ${description}`,
-    `import { test, expect } from "skeptic-cli";`,
-    ``,
-    `test(${JSON.stringify(safeName)}, async ({ page, screenshot }) => {`,
-    `  await page.goto(${JSON.stringify(targetUrl)});`,
-    `  await expect(page).toHaveURL(/.*/);`,
-    `  await screenshot(${JSON.stringify(safeName)});`,
-    `});`,
-    ``,
-  ].join("\n");
-  return {
-    source,
-    filename,
-    notes: [
-      "generate_test is a B1.5 stub — AI-driven generation lands in B5.5 (see plan §B5.5).",
-      "The returned source is a hand-rolled template; treat it as scaffolding, not as a finished test.",
-    ],
-  };
-};
+const buildGenerateFallback = (note: string): GenerateTestResult => ({
+  source: "",
+  filename: "",
+  notes: [note],
+});
 
 interface BuildMcpServerOptions {
   cwd?: string;
+  /**
+   * Test seam: inject a pre-built AIClient instead of calling
+   * `createAIClient(config.ai)`. Production callers leave this undefined.
+   */
+  aiClientOverride?: AIClient | null;
 }
 
 /**
@@ -392,11 +381,13 @@ export const buildMcpServer = (options: BuildMcpServerOptions = {}): McpServer =
   server.registerTool(
     "generate_test",
     {
-      title: "Generate skeptic test (B5.5 stub)",
+      title: "Generate skeptic test",
       description:
-        "B1.5 STUB — AI-driven generation lands in B5.5. Emits a hand-rolled *.spec.ts template built around " +
-        "the public test API (`import { test, expect } from \"skeptic-cli\"`). The response includes a `notes[]` " +
-        "array calling out the stub status so callers don't ship the template as a finished test.",
+        "Generate a *.spec.ts file from a natural-language description using the configured AI provider. " +
+        "The output is run through `tsc --noEmit` and dynamic-imported to verify it registers ≥1 `test(...)` call " +
+        "before being returned. When no API key is configured (or AI assertions weren't built into the binary), " +
+        "the call returns an empty `source` with a `notes[]` entry explaining how to enable AI — agents should " +
+        "surface that note rather than treat the empty source as a valid test.",
       inputSchema: {
         description: z.string().describe("Natural-language description of the test to generate."),
         url: z.string().url().optional().describe("Target URL the test should navigate to."),
@@ -408,11 +399,77 @@ export const buildMcpServer = (options: BuildMcpServerOptions = {}): McpServer =
       },
     },
     async (args): Promise<CallToolResult> => {
-      const result = buildStubTest(args.description, args.url);
-      return {
-        content: [{ type: "text", text: JSON.stringify(result) }],
-        structuredContent: result as unknown as Record<string, unknown>,
-      };
+      const cfg = loadConfig({ searchCwd: cwd });
+      const baseUrl = args.url ?? cfg.url;
+
+      // Resolve the AIClient. The override is the test seam; production
+      // calls run through createAIClient. Both paths use the same fallback
+      // shape so MCP callers don't have to branch on which built the binary.
+      let client: AIClient | undefined;
+      try {
+        if (options.aiClientOverride !== undefined) {
+          client = options.aiClientOverride ?? undefined;
+        } else {
+          client = await createAIClient({
+            provider: cfg.ai.provider,
+            ...(cfg.ai.apiKey !== undefined ? { apiKey: cfg.ai.apiKey } : {}),
+            ...(cfg.ai.model !== undefined ? { model: cfg.ai.model } : {}),
+          });
+        }
+      } catch (err) {
+        if (err instanceof AIFeatureNotBuiltError) {
+          const fallback = buildGenerateFallback(err.message);
+          return {
+            content: [{ type: "text", text: JSON.stringify(fallback) }],
+            structuredContent: fallback as unknown as Record<string, unknown>,
+          };
+        }
+        throw err;
+      }
+
+      if (!client) {
+        const fallback = buildGenerateFallback(missingClientMessage(cfg.ai));
+        return {
+          content: [{ type: "text", text: JSON.stringify(fallback) }],
+          structuredContent: fallback as unknown as Record<string, unknown>,
+        };
+      }
+
+      try {
+        const generated = await generateFromDescription(
+          client,
+          args.description,
+          baseUrl,
+          cwd,
+        );
+        const first = generated[0];
+        if (!first) {
+          const fallback = buildGenerateFallback(
+            "[skeptic] generator returned no results — try refining the description.",
+          );
+          return {
+            content: [{ type: "text", text: JSON.stringify(fallback) }],
+            structuredContent: fallback as unknown as Record<string, unknown>,
+          };
+        }
+        const result: GenerateTestResult = {
+          source: first.source,
+          filename: first.filename,
+          notes: first.diagnostics,
+        };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result) }],
+          structuredContent: result as unknown as Record<string, unknown>,
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        const fallback = buildGenerateFallback(message);
+        return {
+          content: [{ type: "text", text: JSON.stringify(fallback) }],
+          structuredContent: fallback as unknown as Record<string, unknown>,
+          isError: true,
+        };
+      }
     },
   );
 

@@ -237,6 +237,8 @@ program
   .option("--wait <ms>", "extra settle before snapshot (default 1500)")
   .option("--connect <url>", "CDP auto-discover and attach (host:port or ws URL)")
   .option("--with-playwright-hints", "also emit Playwright snippet per ref")
+  .option("--annotated", "capture an annotated PNG with numbered badges over each ref")
+  .option("--annotate-output <path>", "output path for the annotated PNG (defaults to ./skeptic-inspect-<ts>.png)")
   .action(async (url: string, cmdOpts: import("./commands/inspect.js").InspectCommandOptions) => {
     const { runInspect } = await import("./commands/inspect.js");
     await runInspect(url, cmdOpts);

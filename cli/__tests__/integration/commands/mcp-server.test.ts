@@ -6,6 +6,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { LoggingMessageNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 import { buildMcpServer } from "../../../src/commands/mcp.js";
+import type { AIClient, AIResult } from "../../../src/ai/ai-client.js";
 
 // Two paths exercised here:
 //   - In-process registration & generate_test (pure helpers; no worker spawn).
@@ -63,7 +64,80 @@ describe("MCP server (B1.5) — in-process", () => {
     expect(runTest?.description ?? "").toMatch(/spec/i);
   });
 
-  it("generate_test emits a hand-rolled spec template with stub notes", async () => {
+  it("generate_test returns a graceful fallback when no AIClient is available", async () => {
+    // The default in-process server has no aiClientOverride and the test env
+    // has no provider API keys → handler must return the missing-key note,
+    // NOT crash. The empty source signals "configure AI to use this tool".
+    const prevKeys = {
+      gemini: process.env["GEMINI_API_KEY"],
+      openai: process.env["OPENAI_API_KEY"],
+      anthropic: process.env["ANTHROPIC_API_KEY"],
+    };
+    delete process.env["GEMINI_API_KEY"];
+    delete process.env["OPENAI_API_KEY"];
+    delete process.env["ANTHROPIC_API_KEY"];
+    try {
+      const result = await callTool(client, "generate_test", {
+        description: "homepage smoke",
+        url: "https://example.com",
+      });
+      const structured = result.structuredContent as {
+        source: string;
+        filename: string;
+        notes: string[];
+      };
+      expect(structured.source).toBe("");
+      expect(structured.filename).toBe("");
+      expect(structured.notes.some((n) => /api key/i.test(n))).toBe(true);
+    } finally {
+      if (prevKeys.gemini) process.env["GEMINI_API_KEY"] = prevKeys.gemini;
+      if (prevKeys.openai) process.env["OPENAI_API_KEY"] = prevKeys.openai;
+      if (prevKeys.anthropic) process.env["ANTHROPIC_API_KEY"] = prevKeys.anthropic;
+    }
+  });
+});
+
+// Mock-AI path: inject a stub AIClient so the handler routes through
+// generateFromDescription end-to-end without hitting a real provider.
+describe("MCP server (B1.5) — generate_test with injected AIClient", () => {
+  let client: Client;
+  let serverTransport: InMemoryTransport;
+  let lastPrompt: string | null = null;
+
+  const mockSpec = `import { test, expect } from "skeptic-cli";
+
+test("homepage smoke", async ({ page }) => {
+  await page.goto("https://example.com/");
+  await expect(page).toHaveURL(/.+/);
+});
+`;
+
+  const mockClient: AIClient = {
+    provider: "gemini",
+    analyzeImage: async (): Promise<AIResult> => ({ text: "", retryCount: 0 }),
+    generateText: async (prompt: string): Promise<AIResult> => {
+      lastPrompt = prompt;
+      return { text: mockSpec, retryCount: 0 };
+    },
+  };
+
+  beforeAll(async () => {
+    const server = buildMcpServer({ cwd: FIXTURE_DIR, aiClientOverride: mockClient });
+    const [clientTransport, st] = InMemoryTransport.createLinkedPair();
+    serverTransport = st;
+    await server.connect(serverTransport);
+
+    client = new Client({ name: "skeptic-mcp-test-ai", version: "0.0.0" });
+    await client.connect(clientTransport);
+  });
+
+  afterAll(async () => {
+    await client.close().catch(() => {});
+    await serverTransport.close().catch(() => {});
+  });
+
+  it("invokes generateFromDescription and returns the validated source", async () => {
+    lastPrompt = null;
     const result = await callTool(client, "generate_test", {
       description: "homepage smoke",
       url: "https://example.com",
@@ -73,12 +147,20 @@ describe("MCP server (B1.5) — in-process", () => {
       filename: string;
       notes: string[];
     };
+
+    // The mock LLM was called with the description-driven prompt — proving
+    // the handler routes through flow-generator, not the old hand-rolled stub.
+    expect(lastPrompt).toBeTruthy();
+    expect(lastPrompt!).toContain("homepage smoke");
+    expect(lastPrompt!).toContain("import { test, expect }");
+
+    // The returned source matches what the mock emitted, run through the
+    // typecheck+import sanity gate.
     expect(structured.filename).toBe("homepage-smoke.spec.ts");
     expect(structured.source).toContain('import { test, expect } from "skeptic-cli"');
     expect(structured.source).toContain('test("homepage smoke"');
-    expect(structured.source).toContain("https://example.com");
-    expect(structured.notes.some((n) => /B1\.5 stub/i.test(n))).toBe(true);
-    expect(structured.notes.some((n) => /B5\.5/i.test(n))).toBe(true);
+    // No stub-era notes in the new shape.
+    expect(structured.notes.every((n) => !/B1\.5 stub/i.test(n))).toBe(true);
   });
 });
 

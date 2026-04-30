@@ -1,6 +1,11 @@
 # skeptic
 
-CLI-first E2E testing with YAML flows, AI assertions, and browser cookie extraction.
+CLI-first E2E testing with TypeScript test files, AI assertions, and browser cookie extraction.
+
+> **For agent users:** see [AGENTS.md](./AGENTS.md) for the discovery loop
+> (`skeptic inspect <url>`), selector cheatsheet, output schema (results.json
+> v0.3.0), failure-mode guide, and copy-pastable `*.spec.ts` patterns.
+> Third-party attributions live in [LICENSES.md](./LICENSES.md).
 
 ## Development Setup
 
@@ -25,13 +30,19 @@ skeptic --help
 # Initialize a project
 skeptic init
 
-# Write a flow in tests/
-# Run it
-skeptic test
+# Inspect a page to discover stable selectors before authoring a test
+skeptic inspect https://example.com
 
-# Generate flows with AI
+# Write a *.spec.ts in tests/, then run it
+skeptic run
+
+# Generate a *.spec.ts with AI
 skeptic generate -m "test the login page"
 ```
+
+`skeptic inspect <url>` opens a browser, captures an ARIA + cursor-interactive
+tree, and prints `selectorHint:` lines you can copy directly into a
+`*.spec.ts` file. See [AGENTS.md](./AGENTS.md) for the full discovery loop.
 
 ## YAML Flow Format
 
