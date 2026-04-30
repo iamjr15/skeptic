@@ -1,0 +1,18 @@
+import { test, expect } from "skeptic-cli";
+
+test("jigyansurout home — observability + dual-engine a11y", async ({ page, observability }) => {
+  await page.goto("https://jigyansurout.com/");
+  await page.waitForLoadState("networkidle");
+  await observability.expectAccessible({ standard: "WCAG21AA" });
+});
+
+test("jigyansurout multi-page nav — cursor persistence + page-load smoke", async ({ page }) => {
+  await page.goto("https://jigyansurout.com/");
+  await page.waitForLoadState("networkidle");
+  await expect(page).toHaveURL(/jigyansurout\.com/);
+
+  for (const path of ["/projects", "/achievements", "/blog"]) {
+    await page.goto(`https://jigyansurout.com${path}`);
+    await page.waitForLoadState("networkidle");
+  }
+});

@@ -1,0 +1,17 @@
+[skeptic] skeptic — running tests/jigyansurout-verify.spec.ts
+
+  jigyansurout home — observability + dual-engine a11y (/Users/iamjr15/Desktop/aurum/cli/tests/jigyansurout-verify.spec.ts)
+   FAIL  7474ms
+  Metrics: perf: FCP 1.80s, LCP 1.80s, CLS 0.166, TTFB 767ms · net: 50 reqs · a11y: 2 violations
+
+  jigyansurout multi-page nav — cursor persistence + page-load smoke (/Users/iamjr15/Desktop/aurum/cli/tests/jigyansurout-verify.spec.ts)
+   FAIL  3494ms
+  Metrics: perf: FCP 972ms, LCP 1.88s, CLS 0.172, TTFB 455ms · net: 44 reqs
+
+  skeptic Results
+  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─
+  2 failed, 2 total
+  Duration: 14.47s
+
+
+  Artifacts
