@@ -1,0 +1,111 @@
+# Releasing skeptic CLI
+
+## Distribution model
+
+`npm install -g skeptic-cli` is the **primary** distribution. npm picks the
+matching `skeptic-cli-bin-<platform>` from `optionalDependencies` and the
+launcher shim (`bin/launcher.mjs`) spawns the prebuilt binary. If the
+platform isn't covered, the launcher falls back to the bundled JS at
+`dist/skeptic.mjs` running on the user's Node.
+
+Direct binary downloads are **secondary**: same artifacts re-uploaded to
+GitHub Releases for users without Node, or for `brew install` via the
+Homebrew tap.
+
+## Cutting a release
+
+1. Make sure `main` is green.
+2. Tag with the new version:
+   ```sh
+   git tag v0.2.0
+   git push --tags
+   ```
+3. CI does the rest:
+   - **bundle** job: bumps versions on `cli/` + every `cli-bin-*/`,
+     verifies `skeptic --version` matches the tag, runs `npm pack --dry-run`.
+   - **binary-build** matrix: builds SEA binaries on macos-14 (arm64),
+     macos-13 (x64), ubuntu-22.04 (x64), ubuntu-22.04-arm (arm64),
+     windows-2022 (x64). macOS jobs sign + zip + notarize.
+   - **smoke-test** matrix: runs `--version`, `init`, `browsers install`,
+     and (on macOS) `cookies list` to verify the signed `.node` loads under
+     Hardened Runtime.
+   - **publish**: pushes all `skeptic-cli-bin-*` packages to npm, then the
+     main `skeptic-cli` package, then creates the GitHub Release with all 5
+     tarballs attached.
+
+A successful release takes ~12 minutes. Notarization can be the long pole
+on macOS (~5 minutes per binary).
+
+## Required secrets
+
+Configure these in **Settings → Secrets and variables → Actions**:
+
+| Secret | Purpose |
+|---|---|
+| `NPM_TOKEN` | `npm publish` for `skeptic-cli` + 5x `skeptic-cli-bin-*` |
+| `APPLE_ID` | Apple Developer email |
+| `APPLE_TEAM_ID` | Apple Developer Team ID |
+| `APPLE_APP_PASSWORD` | App-specific password for `notarytool` |
+| `APPLE_DEVELOPER_ID` | Common name of the Developer ID Application cert |
+
+The cert itself must already be importable on the macOS runner. The
+simplest path is a self-hosted runner with the cert pre-installed; the
+GitHub-hosted alternative is to base64-encode the `.p12` into another
+secret and have a step write+import it before the codesign call.
+
+## Version stamping
+
+`tsup` substitutes `__SKEPTIC_CLI_VERSION__` from `cli/package.json` into the
+bundle at build time. The release workflow bumps `cli/package.json` (and
+every `cli-bin-*/package.json`) **before** running the build, then asserts
+`node dist/skeptic.mjs --version` equals the tag. Forgetting to bump fails
+the build loudly rather than silently shipping a stale-version binary.
+
+## Bin-package versions
+
+Each `cli-bin-<platform>/package.json` has `0.0.0-LOCKFILE` placeholders
+for `playwright`, `playwright-core`, `better-sqlite3`, and `oxc-resolver`.
+The CI step `Stamp bin-package version` runs
+`scripts/gen-bin-package.mjs --bin-pkg <dir> --version <tag>`, which reads
+`cli/package-lock.json` and writes the resolved versions into the bin
+package. `0.0.0-LOCKFILE` is invalid semver — npm rejects publish if the
+gen step didn't run, which is the failure mode we want.
+
+## Local dry-run
+
+To verify the release pipeline without publishing:
+
+```sh
+# From repo root
+gh workflow run release.yml --ref v0.2.0-rc.1
+# Use a pre-release tag so it doesn't ship to `latest`.
+```
+
+Or wire a local Verdaccio for a true install-from-tarball test:
+
+```sh
+npx verdaccio &
+npm set registry http://localhost:4873
+( cd cli && npm pack )
+for d in cli-bin-*; do (cd "$d" && npm pack); done
+for tgz in cli/*.tgz cli-bin-*/*.tgz; do
+  npm publish --registry http://localhost:4873 "$tgz"
+done
+npm i -g skeptic-cli --registry http://localhost:4873
+which skeptic && skeptic --version
+```
+
+## Rollback
+
+If a release is broken:
+
+```sh
+# Deprecate (keeps installs working but warns):
+npm deprecate skeptic-cli@<bad-version> "Use <previous-version> instead"
+
+# Or unpublish within 72h:
+npm unpublish skeptic-cli@<bad-version>
+# Then unpublish each bin package similarly.
+```
+
+GitHub Release can be deleted with `gh release delete v<bad-version>`.

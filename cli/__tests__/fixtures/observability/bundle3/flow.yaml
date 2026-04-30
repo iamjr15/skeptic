@@ -1,0 +1,13 @@
+---
+name: Bundle 3 smoke
+---
+- navigate: /
+- wait: 1000
+- click: "#load-data"
+- wait: 500
+# `optional: true` so a metric that didn't fire (e.g. CLS on a page without layout
+# shift) doesn't halt the flow before the network and a11y assertions run.
+- assertPerformance: { lcp: "<5s", cls: "<0.5" }
+  optional: true
+- assertNoNetworkErrors: { allowStatus: [404] }
+- accessibilityAudit: { standard: "WCAG2AA", impacts: ["critical"] }

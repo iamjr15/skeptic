@@ -1,0 +1,38 @@
+url: http://localhost:4000
+tests:
+  - "tests/**/*.yaml"
+  - "extra/**/*.yaml"
+
+browser:
+  engine: chromium
+  headless: false
+  slowMo: 100
+  timeout: 15000
+  viewport:
+    width: 1920
+    height: 1080
+  device: macbook_pro_14
+
+auth:
+  cookies: true
+  browsers:
+    - chrome
+
+execution:
+  retries: 2
+  parallel: 4
+  bail: true
+  tags:
+    - smoke
+
+output:
+  dir: ./test-output
+  reporters:
+    - console
+    - json
+    - junit
+  verbose: true
+
+env:
+  APP_ENV: test
+  API_KEY: test-key-123

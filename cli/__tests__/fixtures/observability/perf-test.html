@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>perf smoke</title>
+<style>
+  body { font-family: sans-serif; padding: 1rem; }
+  .hero { width: 600px; height: 400px; background: linear-gradient(135deg, #667 0%, #234 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 3rem; }
+</style>
+</head>
+<body>
+<h1>Performance smoke test</h1>
+<div class="hero">Hello LCP</div>
+<p>This page deliberately renders a large hero element to qualify for LCP measurement.</p>
+<button id="btn">click for INP</button>
+<script>
+  document.getElementById('btn').addEventListener('click', () => {
+    const end = Date.now() + 300;
+    while (Date.now() < end) { /* synchronous block to register INP */ }
+  });
+</script>
+</body>
+</html>

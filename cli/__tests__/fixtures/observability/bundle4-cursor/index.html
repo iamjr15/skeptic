@@ -1,0 +1,18 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>bundle4-cursor — cursor-interactive heuristic fixture</title>
+  </head>
+  <body>
+    <h1>bundle4-cursor</h1>
+    <!-- Cursor-interactive: heuristic SHOULD pick this up. -->
+    <div onclick="(function(){})()" style="cursor: pointer; padding: 8px; background: #eef;">
+      Click me
+    </div>
+    <!-- Negative case: <button> is in the heuristic's excluded-tags set, MUST be skipped
+         by the cursor-interactive pass (Playwright surfaces it as a normal ARIA `button`
+         ref in the snapshot, not a cursor-interactive ref). -->
+    <button type="button">Real button</button>
+  </body>
+</html>

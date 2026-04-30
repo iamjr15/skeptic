@@ -265,10 +265,14 @@ interface BuildMcpServerOptions {
 export const buildMcpServer = (options: BuildMcpServerOptions = {}): McpServer => {
   const cwd = options.cwd ?? process.cwd();
 
-  const server = new McpServer({
-    name: "skeptic-mcp",
-    version: __SKEPTIC_CLI_VERSION__,
-  });
+  // `capabilities.logging: {}` is required for `sendLoggingMessage` to actually
+  // deliver — the SDK silently drops calls when the server doesn't advertise
+  // logging support. run_test streams test:start / step:* / test:complete via
+  // logging notifications, so this gate is load-bearing.
+  const server = new McpServer(
+    { name: "skeptic-mcp", version: __SKEPTIC_CLI_VERSION__ },
+    { capabilities: { logging: {} } },
+  );
 
   server.registerTool(
     "list_tests",

@@ -1,0 +1,8 @@
+node_modules
+__tests__
+live-tests
+live-output
+.skeptic
+skeptic-output
+*.md
+.git
