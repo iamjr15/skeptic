@@ -75,3 +75,14 @@ node dist/skeptic.mjs inspect https://jigyansurout.com/ > inspect.txt
 node dist/skeptic.mjs inspect https://jigyansurout.com/ --annotated --annotate-output inspect-annotated.png > inspect-annotated.txt
 node dist/skeptic.mjs run tests/jigyansurout-verify.spec.ts --observability --video --output run-output
 ```
+
+---
+
+## Update — superseded by skeptic-v2
+
+This run had two real issues that surfaced on careful inspection:
+
+1. **Videos at 800×450, not 1280×720** — the runner's `worker.ts:104` didn't pass `size` to Playwright's `recordVideo`, so videos defaulted to Playwright's pre-2023 fallback. Fixed in `worker.ts` and re-recorded in `../skeptic-v2/`.
+2. **Cursor overlay never rendered visibly** — the original spec had no mouse interactions so the overlay's mousemove listener never fired. Fixed by re-authoring the spec with `page.mouse.move(...)` calls — see `../skeptic-v2/spec.ts.txt`.
+
+The corrected results (cursor visible, video at 1280×720, all four pages captured) live in `../skeptic-v2/`. This v1 folder is preserved for the bug-discovery audit trail.

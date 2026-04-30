@@ -101,7 +101,7 @@ const runOneTest = async (
 
   const context: BrowserContext = await browser.newContext({
     viewport,
-    ...(config.video ? { recordVideo: { dir: flowDir } } : {}),
+    ...(config.video ? { recordVideo: { dir: flowDir, size: viewport } } : {}),
   });
   if (config.trace) {
     await context.tracing.start({ screenshots: true, snapshots: true, sources: false });
