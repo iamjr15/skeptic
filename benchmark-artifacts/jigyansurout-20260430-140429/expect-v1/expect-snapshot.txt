@@ -1,0 +1,861 @@
+{
+  "tree": "- main:\n  - img\n  - heading \"hi, i'm jigyansu ⎯\" [level=2] [ref=e1]\n  - paragraph: im 22 yo, i build products, drink crazy amount of coffee, and write code.\n  - link: [ref=e2]\n    - /url: /projects\n    - img\n  - heading \"SEE ALL PROJECTS\" [level=2]: [ref=e3]\n    - link \"SEE ALL PROJECTS\": [ref=e4]\n      - /url: /projects\n  - link \" VIEW CV\": [ref=e5]\n    - /url: assets/docs/Jigyansu_Rout_CV.pdf\n  - separator\n  - link \"\": [ref=e6]\n    - /url: https://github.com/iamjr15\n  - link \"\": [ref=e7]\n    - /url: https://linkedin.com/in/iamjr15\n  - link \"\": [ref=e8]\n    - /url: https://medium.com/@iamjr15\n  - link \"\": [ref=e9]\n    - /url: mailto:jigyanshu15@gmail.com\n  - text: 4167 contributions in the last year\n  - link \"iamjr15\": [ref=e10]\n    - /url: https://github.com/iamjr15\n  - img \"iamjr15's avatar\"\n  - table:\n    - rowgroup:\n      - row \"May Jun Jul Aug Sep Oct Nov Dec Jan Feb Mar\":\n        - cell\n        - cell \"May\" [ref=e11]\n        - cell \"Jun\" [ref=e12]\n        - cell \"Jul\" [ref=e13]\n        - cell \"Aug\" [ref=e14]\n        - cell \"Sep\" [ref=e15]\n        - cell \"Oct\" [ref=e16]\n        - cell \"Nov\" [ref=e17]\n        - cell \"Dec\" [ref=e18]\n        - cell \"Jan\" [ref=e19]\n        - cell \"Feb\" [ref=e20]\n        - cell \"Mar\" [ref=e21]\n    - rowgroup:\n      - row:\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n      - row \"Mon\":\n        - cell \"Mon\" [ref=e22]\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n      - row:\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n      - row \"Wed\":\n        - cell \"Wed\" [ref=e23]\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n      - row:\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n      - row \"Fri\":\n        - cell \"Fri\" [ref=e24]\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n      - row:\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n        - cell\n  - text: Less More\n  - link: [ref=e25]\n    - /url: https://github.com/iamjr15/github-contribution-graph\n    - img\n  - img \"Cheatcode AI\"\n  - link \"\": [ref=e26]\n    - /url: javascript:void(0)\n  - link \"\": [ref=e27]\n    - /url: javascript:void(0)\n  - link \"\": [ref=e28]\n    - /url: javascript:void(0)\n  - link \"\": [ref=e29]\n    - /url: javascript:void(0)\n  - link \"\": [ref=e30]\n    - /url: javascript:void(0)\n  - link \"\": [ref=e31]\n    - /url: javascript:void(0)\n  - link \"OpenAI, LiteLLM, Anthropic Claude, Google Gemini Embeddings, OpenRouter, Langfuse\": [ref=e32]\n    - /url: javascript:void(0)\n    - img\n  - link \"\": [ref=e33]\n    - /url: javascript:void(0)\n  - link \"\": [ref=e34]\n    - /url: javascript:void(0)\n  - link \"\": [ref=e35]\n    - /url: javascript:void(0)\n  - link \"\": [ref=e36]\n    - /url: javascript:void(0)\n  - link \"\": [ref=e37]\n    - /url: javascript:void(0)\n  - link \"\": [ref=e38]\n    - /url: javascript:void(0)\n  - heading \"Cheatcode AI Open Cheatcode AI\" [level=2]: [ref=e39]\n    - link \"Cheatcode AI\": [ref=e40]\n      - /url: https://www.trycheatcode.com/\n    - link \"Open Cheatcode AI\": [ref=e41]\n      - /url: https://www.trycheatcode.com/\n      - text: \n  - paragraph: Cheatcode lets non-technical founders and PMs build native mobile apps and web applications through simple conversation. Just describe what you want — the AI generates React Native apps for mobile and Next.js for web, complete with databases, authentication, and AI integrations.\n  - paragraph: No coding required, no juggling multiple tools - just natural language prompts that become production-ready applications. From concept to deployment, founders focus on their business while AI handles the code.\n  - text: CHEATCODE AI | PROJECTS\n  - img \"Nudgely AI\"\n  - link \"OpenAI, Vapi AI, Deepgram, n8n agents\": [ref=e42]\n    - /url: javascript:void(0)\n    - img\n  - link \"\": [ref=e43]\n    - /url: javascript:void(0)\n  - link \"\": [ref=e44]\n    - /url: javascript:void(0)\n  - link \"\": [ref=e45]\n    - /url: javascript:void(0)\n  - link \"\": [ref=e46]\n    - /url: javascript:void(0)\n  - link \"社\": [ref=e47]\n    - /url: javascript:void(0)\n  - link \"\": [ref=e48]\n    - /url: javascript:void(0)\n  - link \"\": [ref=e49]\n    - /url: javascript:void(0)\n  - link \"\": [ref=e50]\n    - /url: javascript:void(0)\n  - heading \"Nudgely AI Open Nudgely AI\" [level=2]: [ref=e51]\n    - link \"Nudgely AI\": [ref=e52]\n      - /url: https://trynudgely.com/\n    - link \"Open Nudgely AI\": [ref=e53]\n      - /url: https://trynudgely.com/\n      - text: \n  - paragraph: Nudgely AI is a voice agent that makes follow-ups effortless. Just set your questions and schedule — it calls the person, speaks naturally, collects responses, and sends them back to you.\n  - paragraph: Whether it's a doctor checking in on a patient or a loved one making sure someone took their meds, Nudgely makes it feel personal, not robotic. Built with Twilio, OpenAI, Supabase… [truncated 9767 chars]",
+  "refs": {
+    "e1": {
+      "role": "heading",
+      "name": "hi, i'm jigyansu ⎯"
+    },
+    "e2": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e3": {
+      "role": "heading",
+      "name": "SEE ALL PROJECTS"
+    },
+    "e4": {
+      "role": "link",
+      "name": "SEE ALL PROJECTS",
+      "nth": 0
+    },
+    "e5": {
+      "role": "link",
+      "name": " VIEW CV"
+    },
+    "e6": {
+      "role": "link",
+      "name": ""
+    },
+    "e7": {
+      "role": "link",
+      "name": ""
+    },
+    "e8": {
+      "role": "link",
+      "name": ""
+    },
+    "e9": {
+      "role": "link",
+      "name": ""
+    },
+    "e10": {
+      "role": "link",
+      "name": "iamjr15"
+    },
+    "e11": {
+      "role": "cell",
+      "name": "May"
+    },
+    "e12": {
+      "role": "cell",
+      "name": "Jun"
+    },
+    "e13": {
+      "role": "cell",
+      "name": "Jul"
+    },
+    "e14": {
+      "role": "cell",
+      "name": "Aug"
+    },
+    "e15": {
+      "role": "cell",
+      "name": "Sep"
+    },
+    "e16": {
+      "role": "cell",
+      "name": "Oct"
+    },
+    "e17": {
+      "role": "cell",
+      "name": "Nov"
+    },
+    "e18": {
+      "role": "cell",
+      "name": "Dec"
+    },
+    "e19": {
+      "role": "cell",
+      "name": "Jan"
+    },
+    "e20": {
+      "role": "cell",
+      "name": "Feb"
+    },
+    "e21": {
+      "role": "cell",
+      "name": "Mar"
+    },
+    "e22": {
+      "role": "cell",
+      "name": "Mon"
+    },
+    "e23": {
+      "role": "cell",
+      "name": "Wed"
+    },
+    "e24": {
+      "role": "cell",
+      "name": "Fri"
+    },
+    "e25": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e26": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e27": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e28": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e29": {
+      "role": "link",
+      "name": ""
+    },
+    "e30": {
+      "role": "link",
+      "name": ""
+    },
+    "e31": {
+      "role": "link",
+      "name": ""
+    },
+    "e32": {
+      "role": "link",
+      "name": "OpenAI, LiteLLM, Anthropic Claude, Google Gemini Embeddings, OpenRouter, Langfuse"
+    },
+    "e33": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e34": {
+      "role": "link",
+      "name": ""
+    },
+    "e35": {
+      "role": "link",
+      "name": ""
+    },
+    "e36": {
+      "role": "link",
+      "name": ""
+    },
+    "e37": {
+      "role": "link",
+      "name": ""
+    },
+    "e38": {
+      "role": "link",
+      "name": ""
+    },
+    "e39": {
+      "role": "heading",
+      "name": "Cheatcode AI Open Cheatcode AI"
+    },
+    "e40": {
+      "role": "link",
+      "name": "Cheatcode AI"
+    },
+    "e41": {
+      "role": "link",
+      "name": "Open Cheatcode AI"
+    },
+    "e42": {
+      "role": "link",
+      "name": "OpenAI, Vapi AI, Deepgram, n8n agents"
+    },
+    "e43": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e44": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e45": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e46": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e47": {
+      "role": "link",
+      "name": "社",
+      "nth": 0
+    },
+    "e48": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e49": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e50": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e51": {
+      "role": "heading",
+      "name": "Nudgely AI Open Nudgely AI"
+    },
+    "e52": {
+      "role": "link",
+      "name": "Nudgely AI"
+    },
+    "e53": {
+      "role": "link",
+      "name": "Open Nudgely AI"
+    },
+    "e54": {
+      "role": "link",
+      "name": "OpenAI, Vapi AI, Deepgram, n8n"
+    },
+    "e55": {
+      "role": "link",
+      "name": "",
+      "nth": 2
+    },
+    "e56": {
+      "role": "link",
+      "name": "",
+      "nth": 2
+    },
+    "e57": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e58": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e59": {
+      "role": "link",
+      "name": "社",
+      "nth": 1
+    },
+    "e60": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e61": {
+      "role": "link",
+      "name": "",
+      "nth": 2
+    },
+    "e62": {
+      "role": "heading",
+      "name": "Settle AI Open Settle AI"
+    },
+    "e63": {
+      "role": "link",
+      "name": "Settle AI"
+    },
+    "e64": {
+      "role": "link",
+      "name": "Open Settle AI"
+    },
+    "e65": {
+      "role": "link",
+      "name": ""
+    },
+    "e66": {
+      "role": "link",
+      "name": "",
+      "nth": 3
+    },
+    "e67": {
+      "role": "link",
+      "name": "",
+      "nth": 2
+    },
+    "e68": {
+      "role": "link",
+      "name": "",
+      "nth": 3
+    },
+    "e69": {
+      "role": "link",
+      "name": ""
+    },
+    "e70": {
+      "role": "link",
+      "name": "Sarvam AI, Phi Data"
+    },
+    "e71": {
+      "role": "heading",
+      "name": "Stockly Open Stockly"
+    },
+    "e72": {
+      "role": "link",
+      "name": "Stockly"
+    },
+    "e73": {
+      "role": "link",
+      "name": "Open Stockly"
+    },
+    "e74": {
+      "role": "heading",
+      "name": "tl;dr - i'm a 6x hackathon winner, equitech applied data institute scholar, and tcs it wiz finalist"
+    },
+    "e75": {
+      "role": "link",
+      "name": "FIND OUT MORE"
+    },
+    "e76": {
+      "role": "heading",
+      "name": "from ai voice agents to coding agents to chrome extensions - i build products that solve real problems"
+    },
+    "e77": {
+      "role": "link",
+      "name": "SEE ALL PROJECTS",
+      "nth": 1
+    },
+    "e78": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e79": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e80": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e81": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e82": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e83": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e84": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e85": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e86": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e87": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e88": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e89": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e90": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e91": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e92": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e93": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e94": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e95": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e96": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e97": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e98": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e99": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e100": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e101": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e102": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e103": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e104": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e105": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e106": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e107": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e108": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e109": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e110": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e111": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e112": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e113": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e114": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e115": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e116": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e117": {
+      "role": "link",
+      "name": "",
+      "nth": 0
+    },
+    "e118": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e119": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e120": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e121": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e122": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e123": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e124": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e125": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e126": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e127": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e128": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e129": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e130": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e131": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e132": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e133": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e134": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e135": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e136": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e137": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e138": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e139": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e140": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e141": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e142": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e143": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e144": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e145": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e146": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e147": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e148": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e149": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e150": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e151": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e152": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e153": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e154": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e155": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e156": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e157": {
+      "role": "link",
+      "name": "",
+      "nth": 1
+    },
+    "e158": {
+      "role": "link",
+      "name": "",
+      "nth": 2
+    },
+    "e159": {
+      "role": "heading",
+      "name": "READ MY BLOG"
+    },
+    "e160": {
+      "role": "link",
+      "name": "READ MY BLOG"
+    },
+    "e161": {
+      "role": "link",
+      "name": "BLOG",
+      "nth": 0
+    },
+    "e162": {
+      "role": "heading",
+      "name": "The Coming of Age of AI in Code (It's not over for us yet!)",
+      "nth": 0
+    },
+    "e163": {
+      "role": "link",
+      "name": "The Coming of Age of AI in Code (It's not over for us yet!)",
+      "nth": 0
+    },
+    "e164": {
+      "role": "link",
+      "name": "BLOG",
+      "nth": 1
+    },
+    "e165": {
+      "role": "heading",
+      "name": "How Philosophy Became My Compass in Computer Science",
+      "nth": 0
+    },
+    "e166": {
+      "role": "link",
+      "name": "How Philosophy Became My Compass in Computer Science",
+      "nth": 0
+    },
+    "e167": {
+      "role": "link",
+      "name": "BLOG",
+      "nth": 2
+    },
+    "e168": {
+      "role": "heading",
+      "name": "When AI Knows Everything, What is Wisdom?"
+    },
+    "e169": {
+      "role": "link",
+      "name": "When AI Knows Everything, What is Wisdom?"
+    },
+    "e170": {
+      "role": "link",
+      "name": "BLOG",
+      "nth": 3
+    },
+    "e171": {
+      "role": "heading",
+      "name": "Why I Choose Design Over Engineering? (I'm an Engineer)"
+    },
+    "e172": {
+      "role": "link",
+      "name": "Why I Choose Design Over Engineering? (I'm an Engineer)"
+    },
+    "e173": {
+      "role": "link",
+      "name": "BLOG",
+      "nth": 4
+    },
+    "e174": {
+      "role": "heading",
+      "name": "The Coming of Age of AI in Code (It's not over for us yet!)",
+      "nth": 1
+    },
+    "e175": {
+      "role": "link",
+      "name": "The Coming of Age of AI in Code (It's not over for us yet!)",
+      "nth": 1
+    },
+    "e176": {
+      "role": "link",
+      "name": "BLOG",
+      "nth": 5
+    },
+    "e177": {
+      "role": "heading",
+      "name": "How Philosophy Became My Compass in Computer Science",
+      "nth": 1
+    },
+    "e178": {
+      "role": "link",
+      "name": "How Philosophy Became My Compass in Computer Science",
+      "nth": 1
+    },
+    "e179": {
+      "role": "button",
+      "name": "Go to slide 1"
+    },
+    "e180": {
+      "role": "button",
+      "name": "Go to slide 2"
+    },
+    "e181": {
+      "role": "button",
+      "name": "Go to slide 3"
+    },
+    "e182": {
+      "role": "button",
+      "name": "Go to slide 4"
+    }
+  },
+  "stats": {
+    "lines": 769,
+    "characters": 19767,
+    "estimatedTokens": 4942,
+    "totalRefs": 182,
+    "interactiveRefs": 153
+  }
+}
