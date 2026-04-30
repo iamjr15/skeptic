@@ -1,0 +1,29 @@
+node_modules/
+dist/
+.next/
+.env
+.env.local
+*.pyc
+__pycache__/
+.venv/
+venv/
+
+# Tool caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+coverage/
+
+# OS files
+.DS_Store
+
+# skeptic CLI output
+skeptic-output/
+# .skeptic/ is the per-project cache: AI-generation temp specs, daemon logs,
+# cookie consent file, etc. Nothing under it should be tracked. Pattern
+# matches any `.skeptic/` directory (project root, test fixtures, etc.).
+.skeptic/
+
+# CLI test artifacts
+cli/live-output/
+cli/live-tests/
