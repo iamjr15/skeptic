@@ -29,6 +29,13 @@ export interface InspectCommandOptions {
    *  default `./skeptic-inspect-<ts>.png` path. */
   annotated?: boolean;
   annotateOutput?: string;
+  /**
+   * B10 — Commander surfaces `--no-daemon` as `daemon: false`. When false,
+   * inspect bypasses the persistent daemon and launches a fresh browser,
+   * identical to the pre-B10 inspect flow. `--connect <ws-url>` (CDP) is a
+   * separate code path and is unchanged.
+   */
+  daemon?: boolean;
 }
 
 interface InspectJsonOutput {
@@ -68,20 +75,65 @@ export const runInspect = async (
   const wait = parseWait(opts.wait);
   const pw = await loadPlaywright();
 
+  // B10 audit fix (task #17) — pre-warm the daemon from the main process so
+  // `process.argv[1]` resolves to the CLI entry. Inspect runs everything in
+  // the main process anyway (no worker_threads), but routing through the
+  // shared helper keeps the gate behavior identical to `run` and exercises
+  // `commandUsesBrowser` on the production path.
+  const { prewarmDaemonIfNeeded } = await import("../daemon/auto-spawn.js");
+  const prewarmed = await prewarmDaemonIfNeeded(process.argv, {
+    engine: "chromium",
+    headed: opts.headed === true,
+    cliVersion: __SKEPTIC_CLI_VERSION__,
+    noDaemon: opts.daemon === false || opts.connect !== undefined,
+  });
+
   let browser: Browser | null = null;
   let context: BrowserContext | null = null;
   let page: Page | null = null;
-  const ownsBrowser = !opts.connect;
+  // CDP-attached browsers stay open after the command exits — we only close
+  // the page we opened. Daemon-attached browsers also stay open; the daemon
+  // owns the BrowserServer. Only the `--no-daemon` (one-shot launch) path
+  // truly owns and must close the browser. Commander parses `--no-daemon`
+  // as `daemon: false`.
+  //
+  // Re-audit finding #2: when pre-warm fails, fall back to the one-shot
+  // launch path so the inspect command still runs. The user has already seen
+  // the "falling back to fresh launches" warning from prewarmDaemonIfNeeded.
+  // The second clause is reachable only when `opts.daemon !== false` (the
+  // short-circuit handles that case first), so the redundant `!== false`
+  // check is dropped to satisfy TS narrowing.
+  const noDaemon = opts.daemon === false || (!opts.connect && !prewarmed);
+  const ownsBrowser = !opts.connect && noDaemon;
+  let daemonDisconnect: (() => Promise<void>) | null = null;
 
   try {
     if (opts.connect) {
+      // Path 1 — explicit CDP attach (unchanged from pre-B10).
       const wsUrl = await discoverCdpUrl(opts.connect);
       browser = await pw.chromium.connectOverCDP(wsUrl);
       const contexts = browser.contexts();
       context = contexts[0] ?? (await browser.newContext());
       page = context.pages()[0] ?? (await context.newPage());
-    } else {
+    } else if (noDaemon) {
+      // Path 2 — `--no-daemon` opt-out (pre-B10 one-shot launch).
       browser = await pw.chromium.launch({ headless: !opts.headed });
+      const ctxOpts = buildContextOptions(opts);
+      context = await browser.newContext(ctxOpts);
+      page = await context.newPage();
+    } else {
+      // Path 3 — daemon (default). Connect to the persistent BrowserServer
+      // and own our own BrowserContext (refs stay session-local — plan §B10
+      // invariants 1-2). Disconnect at the end severs the WebSocket; the
+      // daemon's BrowserServer keeps running for the next caller.
+      const { connectDaemon } = await import("../daemon/client.js");
+      const conn = await connectDaemon({
+        engine: "chromium",
+        headed: opts.headed === true,
+        cliVersion: __SKEPTIC_CLI_VERSION__,
+      });
+      browser = conn.browser;
+      daemonDisconnect = conn.disconnect;
       const ctxOpts = buildContextOptions(opts);
       context = await browser.newContext(ctxOpts);
       page = await context.newPage();
@@ -130,7 +182,12 @@ export const runInspect = async (
     }
   } finally {
     try {
-      if (ownsBrowser) {
+      if (daemonDisconnect) {
+        // Close the inspect-owned context, then sever the WebSocket. The
+        // daemon's BrowserServer stays alive for the next caller.
+        await context?.close().catch(() => {});
+        await daemonDisconnect();
+      } else if (ownsBrowser) {
         await browser?.close();
       } else {
         // CDP-attached: close only the page we opened to avoid disrupting the

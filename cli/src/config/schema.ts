@@ -88,6 +88,13 @@ const ObservabilityConfigSchema = z.object({
   accessibilityImpacts: z
     .array(z.enum(["critical", "serious", "moderate", "minor"]))
     .optional(),
+  /**
+   * Per-impact-bucket cap for the `perf-trace.md` Accessibility section. The
+   * full per-test `audit.md` sidecar always lists every rule regardless of
+   * this cap. Default 100 covers common pages without truncation; bump it
+   * higher (or to 0 for "show all in perf-trace.md") for compliance work.
+   */
+  accessibilityMaxRulesPerImpact: z.number().int().min(0).default(100),
   /** Default fullPage for screenshot steps when a step omits the option. */
   fullPageScreenshots: z.boolean().default(false),
   /** Default blank-frame mode for screenshot steps. Per-step overrides win. */

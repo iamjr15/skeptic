@@ -1,0 +1,1383 @@
+{
+  "requests": [
+    {
+      "url": "https://jigyansurout.com/",
+      "method": "GET",
+      "resourceType": "document",
+      "timestamp": 1777553635793,
+      "frameUrl": "about:blank",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/css/bootstrap.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553636329,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/css/swiper-bundle.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553636330,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/css/font-awesome-pro.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553636330,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/css/magnific-popup.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553636330,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/css/spacing.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553636330,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/css/main.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553636330,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://githubgraph.jigyansurout.com/assets/css/gh.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553636330,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/devicons/devicon@latest/devicon.min.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553636331,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553636331,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/img/logo/favicon.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553636331,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/img/author/noice.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553636331,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/img/resorces/bg.jpg",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553636331,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/img/about/thumb.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553636331,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/img/project/cheatcode.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553636331,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/img/project/nudgely.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553636331,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/img/project/settleai.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553636331,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/img/project/stockly.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553636332,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/ach-index.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553636332,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/img/project/aoc.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553636332,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/img/project/npm.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553636332,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/img/software/bg.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553636332,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/index-img.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553636332,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/img/service/bg.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553636332,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553636333,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/js/vendor/jquery.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553636333,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/js/bootstrap-bundle.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553636333,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/js/swiper-bundle.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553636333,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/js/ajax-form.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553636333,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/js/magnific-popup.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553636333,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/js/main.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553636333,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://githubgraph.jigyansurout.com/assets/js/gh.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553636333,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://raw.githack.com/strangerintheq/rgba/0.0.8/rgba.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553636333,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/js/preloader-shader.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553636333,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553636333,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap%22%20rel=%22stylesheet",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553636514,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@100;200;300;400;500;600&display=swap",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553636514,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/robotomono/v31/L0x5DF4xlVMF-BfR8bXMIjhLq3-cXbKD.woff2",
+      "method": "GET",
+      "resourceType": "font",
+      "timestamp": 1777553636869,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/fonts/tabler-icons.woff2?v2.47.0",
+      "method": "GET",
+      "resourceType": "font",
+      "timestamp": 1777553636869,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/devicons/devicon@latest/fonts/devicon.ttf?qd25fp",
+      "method": "GET",
+      "resourceType": "font",
+      "timestamp": 1777553636870,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/proj-index.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553636955,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://githubgraph.jigyansurout.com/api/ghcg/fetch-data?login=iamjr15",
+      "method": "GET",
+      "resourceType": "fetch",
+      "timestamp": 1777553636965,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://avatars.githubusercontent.com/u/48449428?u=273253cd20295841867959df2c66590d0aeae3b0&v=4",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553637350,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/cdn-cgi/rum?",
+      "method": "POST",
+      "resourceType": "xhr",
+      "timestamp": 1777553638547,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 204
+    },
+    {
+      "url": "https://jigyansurout.com/projects",
+      "method": "GET",
+      "resourceType": "document",
+      "timestamp": 1777553640734,
+      "frameUrl": "https://jigyansurout.com/",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/cdn-cgi/rum?",
+      "method": "POST",
+      "resourceType": "ping",
+      "timestamp": 1777553640922,
+      "frameUrl": "https://jigyansurout.com/",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://jigyansurout.com/other-css/bootstrap.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553640927,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-css/style.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553640927,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553640927,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-css/custom-projects.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553640928,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/img/about/thumb.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553640928,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/img/project/cheatcode.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553640929,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/img/project/settleai.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553640929,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/img/project/stockly.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553640929,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/img/project/nudgely.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553640929,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/img/project/npm.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553640929,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/img/project/aoc.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553640929,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553640929,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/jquery.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553640930,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/bootstrap.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553640930,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/owl.carousel.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553640930,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/wow.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553640930,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/jquery.magnific-popup.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553640930,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/enquire.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553640930,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/jquery.stellar.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553640930,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/typed.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553640931,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/typed-custom-3.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553640931,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/designesia.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553640931,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://raw.githack.com/strangerintheq/rgba/0.0.8/rgba.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553640931,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/js/preloader-shader.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553640931,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553640931,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@100;200;300;400;500;600&display=swap",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553641099,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://use.typekit.net/ynf8xat.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553641100,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/fonts/font-awesome/css/font-awesome.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553641100,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://jigyansurout.com/fonts/elegant_font/HTML_CSS/style.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553641100,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://jigyansurout.com/fonts/et-line-font/style.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553641100,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://fonts.googleapis.com/css2?family=Montserrat:wght@600&display=swap",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553641100,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://p.typekit.net/p.css?s=1&k=ynf8xat&ht=tk&f=10881.10882.10884.10885.12101.12102.12103.12104.15357.15358.15361.15362.32874.32875&a=22106036&app=typekit&e=css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553641259,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/robotomono/v31/L0x5DF4xlVMF-BfR8bXMIjhLq3-cXbKD.woff2",
+      "method": "GET",
+      "resourceType": "font",
+      "timestamp": 1777553641335,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/fonts/tabler-icons.woff2?v2.47.0",
+      "method": "GET",
+      "resourceType": "font",
+      "timestamp": 1777553641336,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://use.typekit.net/af/d7bb7b/0000000000000000000178a7/27/l?primer=7cdcb44be4a7db8877ffa5c0007b8dd865b3bbc383831fe2ea177f62257a9191&fvd=n7&v=3",
+      "method": "GET",
+      "resourceType": "font",
+      "timestamp": 1777553641351,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCu173w5aXp-p7K4KLg.woff2",
+      "method": "GET",
+      "resourceType": "font",
+      "timestamp": 1777553641351,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/project.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553641394,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/cdn-cgi/rum?",
+      "method": "POST",
+      "resourceType": "xhr",
+      "timestamp": 1777553641502,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 204
+    },
+    {
+      "url": "https://jigyansurout.com/achievements",
+      "method": "GET",
+      "resourceType": "document",
+      "timestamp": 1777553643751,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/cdn-cgi/rum?",
+      "method": "POST",
+      "resourceType": "ping",
+      "timestamp": 1777553643925,
+      "frameUrl": "https://jigyansurout.com/projects",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://jigyansurout.com/other-css/bootstrap.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553643928,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-css/style.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553643929,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553643929,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-css/custom-projects.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553643929,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/img/about/thumb.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553643929,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553643929,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/jquery.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553643929,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/bootstrap.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553643929,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/owl.carousel.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553643929,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/wow.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553643930,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/jquery.magnific-popup.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553643930,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/enquire.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553643930,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/jquery.stellar.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553643930,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/typed.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553643930,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/typed-custom-3.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553643931,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/designesia.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553643931,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://raw.githack.com/strangerintheq/rgba/0.0.8/rgba.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553643931,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/js/preloader-shader.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553643931,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553643931,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@100;200;300;400;500;600&display=swap",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553643931,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://p.typekit.net/p.css?s=1&k=ynf8xat&ht=tk&f=10881.10882.10884.10885.12101.12102.12103.12104.15357.15358.15361.15362.32874.32875&a=22106036&app=typekit&e=css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553643931,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://use.typekit.net/ynf8xat.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553643931,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/fonts/font-awesome/css/font-awesome.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553643931,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://jigyansurout.com/fonts/elegant_font/HTML_CSS/style.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553643931,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://jigyansurout.com/fonts/et-line-font/style.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553643931,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://fonts.googleapis.com/css2?family=Montserrat:wght@600&display=swap",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553643932,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/robotomono/v31/L0x5DF4xlVMF-BfR8bXMIjhLq3-cXbKD.woff2",
+      "method": "GET",
+      "resourceType": "font",
+      "timestamp": 1777553644124,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://use.typekit.net/af/d7bb7b/0000000000000000000178a7/27/l?primer=7cdcb44be4a7db8877ffa5c0007b8dd865b3bbc383831fe2ea177f62257a9191&fvd=n7&v=3",
+      "method": "GET",
+      "resourceType": "font",
+      "timestamp": 1777553644125,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/fonts/tabler-icons.woff2?v2.47.0",
+      "method": "GET",
+      "resourceType": "font",
+      "timestamp": 1777553644125,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCu173w5aXp-p7K4KLg.woff2",
+      "method": "GET",
+      "resourceType": "font",
+      "timestamp": 1777553644125,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/robotomono/v31/L0x5DF4xlVMF-BfR8bXMIjhFq3-cXbKDO1w.woff2",
+      "method": "GET",
+      "resourceType": "font",
+      "timestamp": 1777553644133,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/achievements.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553644158,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/cdn-cgi/rum?",
+      "method": "POST",
+      "resourceType": "xhr",
+      "timestamp": 1777553644266,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 204
+    },
+    {
+      "url": "https://jigyansurout.com/blog",
+      "method": "GET",
+      "resourceType": "document",
+      "timestamp": 1777553646316,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/cdn-cgi/rum?",
+      "method": "POST",
+      "resourceType": "ping",
+      "timestamp": 1777553646494,
+      "frameUrl": "https://jigyansurout.com/achievements",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://jigyansurout.com/other-css/bootstrap.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553646517,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-css/style.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553646520,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553646521,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-css/custom-projects.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553646522,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/img/about/thumb.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553646522,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553646523,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/jquery.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553646523,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/bootstrap.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553646523,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/owl.carousel.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553646523,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/wow.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553646523,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/jquery.magnific-popup.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553646523,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/enquire.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553646526,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/jquery.stellar.min.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553646526,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/typed.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553646527,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/typed-custom-3.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553646527,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/other-js/designesia.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553646527,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://raw.githack.com/strangerintheq/rgba/0.0.8/rgba.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553646527,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/js/preloader-shader.js",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553646528,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516",
+      "method": "GET",
+      "resourceType": "script",
+      "timestamp": 1777553646528,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@100;200;300;400;500;600&display=swap",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553646531,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://p.typekit.net/p.css?s=1&k=ynf8xat&ht=tk&f=10881.10882.10884.10885.12101.12102.12103.12104.15357.15358.15361.15362.32874.32875&a=22106036&app=typekit&e=css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553646531,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://use.typekit.net/ynf8xat.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553646531,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/fonts/font-awesome/css/font-awesome.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553646531,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://jigyansurout.com/fonts/elegant_font/HTML_CSS/style.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553646531,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://jigyansurout.com/fonts/et-line-font/style.css",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553646531,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://fonts.googleapis.com/css2?family=Montserrat:wght@600&display=swap",
+      "method": "GET",
+      "resourceType": "stylesheet",
+      "timestamp": 1777553646531,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/robotomono/v31/L0x5DF4xlVMF-BfR8bXMIjhFq3-cXbKDO1w.woff2",
+      "method": "GET",
+      "resourceType": "font",
+      "timestamp": 1777553646698,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/robotomono/v31/L0x5DF4xlVMF-BfR8bXMIjhLq3-cXbKD.woff2",
+      "method": "GET",
+      "resourceType": "font",
+      "timestamp": 1777553646699,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://use.typekit.net/af/d7bb7b/0000000000000000000178a7/27/l?primer=7cdcb44be4a7db8877ffa5c0007b8dd865b3bbc383831fe2ea177f62257a9191&fvd=n7&v=3",
+      "method": "GET",
+      "resourceType": "font",
+      "timestamp": 1777553646705,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/fonts/tabler-icons.woff2?v2.47.0",
+      "method": "GET",
+      "resourceType": "font",
+      "timestamp": 1777553646708,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCu173w5aXp-p7K4KLg.woff2",
+      "method": "GET",
+      "resourceType": "font",
+      "timestamp": 1777553646708,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/assets/blog.png",
+      "method": "GET",
+      "resourceType": "image",
+      "timestamp": 1777553646710,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/cdn-cgi/rum?",
+      "method": "POST",
+      "resourceType": "xhr",
+      "timestamp": 1777553647016,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 204
+    },
+    {
+      "url": "https://use.typekit.net/af/cde90e/0000000000000000000178a6/27/l?primer=7cdcb44be4a7db8877ffa5c0007b8dd865b3bbc383831fe2ea177f62257a9191&fvd=n4&v=3",
+      "method": "GET",
+      "resourceType": "font",
+      "timestamp": 1777553648818,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@100;200;300;400;500;600&display=swap",
+      "method": "GET",
+      "resourceType": "xhr",
+      "timestamp": 1777553648818,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://use.typekit.net/ynf8xat.css",
+      "method": "GET",
+      "resourceType": "xhr",
+      "timestamp": 1777553648818,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/fonts/font-awesome/css/font-awesome.css",
+      "method": "GET",
+      "resourceType": "xhr",
+      "timestamp": 1777553648818,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/fonts/elegant_font/HTML_CSS/style.css",
+      "method": "GET",
+      "resourceType": "xhr",
+      "timestamp": 1777553648818,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://jigyansurout.com/fonts/et-line-font/style.css",
+      "method": "GET",
+      "resourceType": "xhr",
+      "timestamp": 1777553648819,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css",
+      "method": "GET",
+      "resourceType": "xhr",
+      "timestamp": 1777553648819,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://fonts.googleapis.com/css2?family=Montserrat:wght@600&display=swap",
+      "method": "GET",
+      "resourceType": "xhr",
+      "timestamp": 1777553648819,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    },
+    {
+      "url": "https://p.typekit.net/p.css?s=1&k=ynf8xat&ht=tk&f=10881.10882.10884.10885.12101.12102.12103.12104.15357.15358.15361.15362.32874.32875&a=22106036&app=typekit&e=css",
+      "method": "GET",
+      "resourceType": "xhr",
+      "timestamp": 1777553648819,
+      "frameUrl": "https://jigyansurout.com/blog",
+      "status": 200
+    }
+  ],
+  "issues": {
+    "failedRequests": [],
+    "networkFailures": [
+      {
+        "url": "https://jigyansurout.com/cdn-cgi/rum?",
+        "method": "POST",
+        "reason": "net::ERR_ABORTED"
+      },
+      {
+        "url": "https://jigyansurout.com/fonts/font-awesome/css/font-awesome.css",
+        "method": "GET",
+        "reason": "net::ERR_ABORTED"
+      },
+      {
+        "url": "https://jigyansurout.com/fonts/elegant_font/HTML_CSS/style.css",
+        "method": "GET",
+        "reason": "net::ERR_ABORTED"
+      },
+      {
+        "url": "https://jigyansurout.com/fonts/et-line-font/style.css",
+        "method": "GET",
+        "reason": "net::ERR_ABORTED"
+      },
+      {
+        "url": "https://jigyansurout.com/cdn-cgi/rum?",
+        "method": "POST",
+        "reason": "net::ERR_ABORTED"
+      },
+      {
+        "url": "https://jigyansurout.com/fonts/font-awesome/css/font-awesome.css",
+        "method": "GET",
+        "reason": "net::ERR_ABORTED"
+      },
+      {
+        "url": "https://jigyansurout.com/fonts/elegant_font/HTML_CSS/style.css",
+        "method": "GET",
+        "reason": "net::ERR_ABORTED"
+      },
+      {
+        "url": "https://jigyansurout.com/fonts/et-line-font/style.css",
+        "method": "GET",
+        "reason": "net::ERR_ABORTED"
+      },
+      {
+        "url": "https://jigyansurout.com/cdn-cgi/rum?",
+        "method": "POST",
+        "reason": "net::ERR_ABORTED"
+      },
+      {
+        "url": "https://jigyansurout.com/fonts/font-awesome/css/font-awesome.css",
+        "method": "GET",
+        "reason": "net::ERR_ABORTED"
+      },
+      {
+        "url": "https://jigyansurout.com/fonts/elegant_font/HTML_CSS/style.css",
+        "method": "GET",
+        "reason": "net::ERR_ABORTED"
+      },
+      {
+        "url": "https://jigyansurout.com/fonts/et-line-font/style.css",
+        "method": "GET",
+        "reason": "net::ERR_ABORTED"
+      }
+    ],
+    "duplicates": [
+      {
+        "method": "POST",
+        "url": "https://jigyansurout.com/cdn-cgi/rum?",
+        "count": 2,
+        "windowMs": 500
+      }
+    ],
+    "mixedContent": [],
+    "corsErrors": []
+  }
+}

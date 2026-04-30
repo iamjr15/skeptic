@@ -85,6 +85,27 @@ const recordActionCalls = (log: CallLog): Array<{ cmd: string }> => {
     .filter((p): p is { cmd: string } => typeof p === "object" && p !== null && "cmd" in p);
 };
 
+// B7: setCommandLabel calls use a `{ label, persistent }` payload shape, distinct from
+// the `{ cmd, x, y }` recordAction shape. Test fixtures distinguish them by field.
+const setLabelCalls = (log: CallLog): Array<{ label: string; persistent: boolean }> => {
+  return log.evaluateCalls
+    .map((call) => (call.args as unknown[])[1])
+    .filter(
+      (p): p is { label: string; persistent: boolean } =>
+        typeof p === "object" && p !== null && "label" in p && "persistent" in p,
+    );
+};
+
+// B7: clearCommandLabel passes no second arg (just the function body). Count the
+// evaluate calls whose body string contains "clearCommandLabel" — the cleanest signal
+// available without instrumenting page.evaluate further.
+const clearLabelCallCount = (log: CallLog): number => {
+  return log.evaluateCalls.filter((call) => {
+    const fn = (call.args as unknown[])[0];
+    return typeof fn === "function" && fn.toString().includes("clearCommandLabel");
+  }).length;
+};
+
 describe("Page Proxy coverage — 8 representative call shapes", () => {
   it("CAUGHT: page.click(selector)", async () => {
     const log = newLog();
@@ -165,6 +186,60 @@ describe("Page Proxy coverage — 8 representative call shapes", () => {
     // Navigation isn't an interaction-target action; correctly no marker.
     expect(log.goto).toBe(1);
     expect(recordActionCalls(log)).toHaveLength(0);
+  });
+
+  describe("B7 — sentence-form narration on intercepted Page actions", () => {
+    it("page.click(selector) emits the friendly persistent label and clears on completion", async () => {
+      const log = newLog();
+      const proxied = wrapPageWithCursor(buildStubPage(log));
+      await proxied.click("button.submit");
+      const sets = setLabelCalls(log);
+      expect(sets.some((s) => s.label === "Clicking" && s.persistent === true)).toBe(true);
+      expect(clearLabelCallCount(log)).toBeGreaterThanOrEqual(1);
+    });
+
+    it("page.fill(selector, value) emits 'Filling input' and clears", async () => {
+      const log = newLog();
+      const proxied = wrapPageWithCursor(buildStubPage(log));
+      await proxied.fill("input[name=email]", "user@example.com");
+      const sets = setLabelCalls(log);
+      expect(sets.some((s) => s.label === "Filling input" && s.persistent === true)).toBe(true);
+      expect(clearLabelCallCount(log)).toBeGreaterThanOrEqual(1);
+    });
+
+    it("page.locator(css).click() emits 'Clicking' on the Locator-Proxy path too", async () => {
+      const log = newLog();
+      const proxied = wrapPageWithCursor(buildStubPage(log));
+      await proxied.locator("button.submit").click();
+      const sets = setLabelCalls(log);
+      expect(sets.some((s) => s.label === "Clicking" && s.persistent === true)).toBe(true);
+      expect(clearLabelCallCount(log)).toBeGreaterThanOrEqual(1);
+    });
+
+    it("page.getByRole('button').hover() emits 'Hovering' and clears", async () => {
+      const log = newLog();
+      const proxied = wrapPageWithCursor(buildStubPage(log));
+      await proxied.getByRole("button").hover();
+      const sets = setLabelCalls(log);
+      expect(sets.some((s) => s.label === "Hovering" && s.persistent === true)).toBe(true);
+      expect(clearLabelCallCount(log)).toBeGreaterThanOrEqual(1);
+    });
+
+    it("a thrown action still clears the label (try/finally discipline)", async () => {
+      // Build a page where click rejects to simulate a Playwright timeout.
+      const log = newLog();
+      const errStub = buildStubPage(log) as unknown as {
+        click: ReturnType<typeof vi.fn>;
+        locator: typeof Object.prototype;
+      };
+      errStub.click = vi.fn(async () => {
+        throw new Error("click failed");
+      });
+      const proxied = wrapPageWithCursor(errStub as unknown as Page);
+      await expect(proxied.click("button.submit")).rejects.toThrow(/click failed/);
+      // The clear must have fired in `finally` even though the action threw.
+      expect(clearLabelCallCount(log)).toBeGreaterThanOrEqual(1);
+    });
   });
 
   it("preserves `this` via Reflect.apply on intercepted methods", async () => {

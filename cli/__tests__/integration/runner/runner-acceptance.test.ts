@@ -297,6 +297,127 @@ describe.skipIf(!distAvailable)("runner acceptance (B1)", () => {
     expect(lines).toHaveLength(2);
   }, 60_000);
 
+  it("test.use({ videoSize }) records a WebM at the requested resolution", () => {
+    const targetOut = path.join(outDir, "video-size");
+    const result = runCli(
+      [
+        "run",
+        path.join(FIXTURES, "video-size.spec.ts"),
+        "--video",
+        "--reporter",
+        "json",
+        "--output",
+        targetOut,
+      ],
+      { timeout: 90_000 },
+    );
+    expect(result.status).toBe(0);
+
+    // Find the per-test subdir produced by the runner (`${safeName}-${ordinal}`)
+    // and pick the first .webm inside it.
+    const subdirs = fs
+      .readdirSync(targetOut, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name);
+    expect(subdirs.length).toBeGreaterThan(0);
+    const flowDir = path.join(targetOut, subdirs[0]!);
+    const webm = fs.readdirSync(flowDir).find((f) => f.endsWith(".webm"));
+    expect(webm, `no .webm in ${flowDir}`).toBeDefined();
+
+    // Validate dimensions via ffprobe — it's available locally on the dev box
+    // and in CI containers; if it isn't, skip the dimension check rather than
+    // fail the suite. The presence of the .webm itself is the soft assertion.
+    let probe;
+    try {
+      probe = execFileSync(
+        "ffprobe",
+        [
+          "-v",
+          "error",
+          "-select_streams",
+          "v:0",
+          "-show_entries",
+          "stream=width,height",
+          "-of",
+          "csv=p=0",
+          path.join(flowDir, webm!),
+        ],
+        { encoding: "utf-8" },
+      );
+    } catch {
+      // ffprobe missing — soft pass; the unit test asserts the precedence chain.
+      return;
+    }
+    expect(probe.trim()).toBe("1920,1080");
+  }, 90_000);
+
+  it("--video-size CLI flag overrides test.use and viewport", () => {
+    const targetOut = path.join(outDir, "video-size-cli");
+    const result = runCli(
+      [
+        "run",
+        path.join(FIXTURES, "video-size.spec.ts"),
+        "--video",
+        "--video-size",
+        "640x480",
+        "--reporter",
+        "json",
+        "--output",
+        targetOut,
+      ],
+      { timeout: 90_000 },
+    );
+    expect(result.status).toBe(0);
+
+    const subdirs = fs
+      .readdirSync(targetOut, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name);
+    expect(subdirs.length).toBeGreaterThan(0);
+    const flowDir = path.join(targetOut, subdirs[0]!);
+    const webm = fs.readdirSync(flowDir).find((f) => f.endsWith(".webm"));
+    expect(webm, `no .webm in ${flowDir}`).toBeDefined();
+
+    let probe;
+    try {
+      probe = execFileSync(
+        "ffprobe",
+        [
+          "-v",
+          "error",
+          "-select_streams",
+          "v:0",
+          "-show_entries",
+          "stream=width,height",
+          "-of",
+          "csv=p=0",
+          path.join(flowDir, webm!),
+        ],
+        { encoding: "utf-8" },
+      );
+    } catch {
+      return;
+    }
+    // CLI flag (640x480) wins over the fixture's `test.use({ videoSize: 1920x1080 })`.
+    expect(probe.trim()).toBe("640,480");
+  }, 90_000);
+
+  it("--video-size rejects malformed input", () => {
+    const result = runCli([
+      "run",
+      path.join(FIXTURES, "video-size.spec.ts"),
+      "--video",
+      "--video-size",
+      "0x0",
+      "--reporter",
+      "json",
+      "--output",
+      path.join(outDir, "video-size-bogus"),
+    ]);
+    expect(result.status).not.toBe(0);
+    expect(`${result.stderr}${result.stdout}`).toMatch(/within|expected/);
+  }, 30_000);
+
   it("--list outputs the manifest without spawning a browser", () => {
     const result = runCli(["run", path.join(FIXTURES, "two-tests.spec.ts"), "--list"]);
     expect(result.stdout).toContain("two-tests.spec.ts");

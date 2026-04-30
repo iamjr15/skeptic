@@ -69,6 +69,13 @@ export interface TestArtifacts {
   networkSnapshot?: string;
   /** Per-test JSON file (a slice of results.json scoped to this test). */
   testJson?: string;
+  /**
+   * Per-test `audit.md` sidecar — full Accessibility violation report grouped
+   * by rule, no rule-level truncation. Written by `writeAuditSidecar` when the
+   * test produced any a11y violations. Reporters (JSON/HTML/console) surface
+   * the path when present.
+   */
+  accessibilityAudit?: string;
 }
 
 export interface TestResult {

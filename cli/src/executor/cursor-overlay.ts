@@ -13,9 +13,14 @@
  *   - hide()                 Toggle visibility off (used before screenshots).
  *   - show()                 Toggle visibility on.
  *   - isVisible()            Boolean — current visibility.
- *   - setCommandLabel(name)  Show a tooltip above the cursor with the command name.
- *                            Tooltip auto-fades after ~1.5 s. Pass commandName ONLY (not
- *                            args — PII safety).
+ *   - setCommandLabel(name, opts?) Show a tooltip near the cursor with the command name.
+ *                            Tooltip auto-fades after ~1.5 s by default. Pass
+ *                            `{ persistent: true }` to pin until cleared (used for
+ *                            long-running ops like accessibility audits). Pass commandName
+ *                            ONLY — never args — PII safety.
+ *   - clearCommandLabel()    Hide the tooltip immediately and cancel any pending fade
+ *                            timer. Paired with setCommandLabel inside runAction's
+ *                            try/finally so the tooltip never gets stuck on a thrown step.
  *   - recordAction(name, x?, y?)
  *                            Drop a numbered action marker at (x, y). Coords default to
  *                            page center if omitted. Action log capped at 50 entries (FIFO).
@@ -194,9 +199,21 @@ export const CURSOR_OVERLAY_SOURCE = String.raw`
   const moveCursor = () => {
     pending = false;
     cursorEl.style.transform = 'translate(' + (lastX - 2) + 'px, ' + (lastY - 2) + 'px)';
-    // Tooltip rides above the cursor; clamp to viewport horizontally.
-    const tx = Math.max(2, Math.min(window.innerWidth - 120, lastX + 14));
-    const ty = Math.max(2, lastY - 26);
+    // Tooltip default: above-and-right of the cursor. When the tooltip would clip the
+    // viewport's right edge, render to the LEFT of the cursor; when it would clip the
+    // bottom (cursor near top of viewport), render BELOW the cursor instead. Independent
+    // design — common UI flip-pattern, not derived from any reference codebase. Keeps
+    // the persistent narration tooltip readable when the cursor is near a screen edge.
+    const vw = window.innerWidth || 0;
+    const vh = window.innerHeight || 0;
+    const tw = tooltipEl.offsetWidth || 200;
+    const th = tooltipEl.offsetHeight || 22;
+    let tx = lastX + 14;
+    if (tx + tw > vw - 4) tx = lastX - 14 - tw;
+    if (tx < 2) tx = 2;
+    let ty = lastY - th - 4;
+    if (ty < 2) ty = lastY + 18;
+    if (ty + th > vh - 2) ty = Math.max(2, vh - th - 2);
     tooltipEl.style.transform = 'translate(' + tx + 'px, ' + ty + 'px)';
   };
 
@@ -301,17 +318,31 @@ export const CURSOR_OVERLAY_SOURCE = String.raw`
   };
 
   let tooltipTimer = 0;
-  const setCommandLabel = (commandName) => {
+  const setCommandLabel = (commandName, opts) => {
     if (typeof commandName !== 'string') return;
     // PII safety: caller is responsible for passing only the command NAME, never args.
-    const safe = commandName.length > 40 ? commandName.slice(0, 40) : commandName;
+    // Sentence-form labels (e.g. "Running accessibility audit") run longer than terse
+    // command names, so cap at 80 chars.
+    const safe = commandName.length > 80 ? commandName.slice(0, 80) : commandName;
     tooltipEl.textContent = safe;
     tooltipEl.classList.remove('hidden');
     tooltipEl.classList.add('show');
-    if (tooltipTimer) clearTimeout(tooltipTimer);
-    tooltipTimer = window.setTimeout(() => {
-      tooltipEl.classList.remove('show');
-    }, TOOLTIP_FADE_MS);
+    if (tooltipTimer) { clearTimeout(tooltipTimer); tooltipTimer = 0; }
+    // Re-position immediately so the new text width feeds into the viewport-edge flip.
+    if (!pending) { pending = true; requestAnimationFrame(moveCursor); }
+    const persistent = !!(opts && opts.persistent === true);
+    if (!persistent) {
+      tooltipTimer = window.setTimeout(() => {
+        tooltipTimer = 0;
+        tooltipEl.classList.remove('show');
+      }, TOOLTIP_FADE_MS);
+    }
+  };
+
+  const clearCommandLabel = () => {
+    if (tooltipTimer) { clearTimeout(tooltipTimer); tooltipTimer = 0; }
+    tooltipEl.classList.remove('show');
+    tooltipEl.textContent = '';
   };
 
   window.__skepticCursor = {
@@ -331,6 +362,7 @@ export const CURSOR_OVERLAY_SOURCE = String.raw`
     },
     isVisible: () => visible,
     setCommandLabel,
+    clearCommandLabel,
     recordAction,
     // Internal: exposed for tests so they can introspect the action log without
     // scraping the DOM. Not part of the documented public API.

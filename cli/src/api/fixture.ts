@@ -21,10 +21,12 @@ import {
   type ObservabilityFixture,
 } from "./observability.js";
 import {
+  fireClearCommandLabel,
   fireRecordAction,
   fireSetCommandLabel,
   wrapPageWithCursor,
 } from "./page-proxy.js";
+import { friendlyLabel, PERSISTENT_LABEL_ACTIONS } from "./labels.js";
 
 export interface SkepticFixture {
   page: Page;
@@ -90,9 +92,20 @@ export const buildFixture = (
     onAction({ label, status: "started" });
     // Side-channel: tooltip + synthetic action marker for fixture-routed methods.
     // Best-effort, fire-and-forget. Outside any abort/timeout boundary; the
-    // `.catch(() => {})` inside fireSetCommandLabel/fireRecordAction is the only
-    // guard. Pass label as evaluate argument inside fire*; never interpolate.
-    if (cursorEnabled) fireSetCommandLabel(page, label);
+    // `.catch(() => {})` inside fireSetCommandLabel is the only guard. Resolve the
+    // raw fixture action name (e.g. `observability.expectAccessible`) to its
+    // sentence-form label via the static labels.ts table — no interpolation, no
+    // user-supplied data ever crosses into evaluate.
+    const friendly = friendlyLabel(label);
+    const persistent = PERSISTENT_LABEL_ACTIONS.has(label);
+    if (cursorEnabled) {
+      // Don't `await` here — we want the action body to start immediately rather than
+      // waiting on a page.evaluate roundtrip. The .catch swallows so an overlay-not-
+      // ready rejection never propagates. The clear in `finally` is awaited because
+      // we want it to land before the next runAction starts (otherwise a race could
+      // briefly show the wrong label).
+      fireSetCommandLabel(page, friendly, { persistent }).catch(() => {});
+    }
     try {
       const result = await fn();
       onAction({
@@ -111,6 +124,12 @@ export const buildFixture = (
         error: message,
       });
       throw err;
+    } finally {
+      // Pair with the persistent setCommandLabel so a thrown step never leaves the
+      // tooltip pinned to the previous action's text on screen.
+      if (cursorEnabled) {
+        await fireClearCommandLabel(page).catch(() => {});
+      }
     }
   };
 
@@ -118,7 +137,12 @@ export const buildFixture = (
     runAction("snapshot", () => snapshot(target ?? page, ctx, opts));
 
   const fixtureScreenshot: SkepticFixture["screenshot"] = (name, opts) =>
-    runAction("screenshot", () => takeScreenshot(page, ctx, name, opts));
+    // Distinguish plain captures from annotated captures so the narration tooltip
+    // can read "Taking annotated screenshot" — annotated captures inject overlays
+    // and run noticeably longer than plain ones.
+    runAction(opts?.annotate === true ? "screenshot.annotated" : "screenshot", () =>
+      takeScreenshot(page, ctx, name, opts),
+    );
 
   const fixtureSettle: SkepticFixture["settle"] = () =>
     runAction("settle", async () => {

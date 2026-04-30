@@ -128,4 +128,45 @@ describe("formatPerfTraceMarkdown", () => {
     expect(md).not.toContain("## Web Vitals");
     expect(md).not.toContain("## Network");
   });
+
+  it("renders a truncation banner when bucket size exceeds the cap", () => {
+    const violations = Array.from({ length: 12 }, (_, i) => ({
+      ruleId: `rule-${i}`,
+      impact: "serious" as const,
+      engine: "axe" as const,
+      help: `help ${i}`,
+      nodes: [],
+    }));
+    const a11y: AccessibilitySnapshot = {
+      violations,
+      summary: { violations: 12, passes: 0, incomplete: 0, dualEngine: false },
+      standard: "WCAG21AA",
+    };
+    const md = formatPerfTraceMarkdown({ accessibility: a11y }, { accessibilityMaxRulesPerImpact: 5 });
+    expect(md).toContain("### Serious (12)");
+    // First 5 rendered, remaining 7 announced via banner.
+    expect(md).toContain("**rule-0**");
+    expect(md).toContain("**rule-4**");
+    expect(md).not.toContain("**rule-5**");
+    expect(md).toContain("...and 7 more — see audit.md");
+  });
+
+  it("does not show the truncation banner when bucket fits within the cap (default 100)", () => {
+    const violations = Array.from({ length: 30 }, (_, i) => ({
+      ruleId: `rule-${i}`,
+      impact: "minor" as const,
+      engine: "axe" as const,
+      help: `help ${i}`,
+      nodes: [],
+    }));
+    const a11y: AccessibilitySnapshot = {
+      violations,
+      summary: { violations: 30, passes: 0, incomplete: 0, dualEngine: false },
+      standard: "WCAG21AA",
+    };
+    const md = formatPerfTraceMarkdown({ accessibility: a11y });
+    expect(md).toContain("### Minor (30)");
+    expect(md).toContain("**rule-29**");
+    expect(md).not.toContain("see audit.md");
+  });
 });

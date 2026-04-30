@@ -295,6 +295,13 @@ function buildArtifactsPanel(flow: TestResult): string {
     );
   }
 
+  // Accessibility audit markdown sidecar — full violation list, no rule-level truncation.
+  if (a.accessibilityAudit) {
+    cards.push(
+      `<div class="artifact-card"><h4>Accessibility Audit</h4><a href="${esc(a.accessibilityAudit)}">Open audit.md</a></div>`,
+    );
+  }
+
   // Console / network sidecars (Bundle 4 will write them under --observability-write-sidecars)
   const sidecarLinks: string[] = [];
   if (a.consoleSnapshot) sidecarLinks.push(`<a href="${esc(a.consoleSnapshot)}">console.json</a>`);

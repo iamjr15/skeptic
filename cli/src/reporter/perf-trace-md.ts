@@ -13,6 +13,16 @@ export interface PerfTraceInput {
   console?: ConsoleSnapshot;
 }
 
+export interface PerfTraceOptions {
+  /**
+   * Per-impact-bucket cap for the Accessibility section. When the bucket
+   * holds more than `cap` rules, the markdown renders the first `cap` and
+   * appends a "...and N more — see audit.md" footer. The per-test `audit.md`
+   * sidecar always lists every rule regardless of this cap. Default = 100.
+   */
+  accessibilityMaxRulesPerImpact?: number;
+}
+
 /** Match the Expect-flavoured ms formatting in the benchmark perf-trace markdown:
  *  use ms up through ~9 999, only switch to seconds for very long durations. Keeps the
  *  output side-by-side comparable with expect-pass output. */
@@ -49,7 +59,11 @@ const webVitalRating = (
  * "0 B" placeholder rows. The Resources section reads from `PerformanceSnapshot.resources`
  * (zero-cost browser-side capture); when that field is empty the section is dropped.
  */
-export const formatPerfTraceMarkdown = (input: PerfTraceInput): string => {
+export const formatPerfTraceMarkdown = (
+  input: PerfTraceInput,
+  options: PerfTraceOptions = {},
+): string => {
+  const a11yCap = options.accessibilityMaxRulesPerImpact ?? 100;
   const parts: string[] = ["# Performance Trace", ""];
 
   const perf = input.performance;
@@ -233,9 +247,13 @@ export const formatPerfTraceMarkdown = (input: PerfTraceInput): string => {
         const list = groups[impact];
         if (!list || list.length === 0) continue;
         parts.push(`### ${impact[0]!.toUpperCase()}${impact.slice(1)} (${list.length})`, "");
-        for (const v of list.slice(0, 10)) {
+        const shown = list.slice(0, a11yCap);
+        for (const v of shown) {
           parts.push(`- **${v.ruleId}** — ${v.help}${v.engine === "equal-access" ? " *(equal-access)*" : ""}`);
           if (v.helpUrl) parts.push(`  - ${v.helpUrl}`);
+        }
+        if (list.length > a11yCap) {
+          parts.push(`- ...and ${list.length - a11yCap} more — see audit.md`);
         }
         parts.push("");
       }

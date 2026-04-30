@@ -6,7 +6,8 @@ interface CursorAPI {
   hide: () => void;
   show: () => void;
   isVisible: () => boolean;
-  setCommandLabel: (cmd: string) => void;
+  setCommandLabel: (cmd: string, opts?: { persistent?: boolean }) => void;
+  clearCommandLabel: () => void;
   recordAction: (cmd: string, x?: number, y?: number) => void;
   __actionLog: { n: number; command: string; x: number; y: number }[];
 }
@@ -19,7 +20,20 @@ interface MockGlobal {
   clearTimeout: (...args: unknown[]) => void;
 }
 
-const buildSandbox = (): { ctx: vm.Context; globals: MockGlobal } => {
+interface TooltipProbe {
+  textContent: string;
+  hasShowClass: () => boolean;
+  hasHiddenClass: () => boolean;
+}
+
+interface SandboxResult {
+  ctx: vm.Context;
+  globals: MockGlobal;
+  tooltipProbe: TooltipProbe;
+  setTimeoutCalls: Array<{ ms: number }>;
+}
+
+const buildSandbox = (): SandboxResult => {
   // Hand-built minimal DOM stub. We're not exercising the visual layer here — only
   // the public API surface and storage/log invariants. Anything the IIFE actually calls
   // gets a no-op stub that returns plausibly-shaped objects.
@@ -103,10 +117,15 @@ const buildSandbox = (): { ctx: vm.Context; globals: MockGlobal } => {
     removeItem: (k: string) => { storage.delete(k); },
   };
 
+  const setTimeoutCalls: Array<{ ms: number }> = [];
+  const trackedSetTimeout = (_fn: unknown, ms: number): number => {
+    setTimeoutCalls.push({ ms });
+    return setTimeoutCalls.length;
+  };
   const globals: MockGlobal = {
     innerWidth: 1024,
     innerHeight: 768,
-    setTimeout: () => 0,
+    setTimeout: trackedSetTimeout as unknown as MockGlobal["setTimeout"],
     clearTimeout: () => {},
   };
   const ctx = vm.createContext({
@@ -114,7 +133,7 @@ const buildSandbox = (): { ctx: vm.Context; globals: MockGlobal } => {
     document,
     sessionStorage,
     requestAnimationFrame: (fn: () => void) => { fn(); return 0; },
-    setTimeout: () => 0,
+    setTimeout: trackedSetTimeout,
     clearTimeout: () => {},
     getComputedStyle: () => ({ cursor: "pointer" }),
     JSON,
@@ -124,11 +143,16 @@ const buildSandbox = (): { ctx: vm.Context; globals: MockGlobal } => {
   });
   // Make `window` references in the IIFE resolve to globals.
   (ctx as { window: MockGlobal }).window = globals;
-  return { ctx, globals };
+  const tooltipProbe: TooltipProbe = {
+    get textContent() { return tooltip.textContent; },
+    hasShowClass: () => tooltip.classes.has("show"),
+    hasHiddenClass: () => tooltip.classes.has("hidden"),
+  };
+  return { ctx, globals, tooltipProbe, setTimeoutCalls };
 };
 
 describe("cursor-overlay source", () => {
-  it("exposes hide / show / isVisible / setCommandLabel / recordAction on window.__skepticCursor", () => {
+  it("exposes hide / show / isVisible / setCommandLabel / clearCommandLabel / recordAction on window.__skepticCursor", () => {
     const { ctx, globals } = buildSandbox();
     vm.runInContext(CURSOR_OVERLAY_SOURCE, ctx);
     const api = globals.__skepticCursor;
@@ -137,6 +161,7 @@ describe("cursor-overlay source", () => {
     expect(typeof api?.show).toBe("function");
     expect(typeof api?.isVisible).toBe("function");
     expect(typeof api?.setCommandLabel).toBe("function");
+    expect(typeof api?.clearCommandLabel).toBe("function");
     expect(typeof api?.recordAction).toBe("function");
   });
 
@@ -185,8 +210,83 @@ describe("cursor-overlay source", () => {
   it("sessionStorage persistence key + tooltip command-name plumbing exist", () => {
     expect(CURSOR_OVERLAY_SOURCE).toContain("__skeptic_cursor_state");
     expect(CURSOR_OVERLAY_SOURCE).toContain("setCommandLabel");
+    expect(CURSOR_OVERLAY_SOURCE).toContain("clearCommandLabel");
     expect(CURSOR_OVERLAY_SOURCE).toContain("recordAction");
     // PII-safety guard: no `step.args` interpolation; the label is passed by name only.
     expect(CURSOR_OVERLAY_SOURCE).not.toContain("step.args");
+  });
+
+  describe("B7 — persistent narration tooltip", () => {
+    it("setCommandLabel writes the text and toggles the show class", () => {
+      const { ctx, globals, tooltipProbe } = buildSandbox();
+      vm.runInContext(CURSOR_OVERLAY_SOURCE, ctx);
+      const api = globals.__skepticCursor!;
+      api.setCommandLabel("Running accessibility audit");
+      expect(tooltipProbe.textContent).toBe("Running accessibility audit");
+      expect(tooltipProbe.hasShowClass()).toBe(true);
+    });
+
+    it("setCommandLabel(label, { persistent: true }) does NOT schedule the auto-fade timer", () => {
+      const { ctx, globals, setTimeoutCalls } = buildSandbox();
+      vm.runInContext(CURSOR_OVERLAY_SOURCE, ctx);
+      const api = globals.__skepticCursor!;
+      // Filter out persist-storage timer (PERSIST_DEBOUNCE_MS=500) from the fade timer
+      // (TOOLTIP_FADE_MS=1500). Only the fade timer matters here.
+      const fadeTimerCount = () => setTimeoutCalls.filter((c) => c.ms === 1500).length;
+
+      const before = fadeTimerCount();
+      api.setCommandLabel("Running accessibility audit", { persistent: true });
+      expect(fadeTimerCount()).toBe(before);
+      // Sanity: a non-persistent call DOES schedule a fade.
+      api.setCommandLabel("Capturing screenshot");
+      expect(fadeTimerCount()).toBe(before + 1);
+    });
+
+    it("calling setCommandLabel a second time replaces the first label's text", () => {
+      const { ctx, globals, tooltipProbe } = buildSandbox();
+      vm.runInContext(CURSOR_OVERLAY_SOURCE, ctx);
+      const api = globals.__skepticCursor!;
+      api.setCommandLabel("Running accessibility audit", { persistent: true });
+      expect(tooltipProbe.textContent).toBe("Running accessibility audit");
+      api.setCommandLabel("Taking annotated screenshot", { persistent: true });
+      expect(tooltipProbe.textContent).toBe("Taking annotated screenshot");
+    });
+
+    it("clearCommandLabel hides the tooltip and empties its text", () => {
+      const { ctx, globals, tooltipProbe } = buildSandbox();
+      vm.runInContext(CURSOR_OVERLAY_SOURCE, ctx);
+      const api = globals.__skepticCursor!;
+      api.setCommandLabel("Running accessibility audit", { persistent: true });
+      expect(tooltipProbe.hasShowClass()).toBe(true);
+      api.clearCommandLabel();
+      expect(tooltipProbe.hasShowClass()).toBe(false);
+      expect(tooltipProbe.textContent).toBe("");
+    });
+
+    it("setCommandLabel truncates labels above 80 chars (sentence-form bumped from 40)", () => {
+      const { ctx, globals, tooltipProbe } = buildSandbox();
+      vm.runInContext(CURSOR_OVERLAY_SOURCE, ctx);
+      const api = globals.__skepticCursor!;
+      const longLabel = "a".repeat(120);
+      api.setCommandLabel(longLabel);
+      expect(tooltipProbe.textContent.length).toBe(80);
+    });
+
+    it("setCommandLabel ignores non-string input (defensive)", () => {
+      const { ctx, globals, tooltipProbe } = buildSandbox();
+      vm.runInContext(CURSOR_OVERLAY_SOURCE, ctx);
+      const api = globals.__skepticCursor!;
+      // @ts-expect-error — runtime guard test
+      api.setCommandLabel(undefined);
+      expect(tooltipProbe.textContent).toBe("");
+    });
+  });
+
+  it("source string still declares clearCommandLabel + viewport-edge flip plumbing", () => {
+    // Sanity guards so a future refactor cannot silently drop the persistent
+    // tooltip behaviour. The viewport-flip uses offsetWidth/offsetHeight.
+    expect(CURSOR_OVERLAY_SOURCE).toContain("clearCommandLabel");
+    expect(CURSOR_OVERLAY_SOURCE).toContain("offsetWidth");
+    expect(CURSOR_OVERLAY_SOURCE).toContain("offsetHeight");
   });
 });

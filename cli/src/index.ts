@@ -72,6 +72,10 @@ program
   .option("--cookies", "enable browser cookie extraction (opt-in)")
   .option("--cookies-from <browser>", "extract cookies from specific browser only")
   .option("--video", "record video of test execution (WebM)")
+  .option(
+    "--video-size <WxH>",
+    "video recording resolution (e.g., 1920x1080); overrides viewport size for video only",
+  )
   .option("-w, --watch", "watch for file changes and re-run")
   .option("-u, --url <url>", "base URL (overrides config)")
   .option("--parallel <n>", "run N test files concurrently", parsePositiveInt)
@@ -94,6 +98,12 @@ program
   .option("--connect <url>", "connect to a running browser via CDP (B2)")
   .option("--env <KEY=VALUE...>", "set environment variables")
   .option("--analyze", "use AI to analyze test failures (best-effort post-run)")
+  .option("--no-daemon", "bypass the persistent BrowserServer daemon (pre-B10 fresh-launch behavior)")
+  .option(
+    "--daemon-idle-timeout <seconds>",
+    "auto-stop the daemon after N seconds idle (default 300; 0 disables)",
+    parseInt,
+  )
   .action(async (specs: string[], cmdOpts: RunCommandOptions) => {
     const { runRun } = await import("./commands/run.js");
     await runRun(specs.length > 0 ? specs : undefined, cmdOpts);
@@ -239,10 +249,66 @@ program
   .option("--with-playwright-hints", "also emit Playwright snippet per ref")
   .option("--annotated", "capture an annotated PNG with numbered badges over each ref")
   .option("--annotate-output <path>", "output path for the annotated PNG (defaults to ./skeptic-inspect-<ts>.png)")
+  .option("--no-daemon", "bypass the persistent daemon and launch a fresh browser (pre-B10)")
   .action(async (url: string, cmdOpts: import("./commands/inspect.js").InspectCommandOptions) => {
     const { runInspect } = await import("./commands/inspect.js");
     await runInspect(url, cmdOpts);
   });
+
+// B10 — daemon control plane. Lifecycle commands for the persistent
+// BrowserServer at `~/.skeptic/daemon.sock`.
+const daemonCmd = program
+  .command("daemon")
+  .description("Manage the persistent BrowserServer daemon (B10)");
+
+daemonCmd
+  .command("start")
+  .description("Start the daemon (foreground; auto-spawned by `run`/`inspect` when needed)")
+  .option("--engine <engine>", "browser engine: chromium | firefox | webkit", "chromium")
+  .option("--headed", "run BrowserServer in headed mode")
+  .option(
+    "--daemon-idle-timeout <seconds>",
+    "auto-stop after N idle seconds (default 300; 0 disables)",
+    parseInt,
+  )
+  .action(
+    async (cmdOpts: { engine?: string; headed?: boolean; daemonIdleTimeout?: number }) => {
+      const { runDaemonStart } = await import("./commands/daemon.js");
+      await runDaemonStart(cmdOpts);
+    },
+  );
+
+daemonCmd
+  .command("stop")
+  .description("Stop the running daemon")
+  .action(async () => {
+    const { runDaemonStop } = await import("./commands/daemon.js");
+    await runDaemonStop();
+  });
+
+daemonCmd
+  .command("status")
+  .description("Show daemon status (running/uptime/clients/engine)")
+  .action(async () => {
+    const { runDaemonStatus } = await import("./commands/daemon.js");
+    await runDaemonStatus();
+  });
+
+daemonCmd
+  .command("logs")
+  .description("Tail the daemon log file at ~/.skeptic/daemon.log")
+  .option("-n, --lines <n>", "show last N lines (default 200)", parseInt)
+  .action(async (cmdOpts: { lines?: number }) => {
+    const { runDaemonLogs } = await import("./commands/daemon.js");
+    await runDaemonLogs(cmdOpts);
+  });
+
+// Re-export `commandUsesBrowser` so existing callers (and the
+// `auto-spawn-discipline` unit test) keep working. The implementation lives
+// in `daemon/auto-spawn.ts` next to the only function that calls it on the
+// runtime path — see B10 audit on task #17 (the inline copy here was
+// dead code on the production path).
+export { commandUsesBrowser, prewarmDaemonIfNeeded } from "./daemon/auto-spawn.js";
 
 program
   .command("audit")

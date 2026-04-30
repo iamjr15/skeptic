@@ -9,6 +9,7 @@ import { logger, setLogLevel } from "../utils/logger.js";
 import type { Reporter, RunSummary } from "../reporter/types.js";
 import { ConsoleReporter } from "../reporter/console-reporter.js";
 import { runSpecs, listSpecs, type WorkerStartConfig } from "../runner/index.js";
+import { prewarmDaemonIfNeeded } from "../daemon/auto-spawn.js";
 
 export interface RunCommandOptions {
   config?: string;
@@ -25,6 +26,8 @@ export interface RunCommandOptions {
   cookies?: boolean;
   cookiesFrom?: string;
   video?: boolean;
+  /** CLI `--video-size <WxH>` — parsed by `parseVideoSize` into a `{width,height}` pair. */
+  videoSize?: string;
   watch?: boolean;
   url?: string;
   parallel?: number;
@@ -49,7 +52,47 @@ export interface RunCommandOptions {
   env?: string[];
   /** Plan §3 carry-over — best-effort post-run AI failure analysis. */
   analyze?: boolean;
+  /**
+   * B10 — Commander surfaces `--no-daemon` as `daemon: false`. When false,
+   * the worker bypasses the persistent BrowserServer daemon and launches a
+   * fresh Playwright Browser per worker (pre-B10 behavior). When undefined
+   * or true, daemon mode is used. Plan §B10 invariant 3 — the safety valve
+   * for CI, version pinning, and debugging.
+   */
+  daemon?: boolean;
+  /**
+   * B10 — override the spawned-daemon idle timeout in seconds. `0` disables.
+   * Default 300 (5 min). Plan §B10 invariant 4.
+   */
+  daemonIdleTimeout?: number;
 }
+
+/**
+ * Parse a `--video-size <WxH>` argument into `{ width, height }`. Accepts
+ * only `\d+x\d+` (case-insensitive on the separator) with both dimensions
+ * positive integers in `[1, 3840]`. Rejects `0x0`, negative values (the
+ * regex already excludes the sign character), and oversized resolutions.
+ */
+export const parseVideoSize = (input: string): { width: number; height: number } => {
+  const match = /^(\d+)[xX](\d+)$/.exec(input);
+  if (!match) {
+    throw new Error(
+      `--video-size: expected "<width>x<height>" (e.g. 1920x1080), got "${input}"`,
+    );
+  }
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  const MAX = 3840;
+  if (!Number.isInteger(width) || !Number.isInteger(height)) {
+    throw new Error(`--video-size: dimensions must be integers, got "${input}"`);
+  }
+  if (width < 1 || height < 1 || width > MAX || height > MAX) {
+    throw new Error(
+      `--video-size: width and height must be within [1, ${MAX}], got ${width}x${height}`,
+    );
+  }
+  return { width, height };
+};
 
 const buildWorkerConfig = (
   opts: RunCommandOptions,
@@ -89,6 +132,8 @@ const buildWorkerConfig = (
       accessibilityStandard: defaults.observability.accessibilityStandard ?? "WCAG21AA",
       autoAccessibilityAudit:
         defaults.observability.autoAccessibilityAudit ?? observabilityFlag,
+      accessibilityMaxRulesPerImpact:
+        defaults.observability.accessibilityMaxRulesPerImpact ?? 100,
     },
     artifact: {
       fullPageScreenshots:
@@ -110,11 +155,22 @@ const buildWorkerConfig = (
     workerConfig.baseUrl = opts.url ?? defaults.url;
   }
   if (deviceId) workerConfig.device = deviceId;
+  if (opts.videoSize) {
+    workerConfig.videoSize = parseVideoSize(opts.videoSize);
+  }
   if (opts.cookies ?? defaults.auth.cookies) {
     workerConfig.cookies = {
       enabled: opts.cookies ?? defaults.auth.cookies,
       ...(opts.cookiesFrom ? { browser: opts.cookiesFrom } : {}),
     };
+  }
+  // B10 — daemon plumbing. Commander parses `--no-daemon` as `daemon: false`.
+  // When the user passed `--no-daemon`, flip the worker into the pre-B10
+  // direct-launch branch. `--daemon-idle-timeout` is forwarded to a freshly
+  // auto-spawned daemon (no effect when daemon is already running).
+  if (opts.daemon === false) workerConfig.noDaemon = true;
+  if (typeof opts.daemonIdleTimeout === "number") {
+    workerConfig.daemonIdleTimeoutSeconds = opts.daemonIdleTimeout;
   }
   return workerConfig;
 };
@@ -180,7 +236,13 @@ const createReporters = async (
 const printArtifactPaths = (summary: RunSummary, outputDir: string): void => {
   const tests = summary.tests.filter((t) => {
     const a = t.artifacts ?? {};
-    return a.video || a.trace || a.perfTrace || (a.screenshots && a.screenshots.length > 0);
+    return (
+      a.video ||
+      a.trace ||
+      a.perfTrace ||
+      a.accessibilityAudit ||
+      (a.screenshots && a.screenshots.length > 0)
+    );
   });
   if (tests.length === 0) return;
   logger.raw("");
@@ -243,6 +305,30 @@ export const runRun = async (
 
   const workerConfig = buildWorkerConfig(opts, config, envOverrides);
   if (isCI) workerConfig.headed = false;
+
+  // B10 audit fix (task #17) — pre-warm the daemon from the MAIN process so
+  // `process.argv[1]` resolves to `dist/skeptic.mjs`. Spawning from inside a
+  // worker_thread would resolve to `dist/worker.mjs` and the spawned daemon
+  // would hang on a parentPort message that never arrives. After this gate,
+  // the worker-side `connectDaemon` call hits the socket-connectable fast
+  // path and never spawns.
+  //
+  // Re-audit finding #2: when pre-warm fails (spawn-timeout, version mismatch,
+  // etc.) we propagate `noDaemon: true` to workers so they actually fall back
+  // to fresh per-test launches instead of re-running the same broken spawn
+  // path 4× times. Matches the warning text "falling back to fresh launches".
+  const prewarmed = await prewarmDaemonIfNeeded(process.argv, {
+    engine: workerConfig.browserEngine,
+    headed: workerConfig.headed,
+    cliVersion: __SKEPTIC_CLI_VERSION__,
+    noDaemon: opts.daemon === false,
+    ...(typeof opts.daemonIdleTimeout === "number"
+      ? { idleTimeoutSeconds: opts.daemonIdleTimeout }
+      : {}),
+  });
+  if (!prewarmed && opts.daemon !== false) {
+    workerConfig.noDaemon = true;
+  }
 
   const shardIndex = opts.shardIndex ?? Number(process.env["SKEPTIC_SHARD_INDEX"] ?? "");
   const runOptions = {

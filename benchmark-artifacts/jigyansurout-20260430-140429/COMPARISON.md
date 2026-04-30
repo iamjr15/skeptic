@@ -154,3 +154,61 @@ skeptic-v3/
     perf-trace.md                  Markdown sidecar w/ dual-engine a11y
     network.json / console.json    Capture sidecars
 ```
+
+---
+
+## Wave 2 (B7–B10) — closing the gaps
+
+After v3 shipped, the `velvety-finding-beacon` plan tackled the four
+output-quality regressions surfaced above. Bundles B7–B10 landed on
+`main` and a fresh verification benchmark was captured at
+`../jigyansurout-20260430-182139/skeptic-v4/` (commit
+`3a60f93d28b8e5f2e5a46d50be7dd2988e5c5895`). Same target, same 4-page
+sequence, same `expectAccessible` audit at the end — re-comparing
+against `expect-v1`:
+
+| Metric | expect-v1 | skeptic-v3 | **skeptic-v4** | Wave-2 win |
+|---|---|---|---|---|
+| Video resolution | 1920×1080 | 1280×720 | **1920×1080** | **B8** — `--video-size <WxH>` flag, `test.use({ videoSize })`, viewport fallback |
+| Cursor narration text | bare method names (CDP shim) | bare method names, 1 s fade | **sentence form**, persistent during long ops | **B7** — labels module + persistent tooltip |
+| A11y rule surfacing (axe + IBM) | JSON to stdout (full IBM ruleset, 60+ rules surfaced) | summary in `perf-trace.md` only, capped | **per-test `audit.md`** with full rule list, `(axe)` / `(equal-access)` badges, +N-nodes footer | **B9** — `accessibilityMaxRulesPerImpact` knob, full sidecar |
+| Per-call latency (interactive) | daemon model, ~50–150 ms | fresh launch, ~3–5 s | **daemon mode default-on**, warm = ~200 ms RPC | **B10** — `~/.skeptic/daemon.sock`, `--no-daemon` opt-out |
+| Cookie / storage isolation across calls | shared session in daemon | n/a (no daemon) | **per-test `BrowserContext`** — Browser is shared, contexts are not | B10 invariant |
+
+Verification benchmark numbers (skeptic-v4 only, full E2E run):
+
+| Run | Wall | Test-time | Net reqs | Audit |
+|---|---:|---:|---:|---|
+| cold (clean `~/.skeptic`) | 17.76 s | 16.53 s | 163 | `audit.md` written ✓ |
+| warm (daemon up) | **15.17 s** | 14.41 s | 163 | `audit.md` written ✓ |
+| Δ | −2.59 s | −2.12 s | — | — |
+
+Daemon overhead in isolation (`inspect about:blank --wait 0`):
+
+| Run | Wall | Note |
+|---|---:|---|
+| cold | 1.09 s | first daemon spawn + 0700 sidecar init |
+| warm | 0.78 s | connect-only path |
+| Δ | −0.31 s (≈30 %) | daemon savings, untainted by page-load |
+
+Where each is **now** ahead:
+
+**expect is still ahead on:**
+- IBM Equal Access ruleset depth (more rules fire on the same page —
+  IBM's ruleset is much larger than axe's, both tools run both engines).
+
+**skeptic-v4 is ahead on (incremental over v3):**
+- All v3 wins (selector hints, default-on observability, console
+  redaction, two-contract refs, severity-flagged sidecars).
+- **Plus** parity with expect on video resolution (1920×1080), cursor
+  narration legibility (sentence-form persistent tooltip), per-test
+  audit-report unabridged sidecar (`audit.md`), and warm-call latency
+  (daemon mode default-on for `run`/`inspect`, opt-out via
+  `--no-daemon`).
+
+**Tied:**
+- Annotated screenshot mode.
+- Dual-engine a11y (both run axe + Equal Access; the rule-count delta is
+  page-state and audit-mode dependent, not an engine gap).
+- Multi-page video continuity.
+- Per-page screenshots.

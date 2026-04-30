@@ -131,6 +131,8 @@ const buildAcpWorkerConfig = (
       accessibilityHtmlSnippetLimit: cfg.observability.accessibilityHtmlSnippetLimit,
       accessibilityStandard: cfg.observability.accessibilityStandard ?? "WCAG21AA",
       autoAccessibilityAudit: cfg.observability.autoAccessibilityAudit ?? false,
+      accessibilityMaxRulesPerImpact:
+        cfg.observability.accessibilityMaxRulesPerImpact ?? 100,
     },
     artifact: {
       fullPageScreenshots: cfg.observability.fullPageScreenshots,

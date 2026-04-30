@@ -449,8 +449,16 @@ The cursor overlay shows:
 - A circular cursor at the current pointer location.
 - A short fading **action marker** at every fixture-routed `click`/`fill`/
   `hover`/`press`/`type`/`dblclick`/`selectOption` call.
-- A **tooltip label** beside the cursor showing the action name (e.g.
-  `click`, `fill`) for ~1 second after each action.
+- A **persistent narration tooltip** beside the cursor — labels are written
+  in **sentence form** (`Clicked the "Sign in" button`, `Filled the email
+  field`, `Auditing accessibility (axe + IBM Equal Access)`), not as bare
+  method names. The tooltip stays on screen for the full duration of long
+  operations (accessibility audit, network-idle wait, AI step) so a viewer
+  reading frames out of context can still tell what skeptic was doing.
+- The tooltip clamps to the **viewport edges** — it shifts left when the
+  cursor sits in the right gutter, and the host element uses
+  `pointer-events: none` so the tooltip never blocks page interaction or
+  steals click targets.
 
 These markers are **best-effort and only fire for fixture-routed methods**.
 A raw `await page.click(...)` (no fixture interception) does not draw a
@@ -460,6 +468,195 @@ marker. If you want every action marked, use the snapshot-tree locators
 
 Tip: use `--trace` for click-by-click timing (Playwright trace viewer); use
 `--video` for visual review. They're complementary.
+
+---
+
+## Recording resolution
+
+The default WebM resolution is the configured viewport size (1280×720
+unless overridden). For HD recordings or to match a downstream
+review-tool's expected size, override the resolution without changing how
+the page renders:
+
+| Surface | Where | Example |
+|---|---|---|
+| CLI flag | `skeptic run` and `skeptic inspect` | `--video --video-size 1920x1080` |
+| Per-test | `test.use({ videoSize })` at file or test scope | `test.use({ videoSize: { width: 1920, height: 1080 } })` |
+| Viewport fallback | `test.use({ viewport })` | applies when `videoSize` is unset |
+
+**Precedence (highest wins):** CLI `--video-size` > `test.use({ videoSize })`
+> viewport size. The CLI flag value is forwarded to the worker as a
+`{width, height}` pair and lands on `recordVideo.size` in the
+`browser.newContext` options.
+
+`--video-size` only changes the **recording resolution**, not the page
+rendering. The browser still lays out at viewport dimensions; Playwright
+captures and scales the recording at the chosen size. If you need a
+specific layout (e.g. wide hero), set both:
+
+```bash
+skeptic run tests/hero.spec.ts \
+  --video --video-size 1920x1080 \
+  # use test.use({ viewport: { width: 1920, height: 1080 } }) for layout
+```
+
+Format: `<width>x<height>` (lowercase `x`), integers only, both within
+`[1, 7680]`. Malformed values fail fast with a clear error before the
+worker spawns.
+
+Verify the result with `ffprobe`:
+
+```bash
+ffprobe -v error -select_streams v -show_entries stream=width,height \
+  -of csv=p=0 skeptic-output/<test>/page@*.webm
+```
+
+---
+
+## Audit reports
+
+Under `--observability` (or YAML `observability.autoAccessibilityAudit:
+true`), skeptic runs the dual-engine accessibility collector — axe-core +
+IBM Equal Access — and writes two artifacts per test:
+
+- **`perf-trace.md`** — the cross-cutting performance + a11y digest. The
+  Accessibility section is **summary-only** here: rules grouped by impact
+  bucket (`critical`/`serious`/`moderate`/`minor`), capped at
+  `accessibilityMaxRulesPerImpact` (default 100), with a
+  `…and N more — see audit.md` footer when truncated. This file stays
+  legible on mega-pages.
+- **`audit.md`** — the **full** per-test report. No rule-level
+  truncation: every axe + Equal Access violation is rendered.
+
+`audit.md` lives at `skeptic-output/<test>/audit.md` (same directory as
+`perf-trace.md`, `network.json`, `console.json`, `page@*.webm`). The HTML
+report links it as "Open audit.md" in the per-test artifact card.
+
+Format:
+
+- **Per-rule grouping**, ordered `critical → serious → moderate → minor`,
+  alphabetical within bucket.
+- Each rule block opens with the rule id, an engine badge — **`(axe)`**
+  or **`(equal-access)`** — and the violation summary.
+- Up to **10 example node selectors per rule** (CSS path or stable
+  attribute), truncated with `+N more nodes` when a rule fires on more
+  than 10 elements. Every rule is rendered; only the **examples** are
+  capped, never the rule list itself.
+- The dual-engine merge dedupes by canonical rule id so the same finding
+  isn't double-counted, but every engine-unique rule is preserved — no
+  `(equal-access)` rule is silently dropped when axe also flagged a
+  related (but not identical) issue.
+
+When to read which:
+
+| Need | File |
+|---|---|
+| Quick pass/fail signal in CI | `perf-trace.md` Accessibility section |
+| Every violation for compliance review | `audit.md` |
+| Programmatic consumption | `metrics.accessibility` in `results.json` |
+
+The **`accessibilityMaxRulesPerImpact`** config knob (CLI/YAML/`test.use`)
+controls only the `perf-trace.md` cap. `audit.md` always renders the
+complete rule set; the example-node cap is fixed at 10 per rule (with the
+`+N more nodes` footer) and not user-tunable — that limit guards
+file size on adversarial pages without dropping rule visibility.
+
+To opt into a higher cap in `perf-trace.md`:
+
+```yaml
+# skeptic.config.yaml
+observability:
+  autoAccessibilityAudit: true
+  accessibilityMaxRulesPerImpact: 0   # 0 = show every rule in perf-trace.md too
+```
+
+---
+
+## Daemon mode
+
+skeptic ships with a persistent **BrowserServer daemon** that keeps a
+warm Chromium between calls. It's auto-spawned on first use of `run` or
+`inspect`, listens on a Unix socket at `~/.skeptic/daemon.sock`, and
+exits after an idle window (default 300 s).
+
+What's shared and what isn't:
+
+- The daemon owns the **`Browser`** process. Every test connects via
+  Playwright's `chromium.connect(wsEndpoint)` and creates its **own
+  `BrowserContext`** — cookies, storage, service workers, IndexedDB.
+- Cleanup-on-disconnect is Playwright's native WebSocket-disconnect
+  behavior. The daemon does not track contexts; when a worker closes its
+  WebSocket, Playwright tears down that worker's context. State does not
+  bleed across tests.
+- The daemon does **not** marshal browser ops over the socket. It's a
+  control-plane RPC only (handshake, version probe, idle reset). Page,
+  Locator, and routing operations stay on the direct Playwright
+  WebSocket.
+
+Lifecycle:
+
+| Event | Behavior |
+|---|---|
+| First `run`/`inspect` after a clean `~/.skeptic/` | Cold spawn (~3-5 s). PID + version + engine sidecar files written. |
+| Subsequent calls within the idle window | Warm path — connect-only, no browser launch. Typically < 200 ms RPC. |
+| Idle for `--daemon-idle-timeout` seconds | Daemon self-exits and unlinks its sidecars. |
+| `SIGINT` / `SIGTERM` / `SIGHUP` | BrowserServer closed first, then sidecars unlinked, then process exit. |
+| Stale lockfile (PID dead) | Detected on next spawn (`kill -0` probe), atomically recreated. |
+| Playwright version mismatch on `daemon.ping` | Client refuses to connect, restarts the daemon, retries (capped). |
+
+Flags:
+
+| Flag | Surface | Effect |
+|---|---|---|
+| `--no-daemon` | `run`, `inspect` | Bypass the daemon — fresh browser launch per call (pre-B10 behavior). Safety valve when daemon misbehaves. |
+| `--daemon-idle-timeout <seconds>` | `run`, `inspect`, `daemon start` | Override the default 300 s idle window. `0` disables the timer. |
+
+Subcommands (under `skeptic daemon`):
+
+| Command | Purpose |
+|---|---|
+| `daemon start [--engine chromium\|firefox\|webkit] [--headed] [--daemon-idle-timeout N]` | Foreground start. Useful for explicit control or for inspecting daemon stdout/stderr. |
+| `daemon stop` | Send a clean shutdown over the socket. Removes lockfile + socket. Idempotent. |
+| `daemon status` | Print running / not-running, uptime, connected clients, engine. Exit 0 either way (informational). |
+| `daemon logs` | Tail the daemon log at `~/.skeptic/daemon.log`. |
+
+Security envelope:
+
+- `~/.skeptic/` is created with **`0700`** (owner-only). The socket and
+  PID lockfile inherit the parent's restriction; Unix-socket
+  filesystem-permission semantics enforce the boundary.
+- Optional shared-secret auth: set
+  **`SKEPTIC_DAEMON_AUTH_TOKEN=<token>`** in the daemon's environment.
+  When set, every connecting client must present the same token in the
+  handshake; mismatch closes the socket. The token never traverses the
+  network — daemon and clients are colocated on the same host.
+- The daemon's WebSocket endpoint is bound to `127.0.0.1` only. There is
+  no path that exposes the BrowserServer to other hosts.
+
+Common workflows:
+
+```bash
+# Default — auto-spawned, warmed across runs
+skeptic run tests/foo.spec.ts --observability --video
+
+# Disable daemon for a single run (e.g. while debugging the daemon itself)
+skeptic run tests/foo.spec.ts --no-daemon
+
+# Foreground with a 30 s idle window for short-lived dev sessions
+skeptic daemon start --daemon-idle-timeout 30
+
+# Always-on under tmux for a long review session, 0 = never idle out
+skeptic daemon start --daemon-idle-timeout 0
+
+# Status check before a CI gate
+skeptic daemon status
+
+# Stop before suspending the laptop
+skeptic daemon stop
+```
+
+If the daemon ever wedges, the recovery path is `skeptic daemon stop &&
+rm -rf ~/.skeptic` — the next `run` will cold-spawn cleanly.
 
 ---
 

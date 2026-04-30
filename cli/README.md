@@ -33,8 +33,8 @@ skeptic init
 # Inspect a page to discover stable selectors before authoring a test
 skeptic inspect https://example.com
 
-# Write a *.spec.ts in tests/, then run it
-skeptic run
+# Write a *.spec.ts in tests/, then run it (full evidence: video + a11y + perf)
+skeptic run tests/foo.spec.ts --observability --video --video-size 1920x1080
 
 # Generate a *.spec.ts with AI
 skeptic generate -m "test the login page"
@@ -43,6 +43,38 @@ skeptic generate -m "test the login page"
 `skeptic inspect <url>` opens a browser, captures an ARIA + cursor-interactive
 tree, and prints `selectorHint:` lines you can copy directly into a
 `*.spec.ts` file. See [AGENTS.md](./AGENTS.md) for the full discovery loop.
+
+### Daemon (default-on)
+
+`skeptic run` and `skeptic inspect` connect to a persistent **BrowserServer
+daemon** at `~/.skeptic/daemon.sock`. The daemon is auto-spawned on first
+use, owner-only (`0700`), and self-exits after 5 min idle. Subsequent
+runs reuse the warm Chromium, cutting spawn cost from ~3-5 s to under
+200 ms.
+
+| Flag | Effect |
+|---|---|
+| `--no-daemon` | Bypass the daemon, fresh launch per call (pre-daemon behavior) |
+| `--daemon-idle-timeout <s>` | Override the idle window. `0` disables. |
+
+Lifecycle: `skeptic daemon start | stop | status | logs`. Each test still
+gets its own `BrowserContext`, so cookies and storage do not bleed
+across runs. See [AGENTS.md § Daemon mode](./AGENTS.md#daemon-mode) for
+the full security envelope and recovery path.
+
+### Recording resolution
+
+`--video-size <WxH>` (e.g. `1920x1080`) overrides the recording resolution
+without changing how the page lays out. Precedence: CLI flag >
+`test.use({ videoSize })` > viewport. See
+[AGENTS.md § Recording resolution](./AGENTS.md#recording-resolution).
+
+### Audit reports
+
+Under `--observability`, skeptic writes a per-test **`audit.md`** sidecar
+listing every axe + IBM Equal Access violation (no rule-level
+truncation), alongside the cross-cutting `perf-trace.md`. See
+[AGENTS.md § Audit reports](./AGENTS.md#audit-reports).
 
 ## YAML Flow Format
 

@@ -1,0 +1,141 @@
+{
+  "messages": [
+    {
+      "type": "warning",
+      "text": "[.WebGL-0x12400457800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+      "location": {
+        "url": "https://jigyansurout.com/",
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "timestamp": 1777553526352
+    },
+    {
+      "type": "warning",
+      "text": "[.WebGL-0x12400457800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+      "location": {
+        "url": "https://jigyansurout.com/",
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "timestamp": 1777553526359
+    },
+    {
+      "type": "warning",
+      "text": "[.WebGL-0x12400457800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+      "location": {
+        "url": "https://jigyansurout.com/",
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "timestamp": 1777553526359
+    },
+    {
+      "type": "warning",
+      "text": "[.WebGL-0x12400457800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
+      "location": {
+        "url": "https://jigyansurout.com/",
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "timestamp": 1777553526359
+    },
+    {
+      "type": "error",
+      "text": "Refused to apply style from 'https://jigyansurout.com/fonts/elegant_font/HTML_CSS/style.css' because its MIME type ('text/html') is not a supported stylesheet MIME type, and strict MIME checking is enabled.",
+      "location": {
+        "url": "https://jigyansurout.com/projects",
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "timestamp": 1777553529271
+    },
+    {
+      "type": "error",
+      "text": "Refused to apply style from 'https://jigyansurout.com/fonts/et-line-font/style.css' because its MIME type ('text/html') is not a supported stylesheet MIME type, and strict MIME checking is enabled.",
+      "location": {
+        "url": "https://jigyansurout.com/projects",
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "timestamp": 1777553529271
+    },
+    {
+      "type": "error",
+      "text": "Refused to apply style from 'https://jigyansurout.com/fonts/font-awesome/css/font-awesome.css' because its MIME type ('text/html') is not a supported stylesheet MIME type, and strict MIME checking is enabled.",
+      "location": {
+        "url": "https://jigyansurout.com/projects",
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "timestamp": 1777553529275
+    },
+    {
+      "type": "error",
+      "text": "Refused to apply style from 'https://jigyansurout.com/fonts/elegant_font/HTML_CSS/style.css' because its MIME type ('text/html') is not a supported stylesheet MIME type, and strict MIME checking is enabled.",
+      "location": {
+        "url": "https://jigyansurout.com/achievements",
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "timestamp": 1777553533094
+    },
+    {
+      "type": "error",
+      "text": "Refused to apply style from 'https://jigyansurout.com/fonts/et-line-font/style.css' because its MIME type ('text/html') is not a supported stylesheet MIME type, and strict MIME checking is enabled.",
+      "location": {
+        "url": "https://jigyansurout.com/achievements",
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "timestamp": 1777553533096
+    },
+    {
+      "type": "error",
+      "text": "Refused to apply style from 'https://jigyansurout.com/fonts/font-awesome/css/font-awesome.css' because its MIME type ('text/html') is not a supported stylesheet MIME type, and strict MIME checking is enabled.",
+      "location": {
+        "url": "https://jigyansurout.com/achievements",
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "timestamp": 1777553533100
+    },
+    {
+      "type": "error",
+      "text": "Refused to apply style from 'https://jigyansurout.com/fonts/elegant_font/HTML_CSS/style.css' because its MIME type ('text/html') is not a supported stylesheet MIME type, and strict MIME checking is enabled.",
+      "location": {
+        "url": "https://jigyansurout.com/blog",
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "timestamp": 1777553535807
+    },
+    {
+      "type": "error",
+      "text": "Refused to apply style from 'https://jigyansurout.com/fonts/et-line-font/style.css' because its MIME type ('text/html') is not a supported stylesheet MIME type, and strict MIME checking is enabled.",
+      "location": {
+        "url": "https://jigyansurout.com/blog",
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "timestamp": 1777553535807
+    },
+    {
+      "type": "error",
+      "text": "Refused to apply style from 'https://jigyansurout.com/fonts/font-awesome/css/font-awesome.css' because its MIME type ('text/html') is not a supported stylesheet MIME type, and strict MIME checking is enabled.",
+      "location": {
+        "url": "https://jigyansurout.com/blog",
+        "lineNumber": 0,
+        "columnNumber": 0
+      },
+      "timestamp": 1777553535807
+    }
+  ],
+  "summary": {
+    "total": 13,
+    "errorCount": 9,
+    "warningCount": 4,
+    "infoCount": 0,
+    "redactionDisabled": false
+  }
+}

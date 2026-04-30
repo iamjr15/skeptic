@@ -101,12 +101,14 @@ export class ConsoleReporter implements Reporter {
 
     const videoPath = result.artifacts?.video?.path;
     const tracePath = result.artifacts?.trace;
+    const auditPath = result.artifacts?.accessibilityAudit;
     if (this.concurrency > 1) {
       const buf = this.buffer.get(result.name);
       if (buf) {
         buf.push(`  ${status} ${chalk.dim(`${result.duration_ms}ms`)}`);
         if (videoPath) buf.push(`  ${chalk.dim("Video:")} ${chalk.cyan(videoPath)}`);
         if (tracePath) buf.push(`  ${chalk.dim("Trace:")} ${chalk.cyan(tracePath)}`);
+        if (auditPath) buf.push(`  ${chalk.dim("Audit:")} ${chalk.cyan(auditPath)}`);
         if (metricsLine) buf.push(metricsLine);
         // Flush buffered output through the shard-aware write gate.
         for (const line of buf) this.write(line);
@@ -116,6 +118,7 @@ export class ConsoleReporter implements Reporter {
       this.write(`  ${status} ${chalk.dim(`${result.duration_ms}ms`)}`);
       if (videoPath) this.write(`  ${chalk.dim("Video:")} ${chalk.cyan(videoPath)}`);
       if (tracePath) this.write(`  ${chalk.dim("Trace:")} ${chalk.cyan(tracePath)}`);
+      if (auditPath) this.write(`  ${chalk.dim("Audit:")} ${chalk.cyan(auditPath)}`);
       if (metricsLine) this.write(metricsLine);
     }
   }

@@ -37,6 +37,8 @@ export interface WorkerStartConfig {
     accessibilityHtmlSnippetLimit: number;
     accessibilityStandard: "WCAG2A" | "WCAG2AA" | "WCAG21A" | "WCAG21AA" | "WCAG22AA";
     autoAccessibilityAudit: boolean;
+    /** Per-impact-bucket cap for `perf-trace.md`; full list lives in `audit.md`. */
+    accessibilityMaxRulesPerImpact: number;
   };
   artifact: {
     fullPageScreenshots: boolean;
@@ -48,10 +50,29 @@ export interface WorkerStartConfig {
   headed: boolean;
   browserEngine: "chromium" | "firefox" | "webkit";
   viewport?: { width: number; height: number };
+  /**
+   * CLI `--video-size <WxH>` override. Wins over `test.use({ videoSize })`
+   * which in turn wins over the viewport default. Only applied when
+   * `video: true` (otherwise video isn't recorded at all).
+   */
+  videoSize?: { width: number; height: number };
   device?: string;
   cookies?: { enabled: boolean; browser?: string };
   retries: number;
   shardId?: number;
+  /**
+   * B10 — `--no-daemon` opt-out. When true, the worker launches a fresh
+   * browser via `pw[engine].launch()` (pre-B10 behavior). When false (the
+   * default), the worker connects to the persistent daemon BrowserServer
+   * via `connectDaemon()`. Plan §B10 invariant 3.
+   */
+  noDaemon?: boolean;
+  /**
+   * B10 — forwarded to a daemon spawned by this worker (if no daemon is
+   * already running). Default 300 s. `0` disables idle timeout. See plan
+   * §B10 invariant 4.
+   */
+  daemonIdleTimeoutSeconds?: number;
 }
 
 export interface WorkerStartMessage {

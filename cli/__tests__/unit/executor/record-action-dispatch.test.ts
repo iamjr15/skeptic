@@ -92,7 +92,11 @@ describe("recordAction dispatch contract", () => {
     // goto must NOT trigger a side-channel evaluate.
     expect(evaluateCalls).toBe(0);
     await proxied.click("button");
-    // Click DOES trigger one side-channel evaluate.
-    expect(evaluateCalls).toBe(1);
+    // B7: click now triggers THREE side-channel evaluates per intercepted interaction:
+    //   1. recordAction marker          (existing — pre-B7)
+    //   2. setCommandLabel persistent   (B7 — sentence-form narration tooltip)
+    //   3. clearCommandLabel in finally (B7 — paired clear so a thrown step doesn't
+    //                                    leave the tooltip stuck on screen)
+    expect(evaluateCalls).toBe(3);
   });
 });

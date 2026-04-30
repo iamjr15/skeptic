@@ -24,6 +24,7 @@ import { AccessibilityCollector } from "../observability/collectors/accessibilit
 import { awaitVisualSettle } from "./visual-settle.js";
 import { writeSidecars } from "./sidecars.js";
 import { CURSOR_OVERLAY_SOURCE } from "./cursor-overlay.js";
+import { friendlyLabel, PERSISTENT_LABEL_ACTIONS } from "../api/labels.js";
 
 /** Commands that target an element on the page. recordAction fires only for these
  *  (NOT for navigate, wait, assertVisible, observability snapshots, etc.). The set
@@ -68,18 +69,48 @@ export const tryGetTargetCoords = async (
   }
 };
 
-const fireSetCommandLabelOnPage = (page: Page, command: string): void => {
-  page
+const fireSetCommandLabelOnPage = (
+  page: Page,
+  command: string,
+  opts: { persistent?: boolean } = {},
+): Promise<void> => {
+  // Resolve the engine's command name (e.g. "test", "click") through the friendly-label
+  // table BEFORE the side-channel fires; the overlay's setCommandLabel receives the
+  // sentence-form string only. PII boundary: command is a fixed identifier, never user
+  // data — the friendlyLabel resolver is the audit point.
+  const label = friendlyLabel(command);
+  const persistent = opts.persistent === true;
+  return page
     .evaluate(
-      (cmd) => {
-        const cursor = (globalThis as unknown as { __skepticCursor?: { setCommandLabel?: (c: string) => void } })
-          .__skepticCursor;
-        if (cursor && typeof cursor.setCommandLabel === "function") cursor.setCommandLabel(cmd);
+      ({ label: lbl, persistent: p }) => {
+        const cursor = (
+          globalThis as unknown as {
+            __skepticCursor?: {
+              setCommandLabel?: (c: string, opts?: { persistent?: boolean }) => void;
+            };
+          }
+        ).__skepticCursor;
+        if (cursor && typeof cursor.setCommandLabel === "function") {
+          cursor.setCommandLabel(lbl, { persistent: p });
+        }
       },
-      command,
+      { label, persistent },
     )
     .catch(() => {
       /* overlay may not be loaded yet (pre-navigate); best-effort fire-and-forget */
+    });
+};
+
+const fireClearCommandLabelOnPage = (page: Page): Promise<void> => {
+  return page
+    .evaluate(() => {
+      const cursor = (
+        globalThis as unknown as { __skepticCursor?: { clearCommandLabel?: () => void } }
+      ).__skepticCursor;
+      if (cursor && typeof cursor.clearCommandLabel === "function") cursor.clearCommandLabel();
+    })
+    .catch(() => {
+      /* swallow — overlay may not be loaded yet */
     });
 };
 
@@ -294,9 +325,14 @@ export class PlaywrightEngine {
         const startCommand = "test";
         onProgress?.({ type: "step:start", index: 0, total: 1, command: startCommand, args: { name: input.name } });
         // setCommandLabel side-channel — fire after step:start so the tooltip mirrors
-        // the dispatched command name. Pass via evaluate argument (no interpolation),
+        // the dispatched command. The "test" label is on the persistent set so the
+        // tooltip stays pinned for the full test body (no auto-fade after 1.5 s).
         // .catch swallow inside helper, outside any timeout boundary.
-        if (videoEnabled) fireSetCommandLabelOnPage(page, startCommand);
+        if (videoEnabled) {
+          fireSetCommandLabelOnPage(page, startCommand, {
+            persistent: PERSISTENT_LABEL_ACTIONS.has(startCommand),
+          }).catch(() => {});
+        }
         try {
           await input.runFn(page, ctx);
         } catch (err) {
@@ -346,6 +382,12 @@ export class PlaywrightEngine {
             const coords = await tryGetTargetCoords(page, stepResult);
             fireRecordActionOnPage(page, stepResult.command, coords);
           }
+        }
+        // Clear the narration tooltip after the step completes — paired with the
+        // persistent setCommandLabel above so the previous test's label never leaks
+        // into the start of the next test or the post-test screenshot frame.
+        if (videoEnabled && page && !page.isClosed()) {
+          fireClearCommandLabelOnPage(page).catch(() => {});
         }
       }
 
@@ -460,6 +502,7 @@ export class PlaywrightEngine {
           flowDir,
           metrics: metricsMap,
           artifacts: result.artifacts,
+          observabilityConfig,
         });
       }
 

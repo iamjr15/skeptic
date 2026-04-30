@@ -98,10 +98,13 @@ const runOneTest = async (
 
   const merged = { ...registry.fileUse, ...test.use };
   const viewport = merged.viewport ?? config.viewport ?? { width: 1280, height: 720 };
+  // Precedence: CLI flag > test.use override > viewport. Earlier draft had
+  // the operands reversed — see velvety-finding-beacon.md §B8 / Codex round 1 #6.
+  const videoSize = config.videoSize ?? merged.videoSize ?? viewport;
 
   const context: BrowserContext = await browser.newContext({
     viewport,
-    ...(config.video ? { recordVideo: { dir: flowDir, size: viewport } } : {}),
+    ...(config.video ? { recordVideo: { dir: flowDir, size: videoSize } } : {}),
   });
   if (config.trace) {
     await context.tracing.start({ screenshots: true, snapshots: true, sources: false });
@@ -134,20 +137,23 @@ const runOneTest = async (
   }
   for (const c of declared) required.add(c);
 
+  const observabilityConfig = {
+    collectors: [...required],
+    networkCaptureLimit: config.observability.networkCaptureLimit,
+    duplicateWindowMs: config.observability.duplicateWindowMs,
+    accessibilityDualEngine: config.observability.accessibilityDualEngine,
+    accessibilityHtmlSnippetLimit: config.observability.accessibilityHtmlSnippetLimit,
+    consoleCaptureLimit: config.observability.consoleCaptureLimit,
+    consoleRedaction: config.observability.consoleRedaction,
+    autoAccessibilityAudit: config.observability.autoAccessibilityAudit,
+    accessibilityStandard: config.observability.accessibilityStandard,
+    accessibilityMaxRulesPerImpact: config.observability.accessibilityMaxRulesPerImpact,
+  };
+
   const collectors: Collector[] = buildCollectors({
     required,
     configured: [],
-    config: {
-      collectors: [...required],
-      networkCaptureLimit: config.observability.networkCaptureLimit,
-      duplicateWindowMs: config.observability.duplicateWindowMs,
-      accessibilityDualEngine: config.observability.accessibilityDualEngine,
-      accessibilityHtmlSnippetLimit: config.observability.accessibilityHtmlSnippetLimit,
-      consoleCaptureLimit: config.observability.consoleCaptureLimit,
-      consoleRedaction: config.observability.consoleRedaction,
-      autoAccessibilityAudit: config.observability.autoAccessibilityAudit,
-      accessibilityStandard: config.observability.accessibilityStandard,
-    },
+    config: observabilityConfig,
   });
 
   const artifactConfig: ArtifactRuntimeConfig = {
@@ -312,7 +318,36 @@ const runOneTest = async (
       flowDir,
       metrics: metricsMap,
       artifacts: result.artifacts,
+      observabilityConfig,
     });
+  }
+
+  // Flush the video before closing the context. Playwright's `connect()` path
+  // (daemon mode) records server-side and does NOT automatically flush to the
+  // client-supplied `recordVideo.dir` absolute path. Closing the page first
+  // forces the BrowserServer to finalize the stream; `video.saveAs(...)` then
+  // copies the file to `flowDir/<safeName>.webm` which the test reporter
+  // expects. The `--no-daemon` path also benefits — saveAs is idempotent.
+  if (config.video) {
+    try {
+      const video = page.video();
+      if (video) {
+        const destPath = path.join(flowDir, `${safeName}.webm`);
+        await page.close().catch(() => {});
+        await video.saveAs(destPath);
+        result.artifacts.video = {
+          path: destPath,
+          width: videoSize.width,
+          height: videoSize.height,
+        };
+      }
+    } catch (err) {
+      post({
+        type: "log",
+        level: "warn",
+        message: `[skeptic] video save failed: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
   }
 
   await context.close().catch(() => {});
@@ -376,8 +411,27 @@ const handleExecute = async (start: WorkerStartMessage): Promise<void> => {
   }
   const launcher = pw[start.config.browserEngine];
   let browser: Browser;
+  let daemonDisconnect: (() => Promise<void>) | null = null;
   try {
-    browser = await launcher.launch({ headless: !start.config.headed });
+    if (start.config.noDaemon) {
+      // --no-daemon path: pre-B10 behavior, fresh browser launch per worker.
+      browser = await launcher.launch({ headless: !start.config.headed });
+    } else {
+      // Daemon path: connect to (or auto-spawn) the persistent BrowserServer.
+      // The worker still owns its own BrowserContext (via newContext below) so
+      // refs/cookies/storage stay isolated per test (plan §B10 invariants 1-2).
+      const { connectDaemon } = await import("../daemon/client.js");
+      const conn = await connectDaemon({
+        engine: start.config.browserEngine,
+        headed: start.config.headed,
+        cliVersion: __SKEPTIC_CLI_VERSION__,
+        ...(typeof start.config.daemonIdleTimeoutSeconds === "number"
+          ? { idleTimeoutSeconds: start.config.daemonIdleTimeoutSeconds }
+          : {}),
+      });
+      browser = conn.browser;
+      daemonDisconnect = conn.disconnect;
+    }
   } catch (err) {
     post({
       type: "fatal",
@@ -429,7 +483,14 @@ const handleExecute = async (start: WorkerStartMessage): Promise<void> => {
       });
     }
   } finally {
-    await browser.close().catch(() => {});
+    // Closing the daemon-connected Browser severs the WebSocket; Playwright's
+    // server-side cleans up any contexts we created (plan §B10 invariant 10).
+    // For the --no-daemon path, this still closes the locally-launched browser.
+    if (daemonDisconnect) {
+      await daemonDisconnect().catch(() => {});
+    } else {
+      await browser.close().catch(() => {});
+    }
     post({ type: "file:complete", file: registry.file, finished });
     process.exit(0);
   }

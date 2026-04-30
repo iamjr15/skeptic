@@ -5,6 +5,13 @@ export interface TestUseOptions {
   /** Base URL — used by the runner to set the page's default base. Per-test override via `await page.goto(absoluteUrl)`. */
   url?: string;
   viewport?: { width: number; height: number };
+  /**
+   * Video recording resolution. When set, overrides the default of using the
+   * viewport size for `recordVideo.size`. Page rendering still happens at
+   * viewport dimensions; this only changes the WebM resolution. Precedence
+   * is CLI `--video-size` > `test.use({ videoSize })` > viewport.
+   */
+  videoSize?: { width: number; height: number };
   device?: string;
   cookies?: boolean | { browser?: string };
   env?: Record<string, string>;

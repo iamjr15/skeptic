@@ -32,6 +32,46 @@ maintained for the convenience of downstream auditors, is:
 - `cli/AGENTS.md` — overall workflow-doc structure (Discovery / Selectors /
   Output / Failure modes / Patterns / Cursor + video). The TypeScript content
   is original; the section ordering and the agent-facing framing are adapted.
+- `cli/src/daemon/socket.ts` — line-delimited JSON framing on a Unix socket,
+  malformed-line tolerance, `looks_like_http` early-exit, idle-reset signal on
+  each accepted command (`agent-browser/cli/src/native/daemon.rs:357-430`).
+  Stale-socket cleanup with realpath check, the `0700` parent-dir mode, and
+  the optional `SKEPTIC_DAEMON_AUTH_TOKEN` shared-secret handshake are
+  skeptic-original.
+- `cli/src/daemon/lifecycle.ts` — start-up + shut-down skeleton: pid /
+  version / engine sidecar files written on start and unlinked on exit;
+  idle-timer-with-reset that re-arms on every accepted command; SIGINT /
+  SIGTERM / SIGHUP handlers close the BrowserServer before process exit so
+  destructors fire and Chrome processes don't get orphaned
+  (`agent-browser/cli/src/native/daemon.rs:115-255` and `:439-482`).
+- `cli/src/daemon/rpc.ts` — control-plane-only RPC dispatch (handshake,
+  version probe, idle-reset, stop). No browser-context or page operations
+  are marshaled over the socket; workers connect directly to
+  `BrowserServer.wsEndpoint()` via Playwright's
+  `pw[engine].connect(wsEndpoint)` and own their own `BrowserContext`. The
+  handshake fields and engine-mismatch / version-mismatch paths follow the
+  shape at `agent-browser/cli/src/native/daemon.rs:357-430`.
+- `cli/src/daemon/client.ts` — auto-spawn-with-detached-unref, the
+  version-mismatch restart loop with retry cap, and the bounded
+  socket-readiness probe (`agent-browser/cli/src/connection.rs:574-602`).
+  The Playwright `pw[engine].connect` + BrowserContext-per-test isolation
+  model that sits on top is skeptic-original — agent-browser marshals every
+  browser op over the socket, skeptic hands out the raw WebSocket and lets
+  Playwright's native disconnect-cleanup handle teardown.
+- `cli/src/daemon/auto-spawn.ts` — the "ensure daemon running before doing
+  browser work" gate (`agent-browser/cli/src/connection.rs:574-602`).
+  agent-browser calls `ensure_daemon` from the CLI main, never from a
+  worker; this helper enforces the same discipline for skeptic — the
+  prewarm runs in the main process so a `worker_thread` never resolves to
+  `dist/worker.mjs` and mis-spawns a "daemon" that is actually the worker
+  entrypoint.
+
+All five daemon files carry the verbatim
+`// Source: agent-browser/cli/src/<path>:<lines> © Vercel Inc., Apache 2.0`
+header at the top, in line with the per-file convention used elsewhere in
+this NOTICE. The portions above were derived from the agent-browser
+sources cited; the Playwright-connection model, the shared-secret token,
+and the BrowserContext-per-test isolation contract are skeptic's own.
 
 The list above is informational and may lag the source. The authoritative
 record is the per-file `// Source: agent-browser ...` header — it is checked

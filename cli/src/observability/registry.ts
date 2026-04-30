@@ -16,6 +16,14 @@ export interface ObservabilityRuntimeConfig {
   autoAccessibilityAudit?: boolean;
   accessibilityStandard?: "WCAG2A" | "WCAG2AA" | "WCAG21A" | "WCAG21AA" | "WCAG22AA";
   accessibilityImpacts?: Array<"critical" | "serious" | "moderate" | "minor">;
+  /**
+   * Per-impact-bucket cap for the `perf-trace.md` Accessibility section. When the
+   * bucket holds more than this many rules, the markdown shows `cap` plus a
+   * "...and N more — see audit.md" footer. The full set is always written to
+   * the per-test `audit.md` sidecar (no rule-level truncation there).
+   * Default = 100 (B9 — covers common pages without truncation).
+   */
+  accessibilityMaxRulesPerImpact?: number;
 }
 
 export interface BuildCollectorsInput {

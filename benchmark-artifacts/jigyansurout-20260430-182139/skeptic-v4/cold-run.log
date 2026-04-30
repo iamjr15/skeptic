@@ -1,0 +1,15 @@
+[skeptic] skeptic — running tests/jigyansurout-verify.spec.ts
+
+  jigyansurout — B7-B10 verification: cursor narration, --video-size, audit.md, daemon (/Users/iamjr15/Desktop/aurum/cli/tests/jigyansurout-verify.spec.ts)
+   PASS  15983ms
+  Video: /Users/iamjr15/Desktop/aurum/benchmark-artifacts/jigyansurout-20260430-182139/skeptic-v4/run-output/jigyansurout___B7-B10_verification__cursor_narration__--video-size__audit_md__daemon-0/jigyansurout___B7-B10_verification__cursor_narration__--video-size__audit_md__daemon.webm
+  Audit: /Users/iamjr15/Desktop/aurum/benchmark-artifacts/jigyansurout-20260430-182139/skeptic-v4/run-output/jigyansurout___B7-B10_verification__cursor_narration__--video-size__audit_md__daemon-0/audit.md
+  Metrics: perf: FCP 496ms, LCP 2.47s, CLS 0.006, TTFB 219ms · net: 163 reqs, 14 issues · a11y: 1 violations
+
+  skeptic Results
+  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─
+  1 passed, 1 total
+  Duration: 16.53s
+
+
+  Artifacts
