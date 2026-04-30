@@ -1,0 +1,13 @@
+[skeptic] skeptic — running tests/jigyansurout-verify.spec.ts
+
+  jigyansurout — multi-page nav, cursor proof on every page (/Users/iamjr15/Desktop/aurum/cli/tests/jigyansurout-verify.spec.ts)
+   PASS  12628ms
+  Metrics: perf: FCP 404ms, LCP 2.04s, CLS 0.006, TTFB 142ms · net: 163 reqs, 14 issues · a11y: 1 violations
+
+  skeptic Results
+  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─  ─
+  1 passed, 1 total
+  Duration: 13.16s
+
+
+  Artifacts
