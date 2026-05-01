@@ -1,0 +1,14 @@
+Performance trace written to: /tmp/expect-artifacts/performance-trace-1777615542682.md
+
+Web Vitals:
+  FCP: 460ms (good)
+  LCP: 2644ms (needs-improvement)
+  CLS: 0.006 (good)
+  TTFB: 149ms
+
+Long Animation Frames: 10 detected
+  Worst blocking duration: 94ms
+
+Resources: 33 loaded (1833KB total)
+
+Full trace: /tmp/expect-artifacts/performance-trace-1777615542682.md

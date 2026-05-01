@@ -1,0 +1,50 @@
+{
+  "summary": "9 error(s), 0 warning(s) out of 9 total messages\n\n",
+  "messages": [
+    {
+      "type": "error",
+      "text": "Refused to apply style from 'https://jigyansurout.com/fonts/elegant_font/HTML_CSS/style.css' because its MIME type ('text/html') is not a supported stylesheet MIME type, and strict MIME checking is enabled.",
+      "timestamp": 1777615529329
+    },
+    {
+      "type": "error",
+      "text": "Refused to apply style from 'https://jigyansurout.com/fonts/et-line-font/style.css' because its MIME type ('text/html') is not a supported stylesheet MIME type, and strict MIME checking is enabled.",
+      "timestamp": 1777615529329
+    },
+    {
+      "type": "error",
+      "text": "Refused to apply style from 'https://jigyansurout.com/fonts/font-awesome/css/font-awesome.css' because its MIME type ('text/html') is not a supported stylesheet MIME type, and strict MIME checking is enabled.",
+      "timestamp": 1777615529330
+    },
+    {
+      "type": "error",
+      "text": "Refused to apply style from 'https://jigyansurout.com/fonts/et-line-font/style.css' because its MIME type ('text/html') is not a supported stylesheet MIME type, and strict MIME checking is enabled.",
+      "timestamp": 1777615534653
+    },
+    {
+      "type": "error",
+      "text": "Refused to apply style from 'https://jigyansurout.com/fonts/font-awesome/css/font-awesome.css' because its MIME type ('text/html') is not a supported stylesheet MIME type, and strict MIME checking is enabled.",
+      "timestamp": 1777615534807
+    },
+    {
+      "type": "error",
+      "text": "Refused to apply style from 'https://jigyansurout.com/fonts/elegant_font/HTML_CSS/style.css' because its MIME type ('text/html') is not a supported stylesheet MIME type, and strict MIME checking is enabled.",
+      "timestamp": 1777615534807
+    },
+    {
+      "type": "error",
+      "text": "Refused to apply style from 'https://jigyansurout.com/fonts/font-awesome/css/font-awesome.css' because its MIME type ('text/html') is not a supported stylesheet MIME type, and strict MIME checking is enabled.",
+      "timestamp": 1777615538541
+    },
+    {
+      "type": "error",
+      "text": "Refused to apply style from 'https://jigyansurout.com/fonts/elegant_font/HTML_CSS/style.css' because its MIME type ('text/html') is not a supported stylesheet MIME type, and strict MIME checking is enabled.",
+      "timestamp": 1777615538541
+    },
+    {
+      "type": "error",
+      "text": "Refused to apply style from 'https://jigyansurout.com/fonts/et-line-font/style.css' because its MIME type ('text/html') is not a supported stylesheet MIME type, and strict MIME checking is enabled.",
+      "timestamp": 1777615538541
+    }
+  ]
+}

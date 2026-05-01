@@ -191,6 +191,38 @@ Daemon overhead in isolation (`inspect about:blank --wait 0`):
 | warm | 0.78 s | connect-only path |
 | Δ | −0.31 s (≈30 %) | daemon savings, untainted by page-load |
 
+## Wave 2 head-to-head — `skeptic-v4` vs `expect-v2` (both fresh, 2026-05-01)
+
+A re-run of the same 4-page nav through fresh `expect-cli@0.1.3` for true
+apples-to-apples comparison after Wave 2 shipped. Artifacts: `expect-v2/`
+captured 2026-05-01 (the original `expect-v1/` run was 2026-04-30, before
+the skeptic Wave 2 patches). expect's CLI itself didn't change between
+runs, but pinning the comparison to the same week + date makes the
+post-fix verdict fair.
+
+| Axis | expect-v2 | skeptic-v4 | Verdict |
+|---|---|---|---|
+| Cold wall-clock | 12.79 s open + ~1 s/page nav (~17 s total) | 17.76 s end-to-end (incl. a11y audit + sidecars) | **tie** within margin |
+| Warm wall-clock (subsequent CLI calls) | ~50-150 ms RPC per `screenshot`/`accessibility_audit` etc. | 15.17 s end-to-end on the second run | expect ahead for **interactive subcommand loops**; skeptic comparable for full-test re-runs |
+| Video resolution | 1920×1080 fixed | **1920×1080** (`--video-size 1920x1080`) | tie |
+| Video size for ~10 s clip | 5.5 MB | 1.86 MB | skeptic is 3× lighter at the same resolution (different default codec/bitrate) |
+| Cursor in video | 24 px arrow + glow + persistent text label "Running accessibility audit" etc. | 24 px arrow + glow + **persistent sentence-form tooltip** ("Running accessibility audit", "Capturing screenshot", etc.) | tie — same UX shape, both readable at 1080p |
+| Full-page screenshots (per page) | 1.6-2.2 MB (1280×2720, daemon-side capture) | 1.3-1.9 MB (1280×2720, fixture-side capture w/ cursor visible per design) | tie |
+| A11y audit — # violations | 23 serious on `/blog` page state | 1 axe violation (`link-name`) on `/blog` via `expectAccessible({ impacts: ['critical'] })`; full IBM superset lives in `audit.md` per-test | architectural diff: expect captures page state at audit time; skeptic captures cumulative test state. Both run dual-engine; rule count = page-state × filter |
+| Network requests captured | 33 (page state at `/blog`) | 163 (cumulative across 4 navigations) | architectural diff (page-state vs. session) |
+| Console messages captured | 9 errors (page state at `/blog`) | full session, redacted by default | skeptic ahead on PII redaction default |
+| Perf metrics surfaced | FCP 460 ms / LCP 2644 ms / CLS 0.006 / TTFB 149 ms; LoAF 10 frames worst 94 ms; 33 resources / 1833 KB | FCP 532 ms / LCP 1.86 s / CLS 0.006 / TTFB 159 ms; LoAF tracked per-script with `forcedStyleAndLayoutDuration` | tie on Web Vitals; skeptic ahead on LoAF granularity |
+| Audit report shape | JSON to stdout, no per-test sidecar | `audit.md` per-test with per-rule grouping, `(axe)` / `(equal-access)` badges, +N-nodes footer | skeptic ahead — durable per-test artifact instead of stdout JSON |
+| Latency model fit | wins on **interactive multi-call loops** (open → screenshot → audit → close) | wins on **end-to-end test runs** (the daemon model still gives a warm-path advantage when run multiple times) | use the right tool for the job |
+
+### Architectural observation
+expect's `accessibility_audit` / `network_requests` / `console_logs` /
+`performance_metrics` snapshot the **current page state at call time** —
+no cumulative session record. skeptic's collectors attach once at test
+start and accumulate until test end. Neither is wrong, but the violation /
+request counts are not directly comparable: expect's are last-page-state,
+skeptic's are full-session.
+
 Where each is **now** ahead:
 
 **expect is still ahead on:**
