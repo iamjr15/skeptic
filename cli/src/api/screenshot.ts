@@ -5,7 +5,7 @@ import type { ExecutionContext } from "../executor/context.js";
 import type { StepDiagnostic } from "../executor/types.js";
 import { captureAriaSnapshot } from "../executor/aria-snapshot-capture.js";
 import { resolveElement } from "../executor/element-resolver.js";
-import type { AriaRefEntry } from "../executor/aria-ref-types.js";
+import { isAnnotatableRefEntry, type AriaRefEntry } from "../executor/aria-ref-types.js";
 import {
   injectAnnotationOverlay,
   removeAnnotationOverlay,
@@ -46,7 +46,7 @@ export const takeScreenshot = async (
   name: string,
   opts: ScreenshotOptions = {},
 ): Promise<ScreenshotResult> => {
-  const outDir = ctx.flowDir;
+  const outDir = ctx.testDir;
   await mkdir(outDir, { recursive: true });
   const safeName = sanitizeName(name);
   const filePath = join(outDir, `${safeName}.png`);
@@ -114,7 +114,7 @@ export const captureAnnotatedScreenshot = async (
   const overlayItems: AnnotationOverlayItem[] = [];
   let nextLabel = 1;
 
-  for (const entry of capture.entries) {
+  for (const entry of capture.entries.filter(isAnnotatableRefEntry)) {
     const box = await resolveBoundingBox(page, entry).catch(() => null);
     if (!box) continue; // off-screen / detached — skip, never add to the map
     const projected: AnnotationBox = {

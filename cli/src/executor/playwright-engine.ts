@@ -26,10 +26,7 @@ import { writeSidecars } from "./sidecars.js";
 import { CURSOR_OVERLAY_SOURCE } from "./cursor-overlay.js";
 import { friendlyLabel, PERSISTENT_LABEL_ACTIONS } from "../api/labels.js";
 
-/** Commands that target an element on the page. recordAction fires only for these
- *  (NOT for navigate, wait, assertVisible, observability snapshots, etc.). The set
- *  is derived from the YAML schema's COMMAND_KEYS — we keep it stable here so the
- *  TS-imperative engine and the proxy share one source of truth. */
+/** Commands that target an element on the page. recordAction fires only for these. */
 const INTERACTION_TARGET_COMMANDS: ReadonlySet<string> = new Set([
   "click",
   "doubleClick",
@@ -182,14 +179,8 @@ export class PlaywrightEngine {
   }
 
   /**
-   * Run one test. The TS-pivot replaces the YAML step-loop with a single
-   * `runFn(page, ctx)` invocation; the step-loop's invariants (abortReason,
-   * inTeardown, hardTimeout via Promise.race) live on `runAction()` inside the
-   * fixture builder. The engine still owns context creation, collector wiring,
-   * artifact finalization, and trace/video lifecycle.
-   *
-   * Hooks: per-test beforeEach/afterEach run inside the runFn callback (the
-   * runner orchestrates them). Workspace-wide hooks were removed in B0.5/B1.
+   * Run one test. The engine owns context creation, collector wiring, artifact
+   * finalization, and trace/video lifecycle; the caller supplies the test body.
    */
   async runTest(input: TestInput, onProgress?: StepProgressCallback): Promise<TestResult> {
     if (!this.browser) {
@@ -206,8 +197,8 @@ export class PlaywrightEngine {
 
     const safeName = input.name.replace(/[^a-zA-Z0-9_-]/g, "_");
     const testIndex = input.testIndex ?? 0;
-    const flowDir = join(outputDir, `${safeName}-${testIndex}`);
-    await mkdir(flowDir, { recursive: true });
+    const testDir = join(outputDir, `${safeName}-${testIndex}`);
+    await mkdir(testDir, { recursive: true });
 
     const videoTmpDir = videoEnabled
       ? await mkdtemp(join(tmpdir(), `skeptic-video-${safeName}-`))
@@ -289,7 +280,7 @@ export class PlaywrightEngine {
       const ctx = new ExecutionContext(
         page,
         input.url,
-        flowDir,
+        testDir,
         path.dirname(input.file),
         this.options.aiClient,
         this.options.aiProvider,
@@ -309,18 +300,10 @@ export class PlaywrightEngine {
         }
       }
 
-      if (input.env) {
-        for (const [key, value] of Object.entries(input.env)) {
-          ctx.setVariable(key, value);
-        }
-      }
+      (ctx as unknown as Record<string, string>).outputDir = testDir;
 
-      (ctx as unknown as Record<string, string>).outputDir = flowDir;
-
-      // The TS-pivot run model: invoke the runFn under the runAction boundary
-      // (the runner threads it through fixture.runAction). Engine still emits
-      // step:start / step:complete events when the runFn elects to instrument
-      // its own actions via onProgress.
+      // Invoke the test body under the caller's action boundary. The engine
+      // still emits step:start / step:complete for progress reporters.
       if (input.runFn) {
         const startCommand = "test";
         onProgress?.({ type: "step:start", index: 0, total: 1, command: startCommand, args: { name: input.name } });
@@ -349,7 +332,7 @@ export class PlaywrightEngine {
           onProgress?.({ type: "step:complete", index: 0, total: 1, result: stepResult });
           if (this.options.screenshotOnFailure && page && !page.isClosed()) {
             try {
-              const screenshotPath = join(flowDir, `failure.png`);
+              const screenshotPath = join(testDir, `failure.png`);
               const buffer = await takeRedactedScreenshot(page);
               await writeFile(screenshotPath, buffer);
               stepResult.screenshot = screenshotPath;
@@ -391,9 +374,9 @@ export class PlaywrightEngine {
         }
       }
 
-      // Auto a11y audit (kept from the YAML-engine path) — runs after runFn,
-      // before collector teardown. Skipped if a user-driven audit already populated
-      // lastSnapshot via observability.expectAccessible().
+      // Auto a11y audit runs after the test body and before collector teardown.
+      // Skipped if a user-driven audit already populated lastSnapshot via
+      // observability.expectAccessible().
       const a11yCollector = ctx.collectors.get("accessibility");
       const autoAuditEnabled = observabilityConfig.autoAccessibilityAudit ?? false;
       if (
@@ -462,7 +445,7 @@ export class PlaywrightEngine {
         try {
           const video = page.video();
           if (video) {
-            const destPath = join(flowDir, `${safeName}.webm`);
+            const destPath = join(testDir, `${safeName}.webm`);
             await page.close();
             page = null;
             await video.saveAs(destPath);
@@ -483,7 +466,7 @@ export class PlaywrightEngine {
 
       if (traceStarted && context) {
         try {
-          const tracePath = join(flowDir, `${safeName}.trace.zip`);
+          const tracePath = join(testDir, `${safeName}.trace.zip`);
           await context.tracing.stop({ path: tracePath });
           result.artifacts.trace = tracePath;
           traceStarted = false;
@@ -499,7 +482,7 @@ export class PlaywrightEngine {
 
       if (artifactConfig.writeSidecars) {
         await writeSidecars({
-          flowDir,
+          testDir,
           metrics: metricsMap,
           artifacts: result.artifacts,
           observabilityConfig,
@@ -510,7 +493,7 @@ export class PlaywrightEngine {
     } finally {
       if (traceStarted && context) {
         try {
-          const fallbackPath = join(flowDir, `${safeName}.trace.zip`);
+          const fallbackPath = join(testDir, `${safeName}.trace.zip`);
           await context.tracing.stop({ path: fallbackPath });
         } catch {
           /* best-effort cleanup */

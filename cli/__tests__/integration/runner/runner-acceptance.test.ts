@@ -105,6 +105,33 @@ describe.skipIf(!distAvailable)("runner acceptance (B1)", () => {
     expect(json.tests.every((t) => t.status === "passed")).toBe(true);
   }, 60_000);
 
+  it("--parallel runs spec-file workers concurrently", () => {
+    const targetOut = path.join(outDir, "parallel");
+    const logPath = path.join(outDir, "parallel.log");
+    const result = runCli([
+      "run",
+      path.join(FIXTURES, "parallel-a.spec.ts"),
+      path.join(FIXTURES, "parallel-b.spec.ts"),
+      "--parallel",
+      "2",
+      "--reporter",
+      "json",
+      "--output",
+      targetOut,
+    ], { env: { SKEPTIC_PARALLEL_LOG: logPath }, timeout: 90_000 });
+
+    expect(result.status).toBe(0);
+    const entries = fs.readFileSync(logPath, "utf-8").trim().split("\n");
+    const times = new Map(entries.map((line) => {
+      const [label, value] = line.split(":");
+      return [label, Number(value)] as const;
+    }));
+
+    const latestStart = Math.max(times.get("a:start") ?? 0, times.get("b:start") ?? 0);
+    const earliestEnd = Math.min(times.get("a:end") ?? Number.POSITIVE_INFINITY, times.get("b:end") ?? Number.POSITIVE_INFINITY);
+    expect(latestStart).toBeLessThan(earliestEnd);
+  }, 90_000);
+
   it("test.beforeEach + test.afterEach run around each test in declaration order", () => {
     const targetOut = path.join(outDir, "hooks");
     const result = runCli([
@@ -190,6 +217,29 @@ describe.skipIf(!distAvailable)("runner acceptance (B1)", () => {
     expect(json.tests[0]?.status).not.toBe("passed");
   }, 90_000);
 
+  it("test.use({ hardTimeout }) overrides the CLI hard-timeout for that test", () => {
+    const targetOut = path.join(outDir, "per-test-hard-timeout");
+    const result = runCli(
+      [
+        "run",
+        path.join(FIXTURES, "per-test-hard-timeout.spec.ts"),
+        "--hard-timeout",
+        "50",
+        "--reporter",
+        "json",
+        "--output",
+        targetOut,
+      ],
+      { timeout: 90_000 },
+    );
+    expect(result.status).toBe(0);
+    const json = JSON.parse(fs.readFileSync(path.join(targetOut, "results.json"), "utf-8")) as {
+      tests: Array<{ status: string }>;
+    };
+    expect(json.tests).toHaveLength(1);
+    expect(json.tests[0]?.status).toBe("passed");
+  }, 90_000);
+
   it("hard-timeout (CPU spin) terminates the worker; remaining tests requeue once", () => {
     const targetOut = path.join(outDir, "hang-cpu");
     runCli(
@@ -243,14 +293,14 @@ describe.skipIf(!distAvailable)("runner acceptance (B1)", () => {
     expect(warnings.some((w) => /retry attempt/.test(w))).toBe(true);
   }, 90_000);
 
-  it("--observability --sidecars writes per-test perf-trace.md / console.json / network.json", () => {
+  it("--observability --observability-write-sidecars writes per-test perf-trace.md / console.json / network.json", () => {
     const targetOut = path.join(outDir, "sidecars");
     runCli(
       [
         "run",
         path.join(FIXTURES, "sidecars.spec.ts"),
         "--observability",
-        "--sidecars",
+        "--observability-write-sidecars",
         "--reporter",
         "json",
         "--output",
@@ -264,10 +314,14 @@ describe.skipIf(!distAvailable)("runner acceptance (B1)", () => {
       .filter((d) => d.isDirectory())
       .map((d) => d.name);
     expect(subdirs.length).toBeGreaterThan(0);
-    const flowDir = path.join(targetOut, subdirs[0]!);
-    expect(fs.existsSync(path.join(flowDir, "perf-trace.md"))).toBe(true);
-    expect(fs.existsSync(path.join(flowDir, "console.json"))).toBe(true);
-    expect(fs.existsSync(path.join(flowDir, "network.json"))).toBe(true);
+    const testDir = path.join(targetOut, subdirs[0]!);
+    expect(fs.existsSync(path.join(testDir, "perf-trace.md"))).toBe(true);
+    expect(fs.existsSync(path.join(testDir, "console.json"))).toBe(true);
+    expect(fs.existsSync(path.join(testDir, "network.json"))).toBe(true);
+    const json = JSON.parse(fs.readFileSync(path.join(targetOut, "results.json"), "utf-8")) as {
+      tests: Array<{ metrics?: Record<string, unknown> }>;
+    };
+    expect(json.tests[0]?.metrics?.["accessibility"]).toBeDefined();
   }, 90_000);
 
   it("top-level side-effect rule: each spec is imported twice (discovery + execution)", () => {
@@ -320,9 +374,9 @@ describe.skipIf(!distAvailable)("runner acceptance (B1)", () => {
       .filter((d) => d.isDirectory())
       .map((d) => d.name);
     expect(subdirs.length).toBeGreaterThan(0);
-    const flowDir = path.join(targetOut, subdirs[0]!);
-    const webm = fs.readdirSync(flowDir).find((f) => f.endsWith(".webm"));
-    expect(webm, `no .webm in ${flowDir}`).toBeDefined();
+    const testDir = path.join(targetOut, subdirs[0]!);
+    const webm = fs.readdirSync(testDir).find((f) => f.endsWith(".webm"));
+    expect(webm, `no .webm in ${testDir}`).toBeDefined();
 
     // Validate dimensions via ffprobe — it's available locally on the dev box
     // and in CI containers; if it isn't, skip the dimension check rather than
@@ -340,7 +394,7 @@ describe.skipIf(!distAvailable)("runner acceptance (B1)", () => {
           "stream=width,height",
           "-of",
           "csv=p=0",
-          path.join(flowDir, webm!),
+          path.join(testDir, webm!),
         ],
         { encoding: "utf-8" },
       );
@@ -374,9 +428,9 @@ describe.skipIf(!distAvailable)("runner acceptance (B1)", () => {
       .filter((d) => d.isDirectory())
       .map((d) => d.name);
     expect(subdirs.length).toBeGreaterThan(0);
-    const flowDir = path.join(targetOut, subdirs[0]!);
-    const webm = fs.readdirSync(flowDir).find((f) => f.endsWith(".webm"));
-    expect(webm, `no .webm in ${flowDir}`).toBeDefined();
+    const testDir = path.join(targetOut, subdirs[0]!);
+    const webm = fs.readdirSync(testDir).find((f) => f.endsWith(".webm"));
+    expect(webm, `no .webm in ${testDir}`).toBeDefined();
 
     let probe;
     try {
@@ -391,7 +445,7 @@ describe.skipIf(!distAvailable)("runner acceptance (B1)", () => {
           "stream=width,height",
           "-of",
           "csv=p=0",
-          path.join(flowDir, webm!),
+          path.join(testDir, webm!),
         ],
         { encoding: "utf-8" },
       );

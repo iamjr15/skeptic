@@ -27,7 +27,7 @@ export const SummaryBar = ({ phase, passed, failed, total, startTime, duration_m
       <Box paddingX={2}>
         <ProgressBar current={completed} total={total} width={Math.min(30, width - 40)} />
         <Text color={colors.dim}>
-          {"  "}{completed}/{total} flows  {pct}%  {"•"}  {prettyMs(displayTime)}
+          {"  "}{completed}/{total} tests  {pct}%  {"•"}  {prettyMs(displayTime)}
         </Text>
       </Box>
     );

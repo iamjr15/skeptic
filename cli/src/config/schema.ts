@@ -1,8 +1,6 @@
 import { z } from "zod";
 import { DEVICE_PROFILE_IDS } from "./device-profiles.js";
 import { OUTPUT_DIR_DEFAULT, CONFIG_FILENAME } from "../constants.js";
-// B1: workspace-level hooks (onTestStart / onTestComplete) are gone — per-test
-// setup now uses test.beforeEach / test.afterEach inside the user's spec.
 
 /** Browser engine configuration. */
 const BrowserConfigSchema = z.object({
@@ -38,7 +36,6 @@ const ExecutionConfigSchema = z.object({
   parallel: z.number().min(1).default(1),
   grep: z.string().optional(),
   tags: z.array(z.string()).default([]),
-  flowsOrder: z.array(z.string()).default([]),
 });
 
 /** Output configuration (reporters, output dir). */
@@ -51,14 +48,9 @@ const OutputConfigSchema = z.object({
   verbose: z.boolean().default(false),
 });
 
-// Workspace-wide setup hooks were deleted in B1 — they were YAML-only. Per-test
-// setup lives in `test.beforeEach` / `test.afterEach` inside spec files.
-
 /**
- * Observability configuration — collectors attached to every flow. The active set is the
- * union of this list, the `defaultsForReports` resolution (in commands/test.ts), and
- * collectors inferred from step-level assertions (assertPerformance, assertNoNetworkErrors,
- * accessibilityAudit).
+ * Observability configuration. The active collector set is the union of this
+ * list, reporter-aware defaults, and collectors declared by tests.
  */
 const ObservabilityConfigSchema = z.object({
   collectors: z
@@ -78,8 +70,8 @@ const ObservabilityConfigSchema = z.object({
   consoleCaptureLimit: z.number().int().min(0).default(200),
   consoleRedaction: z.boolean().default(true),
   /**
-   * When true, the engine fires `AccessibilityCollector.audit()` once per flow before
-   * `onTestComplete`. `--observability` flips this on; YAML can also enable it standalone.
+   * When true, the engine fires `AccessibilityCollector.audit()` once per test before
+   * `onTestComplete`. `--observability` flips this on.
    */
   autoAccessibilityAudit: z.boolean().default(false),
   accessibilityStandard: z
@@ -99,6 +91,29 @@ const ObservabilityConfigSchema = z.object({
   fullPageScreenshots: z.boolean().default(false),
   /** Default blank-frame mode for screenshot steps. Per-step overrides win. */
   blankFrameDetection: z.enum(["off", "warn", "fail"]).default("warn"),
+});
+
+/** Safety controls for agent-driven browser work. */
+const SafetyConfigSchema = z.object({
+  /**
+   * Empty means unrestricted. Entries accept exact hostnames, URLs whose host is
+   * used, "*" for unrestricted, or "*.example.com" for a domain and children.
+   */
+  allowedDomains: z.array(z.string()).default([]),
+  /**
+   * Optional JSON policy file, resolved relative to the working directory:
+   * { "default": "allow"|"deny", "allow": ["browser_open"], "deny": [...] }.
+   */
+  actionPolicy: z.string().optional(),
+  /**
+   * Actions that require interactive confirmation. MCP/browser sessions fail
+   * closed for these because there is no safe prompt channel in stdio tools.
+   */
+  confirmActions: z.array(z.string()).default([]),
+  /** Maximum characters returned inline from agent-facing JSON/text tools. */
+  maxOutputChars: z.number().int().min(0).default(120_000),
+  /** Wrap inline tool output in XML-ish boundaries for prompt-injection hygiene. */
+  contentBoundaries: z.boolean().default(false),
 });
 
 /** Notifications: workspace alerts on run completion. */
@@ -148,6 +163,7 @@ export const skepticConfigSchema = z.object({
   output: OutputConfigSchema.default({}),
   ai: AIConfigSchema.default({}),
   observability: ObservabilityConfigSchema.default({}),
+  safety: SafetyConfigSchema.default({}),
   notifications: NotificationsSchema.optional(),
   env: z.record(z.string()).default({}),
 });
@@ -159,6 +175,7 @@ export type ExecutionConfig = z.infer<typeof ExecutionConfigSchema>;
 export type OutputConfig = z.infer<typeof OutputConfigSchema>;
 export type AIConfig = z.infer<typeof AIConfigSchema>;
 export type ObservabilityConfig = z.infer<typeof ObservabilityConfigSchema>;
+export type SafetyConfig = z.infer<typeof SafetyConfigSchema>;
 export type SlackNotificationConfig = z.infer<typeof SlackNotificationSchema>;
 export type WebhookNotificationConfig = z.infer<typeof WebhookNotificationSchema>;
 export type NotificationsConfig = z.infer<typeof NotificationsSchema>;

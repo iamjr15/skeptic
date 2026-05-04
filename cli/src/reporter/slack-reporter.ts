@@ -5,7 +5,7 @@ import type { SlackNotificationConfig } from "../config/schema.js";
 import { logger } from "../utils/logger.js";
 
 const HTTP_TIMEOUT_MS = 10_000;
-const MAX_FAILED_FLOWS_LISTED = 5;
+const MAX_FAILED_TESTS_LISTED = 5;
 
 export class SlackReporter implements Reporter {
   private readonly config: SlackNotificationConfig;
@@ -16,9 +16,9 @@ export class SlackReporter implements Reporter {
     this.runUrl = runUrl;
   }
 
-  onTestStart(_flow: TestIdentifier): void {}
-  onStepComplete(_step: StepResult, _index: number, _total: number, _flow: TestIdentifier): void {}
-  onTestComplete(_result: TestResult, _flow: TestIdentifier): void {}
+  onTestStart(_test: TestIdentifier): void {}
+  onStepComplete(_step: StepResult, _index: number, _total: number, _test: TestIdentifier): void {}
+  onTestComplete(_result: TestResult, _test: TestIdentifier): void {}
 
   async onRunComplete(summary: RunSummary): Promise<void> {
     const failed = summary.failed > 0;
@@ -68,7 +68,7 @@ export function buildSlackPayload(
   const failed = summary.failed > 0;
   const emoji = failed ? "❌" : "✅";
   const headerLabel = failed
-    ? `${emoji} ${PRODUCT_NAME} tests failed: ${summary.failed} flow${summary.failed === 1 ? "" : "s"}`
+    ? `${emoji} ${PRODUCT_NAME} tests failed: ${summary.failed} test${summary.failed === 1 ? "" : "s"}`
     : `${emoji} ${PRODUCT_NAME} tests passed`;
 
   const mentionsLine = config.mention.length > 0 ? config.mention.join(" ") : "";
@@ -100,12 +100,12 @@ export function buildSlackPayload(
   });
 
   if (failed) {
-    const failedFlows = summary.tests.filter((f) => f.status !== "passed");
-    const lines = failedFlows
-      .slice(0, MAX_FAILED_FLOWS_LISTED)
+    const failedTests = summary.tests.filter((f) => f.status !== "passed");
+    const lines = failedTests
+      .slice(0, MAX_FAILED_TESTS_LISTED)
       .map((f) => `• ${formatTestDisplayName(f, summary.tests)}`);
-    if (failedFlows.length > MAX_FAILED_FLOWS_LISTED) {
-      lines.push(`_…and ${failedFlows.length - MAX_FAILED_FLOWS_LISTED} more_`);
+    if (failedTests.length > MAX_FAILED_TESTS_LISTED) {
+      lines.push(`_…and ${failedTests.length - MAX_FAILED_TESTS_LISTED} more_`);
     }
     if (lines.length > 0) {
       blocks.push({

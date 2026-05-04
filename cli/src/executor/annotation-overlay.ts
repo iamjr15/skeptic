@@ -5,7 +5,7 @@
 //  page's CSS. fullPage scrollY projection mirrors get_scroll_offsets at screenshot.rs:493.)
 //
 // PII invariant: badge labels carry only the integer (`[1]`, `[2]`, …) and the entry's
-// numeric `boundingBox`. The structured `annotation-map` diagnostic that flows back to
+// numeric `boundingBox`. The structured `annotation-map` diagnostic written to
 // `results.json` deliberately omits the accessible `name` field — accessible names can
 // contain user data (account names, emails, document titles). The annotated PNG itself
 // shows the page (which is the user's opt-in choice via `annotate: true`); we do not

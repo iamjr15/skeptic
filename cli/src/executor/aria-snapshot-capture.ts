@@ -50,7 +50,7 @@ export async function captureAriaSnapshot(
   scopeSelector: string,
   opts: CaptureOptions,
 ): Promise<CaptureResult> {
-  const yaml = await page.locator(scopeSelector).ariaSnapshot({ mode: "ai" });
+  const yaml = await page.locator(scopeSelector).first().ariaSnapshot({ mode: "ai" });
 
   const limitBytes = resolveLimitBytes();
   const truncated = Buffer.byteLength(yaml, "utf8") > limitBytes;
@@ -139,14 +139,9 @@ async function filterToViewport(
   const inViewport = await Promise.all(
     entries.map(async (entry) => {
       try {
-        const scope = page.locator(entry.scopeSelector);
-        const candidate = scope
-          .getByRole(entry.role as Parameters<typeof page.getByRole>[0], {
-            name: entry.name,
-            exact: true,
-          })
-          .nth(entry.nth);
-        const box = await candidate.boundingBox();
+        const box = await page
+          .locator(`aria-ref=${entry.ref}`)
+          .boundingBox({ timeout: 250 });
         if (!box) return false;
         const cx = box.x + box.width / 2;
         const cy = box.y + box.height / 2;
@@ -176,11 +171,9 @@ async function populateLinkHrefs(
   await Promise.all(
     linkEntries.map(async (entry) => {
       try {
-        const scope = page.locator(entry.scopeSelector);
-        const loc = scope
-          .getByRole("link", { name: entry.name.length > 0 ? entry.name : undefined, exact: true })
-          .nth(entry.nth);
-        const href = await loc.getAttribute("href", { timeout: 1000 });
+        const href = await page
+          .locator(`aria-ref=${entry.ref}`)
+          .getAttribute("href", { timeout: 250 });
         if (href) entry.href = href;
       } catch {
         // best-effort
@@ -193,6 +186,7 @@ interface CursorInteractiveRaw {
   index: number;
   text: string;
   tagName: string;
+  bbox: [number, number, number, number];
   hasOnClick: boolean;
   hasCursorPointer: boolean;
   hasTabIndex: boolean;
@@ -212,16 +206,9 @@ async function captureCursorInteractive(
   const SELECTION_ATTR = "data-__skeptic-ci";
   const cap = MAX_CURSOR_INTERACTIVE_ELEMENTS;
 
-  // Dedupe against ARIA: collect bboxes of every ARIA-captured element and
-  // skip cursor candidates whose own rect matches one of them (±1 px). Without
-  // this, Playwright's `mode: "ai"` snapshot picks up `cursor:pointer`-styled
-  // generic divs as `generic [ref=eN]`, AND the cursor-interactive walker would
-  // re-mint them as `div "Text" [ref=eM]` — two refs for one DOM node.
-  const ariaBboxes = await collectAriaBboxes(page, ariaEntries);
-
   // Use a JS-string evaluate so DOM globals don't need to be in tsconfig's lib.
   // Source pattern: src/observability/collectors/performance-collector.ts:117.
-  const evalScript = `((scopeSel, attrName, maxCap, ariaBboxes) => {
+  const evalScript = `((scopeSel, attrName, maxCap) => {
     var interactiveTags = { a:1, button:1, input:1, select:1, textarea:1, details:1, summary:1 };
     var interactiveRoles = {
       button:1, link:1, textbox:1, checkbox:1, radio:1, combobox:1, listbox:1,
@@ -251,23 +238,14 @@ async function captureCursorInteractive(
       }
       var rect = el.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) continue;
-      // Skip if this element's bbox matches any ARIA-captured element (±1 px) —
-      // Playwright already emitted a ref for this DOM node, no need to dupe.
-      var dupe = false;
-      for (var bi = 0; bi < ariaBboxes.length; bi++) {
-        var b = ariaBboxes[bi];
-        if (Math.abs(b[0] - rect.x) <= 1 && Math.abs(b[1] - rect.y) <= 1 &&
-            Math.abs(b[2] - rect.width) <= 1 && Math.abs(b[3] - rect.height) <= 1) {
-          dupe = true; break;
-        }
-      }
-      if (dupe) continue;
       var text = (el.textContent || "").trim().slice(0, 100);
+      if (!text && hasCursorPointer && !hasOnClick && !hasTabIndex) continue;
       el.setAttribute(attrName, String(results.length));
       results.push({
         index: results.length,
         text: text,
         tagName: tagName,
+        bbox: [rect.x, rect.y, rect.width, rect.height],
         hasOnClick: hasOnClick,
         hasCursorPointer: hasCursorPointer,
         hasTabIndex: hasTabIndex,
@@ -275,10 +253,17 @@ async function captureCursorInteractive(
       });
     }
     return results;
-  })(${JSON.stringify(scopeSelector)}, ${JSON.stringify(SELECTION_ATTR)}, ${cap}, ${JSON.stringify(ariaBboxes)})`;
+  })(${JSON.stringify(scopeSelector)}, ${JSON.stringify(SELECTION_ATTR)}, ${cap})`;
 
-  const raws = (await page.evaluate<CursorInteractiveRaw[]>(evalScript)) ?? [];
+  let raws = (await page.evaluate<CursorInteractiveRaw[]>(evalScript)) ?? [];
 
+  if (raws.length === 0) return [];
+
+  // Dedupe against ARIA only after the cheap DOM pass proves there are
+  // cursor-only candidates. This avoids hundreds of aria-ref boundingBox calls
+  // on pages whose actionable controls are already represented as links/buttons.
+  const ariaBboxes = await collectAriaBboxes(page, dedupeCandidates(ariaEntries, raws));
+  raws = raws.filter((raw) => !bboxMatchesAny(raw.bbox, ariaBboxes));
   if (raws.length === 0) return [];
 
   const usedRefs = new Set<number>();
@@ -329,6 +314,35 @@ async function captureCursorInteractive(
 
   return newEntries;
 }
+
+const bboxMatchesAny = (
+  bbox: [number, number, number, number],
+  candidates: Array<[number, number, number, number]>,
+): boolean => candidates.some((b) =>
+  Math.abs(b[0] - bbox[0]) <= 1 &&
+  Math.abs(b[1] - bbox[1]) <= 1 &&
+  Math.abs(b[2] - bbox[2]) <= 1 &&
+  Math.abs(b[3] - bbox[3]) <= 1,
+);
+
+const dedupeCandidates = (
+  entries: AriaRefEntry[],
+  raws: CursorInteractiveRaw[],
+): AriaRefEntry[] => {
+  if (raws.length <= 10) {
+    return entries.filter((entry) => entry.kind === "aria" && entry.role === "generic");
+  }
+  const rawTexts = raws.map((raw) => raw.text).filter((text) => text.length > 0);
+  if (rawTexts.length === 0) return [];
+  return entries.filter((entry) => {
+    if (entry.kind !== "aria" || entry.role !== "generic" || entry.name.length === 0) {
+      return false;
+    }
+    return rawTexts.some(
+      (text) => text === entry.name || text.includes(entry.name) || entry.name.includes(text),
+    );
+  });
+};
 
 /**
  * Best-effort bbox collection for the dedupe pass. Uses Playwright's `aria-ref=eN`

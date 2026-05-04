@@ -24,14 +24,14 @@ describe("HtmlReporter", () => {
       failed: 1,
       duration_ms: 3000,
       tests: [
-        makeFlow("Login Flow", "tests/login.yaml", "passed"),
-        makeFlow("Search Flow", "tests/search.yaml", "failed"),
+        makeTest("Login Test", "tests/login.spec.ts", "passed"),
+        makeTest("Search Test", "tests/search.spec.ts", "failed"),
       ],
       ...overrides,
     };
   }
 
-  function makeFlow(
+  function makeTest(
     name: string,
     file: string,
     status: "passed" | "failed",
@@ -66,13 +66,13 @@ describe("HtmlReporter", () => {
     expect(html).toContain("<style>");
   });
 
-  it("includes flow names and step counts in the report", () => {
+  it("includes test names and step counts in the report", () => {
     const reporter = new HtmlReporter(tmpDir);
     reporter.onRunComplete(makeSummary());
 
     const html = fs.readFileSync(path.join(tmpDir, "report.html"), "utf-8");
-    expect(html).toContain("Login Flow");
-    expect(html).toContain("Search Flow");
+    expect(html).toContain("Login Test");
+    expect(html).toContain("Search Test");
     expect(html).toContain("navigate");
     expect(html).toContain("click");
   });
@@ -92,7 +92,7 @@ describe("HtmlReporter", () => {
     const reporter = new HtmlReporter(tmpDir);
     const summary = makeSummary({
       tests: [
-        makeFlow("Video Flow", "tests/video.yaml", "passed", {
+        makeTest("Video Test", "tests/video.spec.ts", "passed", {
           videoPath: "/output/video.webm",
         }),
       ],
@@ -108,7 +108,7 @@ describe("HtmlReporter", () => {
     const reporter = new HtmlReporter(tmpDir);
     const summary = makeSummary({
       tests: [
-        makeFlow("Video Flow", "tests/video.yaml", "passed", {
+        makeTest("Video Test", "tests/video.spec.ts", "passed", {
           videoPath: "/output/video.webm",
         }),
       ],
@@ -121,8 +121,8 @@ describe("HtmlReporter", () => {
   });
 
   it("renders a trace link with copyable show-trace command when artifacts.trace is set", () => {
-    const flow: TestResult = {
-      ...makeFlow("Trace Flow", "tests/trace.yaml", "passed"),
+    const test: TestResult = {
+      ...makeTest("Trace Test", "tests/trace.spec.ts", "passed"),
       artifacts: { trace: "/output/x.trace.zip" },
     };
     const reporter = new HtmlReporter(tmpDir);
@@ -131,7 +131,7 @@ describe("HtmlReporter", () => {
       passed: 1,
       failed: 0,
       duration_ms: 1500,
-      tests: [flow],
+      tests: [test],
     });
 
     const html = fs.readFileSync(path.join(tmpDir, "report.html"), "utf-8");
@@ -141,8 +141,8 @@ describe("HtmlReporter", () => {
   });
 
   it("renders a perf-trace markdown link when artifacts.perfTrace is set", () => {
-    const flow: TestResult = {
-      ...makeFlow("Perf Flow", "tests/perf.yaml", "passed"),
+    const test: TestResult = {
+      ...makeTest("Perf Test", "tests/perf.spec.ts", "passed"),
       artifacts: { perfTrace: "/output/perf-trace.md" },
     };
     const reporter = new HtmlReporter(tmpDir);
@@ -151,7 +151,7 @@ describe("HtmlReporter", () => {
       passed: 1,
       failed: 0,
       duration_ms: 1500,
-      tests: [flow],
+      tests: [test],
     });
 
     const html = fs.readFileSync(path.join(tmpDir, "report.html"), "utf-8");
@@ -159,11 +159,11 @@ describe("HtmlReporter", () => {
     expect(html).toContain("performance-trace.md");
   });
 
-  it("uses contextual alt text on screenshots, not 'failure screenshot' on passing flows", () => {
+  it("uses contextual alt text on screenshots, not 'failure screenshot' on passing tests", () => {
     const screenshotPath = path.join(tmpDir, "homepage.png");
     fs.writeFileSync(screenshotPath, Buffer.alloc(64 * 1024, 1));
 
-    const flow = makeFlow("Pass With Shot", "tests/pass.yaml", "passed", {
+    const test = makeTest("Pass With Shot", "tests/pass.spec.ts", "passed", {
       steps: [
         {
           command: "screenshot",
@@ -180,7 +180,7 @@ describe("HtmlReporter", () => {
       passed: 1,
       failed: 0,
       duration_ms: 1500,
-      tests: [flow],
+      tests: [test],
     });
 
     const html = fs.readFileSync(path.join(tmpDir, "report.html"), "utf-8");
@@ -189,9 +189,9 @@ describe("HtmlReporter", () => {
   });
 
   it("renders diagnostics chips and console banner when redaction was disabled", () => {
-    const flow: TestResult = {
-      name: "Diag Flow",
-      file: "tests/diag.yaml",
+    const test: TestResult = {
+      name: "Diag Test",
+      file: "tests/diag.spec.ts",
       status: "passed",
       duration_ms: 1200,
       steps: [
@@ -226,7 +226,7 @@ describe("HtmlReporter", () => {
       passed: 1,
       failed: 0,
       duration_ms: 1500,
-      tests: [flow],
+      tests: [test],
     });
 
     const html = fs.readFileSync(path.join(tmpDir, "report.html"), "utf-8");
@@ -238,7 +238,7 @@ describe("HtmlReporter", () => {
   it("does not include video link when videoPath is absent", () => {
     const reporter = new HtmlReporter(tmpDir);
     const summary = makeSummary({
-      tests: [makeFlow("No Video", "tests/novid.yaml", "passed")],
+      tests: [makeTest("No Video", "tests/novid.spec.ts", "passed")],
     });
     reporter.onRunComplete(summary);
 
@@ -247,11 +247,11 @@ describe("HtmlReporter", () => {
     expect(html).not.toContain("&#127909;");
   });
 
-  it("escapes special characters in flow names for XSS prevention", () => {
+  it("escapes special characters in test names for XSS prevention", () => {
     const reporter = new HtmlReporter(tmpDir);
     const summary = makeSummary({
       tests: [
-        makeFlow('<script>alert("xss")</script>', "tests/xss.yaml", "passed"),
+        makeTest('<script>alert("xss")</script>', "tests/xss.spec.ts", "passed"),
       ],
     });
     reporter.onRunComplete(summary);
@@ -282,23 +282,23 @@ describe("HtmlReporter", () => {
     expect(html).toContain("Element not found");
   });
 
-  it("renders shardId suffix on flow header under sharding", () => {
+  it("renders shardId suffix on test header under sharding", () => {
     const summary: RunSummary = {
       total: 2,
       passed: 2,
       failed: 0,
       duration_ms: 3000,
       tests: [
-        { ...makeFlow("Login Flow", "tests/login.yaml", "passed"), shardId: 0 },
-        { ...makeFlow("Login Flow", "tests/login.yaml", "passed"), shardId: 1 },
+        { ...makeTest("Login Test", "tests/login.spec.ts", "passed"), shardId: 0 },
+        { ...makeTest("Login Test", "tests/login.spec.ts", "passed"), shardId: 1 },
       ],
     };
     const reporter = new HtmlReporter(tmpDir);
     reporter.onRunComplete(summary);
 
     const html = fs.readFileSync(path.join(tmpDir, "report.html"), "utf-8");
-    expect(html).toContain("Login Flow [shard 1]");
-    expect(html).toContain("Login Flow [shard 2]");
+    expect(html).toContain("Login Test [shard 1]");
+    expect(html).toContain("Login Test [shard 2]");
   });
 
   it("does NOT add shard suffix when shardId is undefined", () => {
@@ -320,7 +320,7 @@ describe("HtmlReporter", () => {
       passed: 0,
       failed: 1,
       tests: [
-        makeFlow("Large Screenshot", "tests/large.yaml", "failed", {
+        makeTest("Large Screenshot", "tests/large.spec.ts", "failed", {
           steps: [
             {
               command: "click",
@@ -352,7 +352,7 @@ describe("HtmlReporter", () => {
       passed: 0,
       failed: 1,
       tests: [
-        makeFlow("Small Screenshot", "tests/small.yaml", "failed", {
+        makeTest("Small Screenshot", "tests/small.spec.ts", "failed", {
           steps: [
             {
               command: "click",

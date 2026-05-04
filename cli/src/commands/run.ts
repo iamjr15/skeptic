@@ -37,31 +37,27 @@ export interface RunCommandOptions {
   noTui?: boolean;
   trace?: boolean;
   observability?: boolean;
-  observe?: boolean;
   fullPageScreenshot?: boolean;
   visualSettle?: boolean;
   blankFrameDetection?: "off" | "warn" | "fail";
   observabilityWriteSidecars?: boolean;
-  sidecars?: boolean;
-  /** New in B1 — discover-only mode that replaces YAML's `validate`. */
+  /** Discover specs without running them. */
   list?: boolean;
   /** Tag filter — multiple `--tag foo --tag bar` accumulates. */
   tag?: string[];
-  /** New in B1 — agent-browser CDP auto-discovery. */
+  /** Connect to an existing browser over CDP. */
   connect?: string;
   env?: string[];
-  /** Plan §3 carry-over — best-effort post-run AI failure analysis. */
+  /** Best-effort post-run AI failure analysis. */
   analyze?: boolean;
   /**
-   * B10 — Commander surfaces `--no-daemon` as `daemon: false`. When false,
+   * Commander surfaces `--no-daemon` as `daemon: false`. When false,
    * the worker bypasses the persistent BrowserServer daemon and launches a
-   * fresh Playwright Browser per worker (pre-B10 behavior). When undefined
-   * or true, daemon mode is used. Plan §B10 invariant 3 — the safety valve
-   * for CI, version pinning, and debugging.
+   * fresh Playwright Browser per worker. When undefined or true, daemon mode is used.
    */
   daemon?: boolean;
   /**
-   * B10 — override the spawned-daemon idle timeout in seconds. `0` disables.
+   * Override the spawned-daemon idle timeout in seconds. `0` disables.
    * Default 300 (5 min). Plan §B10 invariant 4.
    */
   daemonIdleTimeout?: number;
@@ -99,8 +95,8 @@ const buildWorkerConfig = (
   defaults: ReturnType<typeof loadConfig>,
   envOverrides: Record<string, string>,
 ): WorkerStartConfig => {
-  const observabilityFlag = opts.observability ?? opts.observe ?? false;
-  const writeSidecarsFlag = opts.observabilityWriteSidecars ?? opts.sidecars ?? false;
+  const observabilityFlag = opts.observability ?? false;
+  const writeSidecarsFlag = opts.observabilityWriteSidecars ?? false;
   const sidecarsActive =
     writeSidecarsFlag ||
     (observabilityFlag && defaults.observability.defaultsForReports !== "none");
@@ -131,7 +127,7 @@ const buildWorkerConfig = (
       accessibilityHtmlSnippetLimit: defaults.observability.accessibilityHtmlSnippetLimit,
       accessibilityStandard: defaults.observability.accessibilityStandard ?? "WCAG21AA",
       autoAccessibilityAudit:
-        defaults.observability.autoAccessibilityAudit ?? observabilityFlag,
+        observabilityFlag || (defaults.observability.autoAccessibilityAudit ?? false),
       accessibilityMaxRulesPerImpact:
         defaults.observability.accessibilityMaxRulesPerImpact ?? 100,
     },
@@ -149,6 +145,7 @@ const buildWorkerConfig = (
     browserEngine: defaults.browser.engine,
     viewport,
     retries: opts.retries ?? defaults.execution.retries,
+    parallel: opts.parallel ?? defaults.execution.parallel ?? 1,
   };
 
   if (opts.url ?? defaults.url) {
@@ -164,10 +161,10 @@ const buildWorkerConfig = (
       ...(opts.cookiesFrom ? { browser: opts.cookiesFrom } : {}),
     };
   }
-  // B10 — daemon plumbing. Commander parses `--no-daemon` as `daemon: false`.
-  // When the user passed `--no-daemon`, flip the worker into the pre-B10
-  // direct-launch branch. `--daemon-idle-timeout` is forwarded to a freshly
-  // auto-spawned daemon (no effect when daemon is already running).
+  // Daemon plumbing. Commander parses `--no-daemon` as `daemon: false`.
+  // When the user passed `--no-daemon`, flip the worker into the direct-launch
+  // branch. `--daemon-idle-timeout` is forwarded to a freshly auto-spawned
+  // daemon (no effect when daemon is already running).
   if (opts.daemon === false) workerConfig.noDaemon = true;
   if (typeof opts.daemonIdleTimeout === "number") {
     workerConfig.daemonIdleTimeoutSeconds = opts.daemonIdleTimeout;
@@ -306,17 +303,15 @@ export const runRun = async (
   const workerConfig = buildWorkerConfig(opts, config, envOverrides);
   if (isCI) workerConfig.headed = false;
 
-  // B10 audit fix (task #17) — pre-warm the daemon from the MAIN process so
+  // Pre-warm the daemon from the main process so
   // `process.argv[1]` resolves to `dist/skeptic.mjs`. Spawning from inside a
   // worker_thread would resolve to `dist/worker.mjs` and the spawned daemon
   // would hang on a parentPort message that never arrives. After this gate,
   // the worker-side `connectDaemon` call hits the socket-connectable fast
   // path and never spawns.
   //
-  // Re-audit finding #2: when pre-warm fails (spawn-timeout, version mismatch,
-  // etc.) we propagate `noDaemon: true` to workers so they actually fall back
-  // to fresh per-test launches instead of re-running the same broken spawn
-  // path 4× times. Matches the warning text "falling back to fresh launches".
+  // When pre-warm fails (spawn-timeout, version mismatch, etc.) we propagate
+  // `noDaemon: true` to workers so they actually fall back to fresh launches.
   const prewarmed = await prewarmDaemonIfNeeded(process.argv, {
     engine: workerConfig.browserEngine,
     headed: workerConfig.headed,

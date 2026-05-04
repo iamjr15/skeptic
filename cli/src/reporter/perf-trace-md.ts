@@ -51,7 +51,7 @@ const webVitalRating = (
 };
 
 /**
- * Pure formatter for the per-flow perf-trace markdown sidecar. Matches the section layout
+ * Pure formatter for the per-test perf-trace markdown sidecar. Matches the section layout
  * Expect emits today (Web Vitals → Navigation Timing → LoAF → Resources → Network issues
  * → Accessibility) without copying any code.
  *

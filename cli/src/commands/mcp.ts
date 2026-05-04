@@ -1,11 +1,5 @@
 /**
- * MCP server for AI agent integration. The B1.5 TS-pivot replaces YAML-shaped
- * tools with TS-spec equivalents:
- *
- *   list_flows     → list_tests       (discovery only — never executes)
- *   validate_flow  → validate_tests   (tsx import sanity + tsc --noEmit)
- *   generate_flow  → generate_test    (AI-driven; routes through generateFromDescription)
- *   run_flow       → run_test         (thin RPC over the runner)
+ * MCP server for AI agent integration.
  *
  * Discovery (`list_tests`/`validate_tests`) imports specs in throwaway workers
  * via the runner's existing `discover()` path; that worker never reaches the
@@ -14,7 +8,7 @@
  * isolation, hard-timeout enforcement, and reporter wiring all carry forward.
  *
  * Stdio framing: stdout is owned by the JSON-RPC transport; logs go to stderr
- * via `redirectStdoutLogsToStderr()` BEFORE the transport opens (lessons.md #19).
+ * via `redirectStdoutLogsToStderr()` before the transport opens.
  */
 import * as path from "node:path";
 import { z } from "zod";
@@ -43,7 +37,8 @@ import {
 import type { AIClient } from "../ai/ai-client.js";
 import { createAIClient, AIFeatureNotBuiltError } from "../ai/client-factory.js";
 import { missingClientMessage } from "../ai/security.js";
-import { generateFromDescription } from "../ai/flow-generator.js";
+import { generateFromDescription } from "../ai/test-generator.js";
+import { registerBrowserMcpTools } from "../mcp/browser-tools.js";
 
 interface ListTestsResult {
   files: Array<{
@@ -204,6 +199,11 @@ export const buildMcpWorkerConfig = (
     browserEngine: cfg.browser.engine,
     viewport: cfg.browser.viewport,
     retries: cfg.execution.retries,
+    parallel: cfg.execution.parallel,
+    // MCP runs happen inside a long-lived stdio child. Prewarming the daemon
+    // from the parent CLI is not available here, so use the deterministic
+    // fresh-launch branch and avoid worker-side daemon spawn timeouts.
+    noDaemon: true,
   };
   const baseUrl = overrides.baseUrl ?? cfg.url;
   if (baseUrl) workerConfig.baseUrl = baseUrl;
@@ -566,6 +566,8 @@ export const buildMcpServer = (options: BuildMcpServerOptions = {}): McpServer =
     },
   );
 
+  registerBrowserMcpTools(server, { cwd });
+
   return server;
 };
 
@@ -580,9 +582,21 @@ export const runMcp = async (): Promise<void> => {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  // Block until the transport closes. The SDK doesn't expose a "wait for close"
-  // promise on McpServer directly; rely on the underlying Server's onclose hook.
+  // Block until the transport closes. In Node's TLA entrypoint an unresolved
+  // promise does not keep the event loop alive, so also resolve on stdin close;
+  // otherwise `node dist/skeptic.mjs mcp` can emit the noisy "unsettled
+  // top-level await" warning after clients disconnect.
   await new Promise<void>((resolve) => {
-    server.server.onclose = () => resolve();
+    let resolved = false;
+    const done = (): void => {
+      if (resolved) return;
+      resolved = true;
+      process.stdin.off("close", done);
+      process.stdin.off("end", done);
+      resolve();
+    };
+    server.server.onclose = done;
+    process.stdin.once("close", done);
+    process.stdin.once("end", done);
   });
 };

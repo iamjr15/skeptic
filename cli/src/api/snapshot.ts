@@ -7,7 +7,11 @@ import type { Locator, Page } from "playwright";
 import type { ExecutionContext } from "../executor/context.js";
 import { captureAriaSnapshot } from "../executor/aria-snapshot-capture.js";
 import { resolveAriaRef } from "../executor/aria-ref-resolver.js";
-import type { AriaRefEntry } from "../executor/aria-ref-types.js";
+import {
+  isHighSignalRefEntry,
+  isInteractiveRefEntry,
+  type AriaRefEntry,
+} from "../executor/aria-ref-types.js";
 
 export interface SnapshotOptions {
   /** Match `agent-browser snapshot -i` — only nodes with refs. */
@@ -35,6 +39,7 @@ export interface SnapshotTree {
   /** Raw Playwright YAML before rendering — kept for diagnostics. */
   rawYaml: string;
   refs: Map<string, AriaRefEntry>;
+  stats: SnapshotStats;
   byRef(ref: string): Locator | Promise<Locator>;
   byRole(role: string, opts?: ByRoleOptions): Locator;
   byText(text: string | RegExp): Locator;
@@ -42,6 +47,27 @@ export interface SnapshotTree {
   cursorInteractiveCount: number;
   ariaRefCount: number;
 }
+
+export interface SnapshotStats {
+  /** Rendered YAML line count. Empty output follows Expect parity: one empty line. */
+  lines: number;
+  /** Rendered YAML character count. */
+  characters: number;
+  /** Rough model-token estimate using the common 4 chars/token heuristic. */
+  estimatedTokens: number;
+  /** All refs captured into the registry, including low-signal refs hidden from compact output. */
+  totalRefs: number;
+  /** Unique refs visible in the rendered YAML. */
+  renderedRefs: number;
+  /** Captured action-oriented refs. Cursor-interactive entries count as interactive. */
+  interactiveRefs: number;
+  /** Action-oriented refs visible in the rendered YAML. */
+  renderedInteractiveRefs: number;
+  ariaRefs: number;
+  cursorInteractiveRefs: number;
+}
+
+const ESTIMATED_CHARS_PER_TOKEN = 4;
 
 /**
  * Build a SnapshotTree backed by Playwright's native `Locator.ariaSnapshot({mode:"ai"})`,
@@ -87,6 +113,7 @@ export const snapshot = async (
     interactive: opts.interactive ?? false,
     compact: opts.compact ?? false,
   });
+  const stats = computeSnapshotStats(renderedYaml, capture.entries);
 
   const byRef = (ref: string): Locator | Promise<Locator> => {
     const entry = refs.get(ref);
@@ -107,8 +134,14 @@ export const snapshot = async (
   };
 
   const byRole = (role: string, byOpts: ByRoleOptions = {}): Locator => {
-    let resolved = page.getByRole(role as Parameters<Page["getByRole"]>[0], {
+    const roleOpts: Parameters<Page["getByRole"]>[1] = {
       name: byOpts.name,
+    };
+    if (typeof byOpts.name === "string") {
+      roleOpts.exact = true;
+    }
+    let resolved = page.getByRole(role as Parameters<Page["getByRole"]>[0], {
+      ...roleOpts,
     });
     if (byOpts.hrefIncludes !== undefined) {
       resolved = resolved.filter({ has: page.locator(`[href*="${byOpts.hrefIncludes}"]`) });
@@ -123,6 +156,7 @@ export const snapshot = async (
     yaml: renderedYaml,
     rawYaml: capture.yaml,
     refs,
+    stats,
     byRef,
     byRole,
     byText,
@@ -131,6 +165,29 @@ export const snapshot = async (
     ariaRefCount: ariaCount,
   };
 };
+
+export const computeSnapshotStats = (
+  renderedYaml: string,
+  entries: AriaRefEntry[],
+): SnapshotStats => {
+  const renderedRefSet = refsInText(renderedYaml);
+  return {
+    lines: renderedYaml.split("\n").length,
+    characters: renderedYaml.length,
+    estimatedTokens: Math.ceil(renderedYaml.length / ESTIMATED_CHARS_PER_TOKEN),
+    totalRefs: entries.length,
+    renderedRefs: renderedRefSet.size,
+    interactiveRefs: entries.filter(isInteractiveRefEntry).length,
+    renderedInteractiveRefs: entries.filter(
+      (entry) => renderedRefSet.has(entry.ref) && isInteractiveRefEntry(entry),
+    ).length,
+    ariaRefs: entries.filter((entry) => entry.kind === "aria").length,
+    cursorInteractiveRefs: entries.filter((entry) => entry.kind === "cursor-interactive").length,
+  };
+};
+
+const refsInText = (text: string): Set<string> =>
+  new Set([...text.matchAll(/\[ref=(e\d+)\]/g)].map((match) => match[1]!));
 
 interface RenderOpts {
   interactive: boolean;
@@ -153,13 +210,17 @@ export const renderSnapshotYaml = (
   const result: string[] = [];
   const refToEntry = new Map(entries.map((e) => [e.ref, e]));
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? "";
     if (line.length === 0 && lines.length === 1) continue;
     result.push(line);
     const m = REF_LINE_RE.exec(line);
     if (m) {
       const entry = refToEntry.get(m[1]!);
-      if (entry?.role === "link" && entry.href) {
+      const nextLine = lines[i + 1] ?? "";
+      const rawAlreadyHasUrl =
+        line.includes("/url:") || /^\s*-?\s*\/url:/.test(nextLine);
+      if (entry?.role === "link" && entry.href && !rawAlreadyHasUrl) {
         // Match agent-browser's `/url: <href>` continuation line.
         const indent = line.match(/^\s*/)?.[0] ?? "";
         result.push(`${indent}  /url: ${entry.href}`);
@@ -177,17 +238,36 @@ export const renderSnapshotYaml = (
   }
 
   let out = result.join("\n");
+  const displayRefs = new Set(
+    entries.filter(isHighSignalRefEntry).map((entry) => entry.ref),
+  );
   if (opts.compact) {
-    out = compactTree(out);
+    out = compactTree(out, displayRefs);
   } else if (opts.interactive) {
-    out = interactiveTree(out);
+    out = interactiveTree(out, displayRefs);
   }
   return out;
 };
 
-const interactiveTree = (tree: string): string => {
+const interactiveTree = (tree: string, displayRefs: ReadonlySet<string>): string => {
   const lines = tree.split("\n");
-  return lines.filter((l) => l.includes("[ref=") || l.startsWith("  /url:")).join("\n");
+  const kept: string[] = [];
+  let keepUrlContinuation = false;
+  for (const line of lines) {
+    const ref = extractRef(line);
+    if (ref && displayRefs.has(ref)) {
+      kept.push(line);
+      keepUrlContinuation = true;
+      continue;
+    }
+    if (keepUrlContinuation && /^\s*-?\s*\/url:/.test(line)) {
+      kept.push(line);
+      keepUrlContinuation = false;
+      continue;
+    }
+    if (line.trim().length > 0) keepUrlContinuation = false;
+  }
+  return kept.join("\n");
 };
 
 const countIndent = (line: string): number => {
@@ -200,14 +280,23 @@ const countIndent = (line: string): number => {
  * Mark every line carrying `ref=` (or a trailing `/url:`) as kept, then walk
  * upward to mark ancestor lines (lower indent) so the kept lines retain context.
  */
-const compactTree = (tree: string): string => {
+const extractRef = (line: string): string | null => {
+  const match = /\[ref=(e\d+)\]/.exec(line);
+  return match?.[1] ?? null;
+};
+
+const compactTree = (tree: string, displayRefs: ReadonlySet<string>): string => {
   const lines = tree.split("\n");
   if (lines.length === 0) return "";
 
   const keep = new Array<boolean>(lines.length).fill(false);
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i] ?? "";
-    if (line.includes("[ref=") || line.includes("/url:")) {
+    const ref = extractRef(line);
+    const keepRef = ref !== null && displayRefs.has(ref);
+    const keepUrl =
+      line.includes("/url:") && i > 0 && keep[i - 1] === true;
+    if (keepRef || keepUrl) {
       keep[i] = true;
       const myIndent = countIndent(line);
       for (let j = i - 1; j >= 0; j--) {
@@ -220,7 +309,13 @@ const compactTree = (tree: string): string => {
     }
   }
 
-  const kept = lines.filter((_, i) => keep[i]);
+  const kept = lines
+    .filter((_, i) => keep[i])
+    .map((line) => {
+      const ref = extractRef(line);
+      if (!ref || displayRefs.has(ref)) return line;
+      return line.replace(/\s+\[ref=e\d+\]/, "");
+    });
   const out = kept.join("\n").trim();
   return out.length === 0 ? "(no interactive elements)" : out;
 };

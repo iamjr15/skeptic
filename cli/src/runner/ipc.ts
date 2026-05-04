@@ -59,18 +59,17 @@ export interface WorkerStartConfig {
   device?: string;
   cookies?: { enabled: boolean; browser?: string };
   retries: number;
+  /** Number of spec-file workers the main runner may execute concurrently. */
+  parallel: number;
   shardId?: number;
   /**
-   * B10 — `--no-daemon` opt-out. When true, the worker launches a fresh
-   * browser via `pw[engine].launch()` (pre-B10 behavior). When false (the
-   * default), the worker connects to the persistent daemon BrowserServer
-   * via `connectDaemon()`. Plan §B10 invariant 3.
+   * `--no-daemon` opt-out. When true, the worker launches a fresh browser.
+   * When false, the worker connects to the persistent daemon BrowserServer.
    */
   noDaemon?: boolean;
   /**
-   * B10 — forwarded to a daemon spawned by this worker (if no daemon is
-   * already running). Default 300 s. `0` disables idle timeout. See plan
-   * §B10 invariant 4.
+   * Forwarded to a daemon spawned by this worker when no daemon is already
+   * running. Default 300 s. `0` disables idle timeout.
    */
   daemonIdleTimeoutSeconds?: number;
 }

@@ -1,5 +1,5 @@
 // Source: agent-browser/cli/src/native/cdp/discovery.rs:1-100 © Vercel Inc., Apache 2.0
-// (CDP discovery flow — `/json/version` → `/json/list` → `/devtools/browser` —
+// (CDP discovery sequence — `/json/version` → `/json/list` → `/devtools/browser` —
 //  ported with IPv6-bracketed hostnames. The skeptic-grammar `selectorHint:` lines
 //  and the cross-process-vs-volatile-ref footer are original.)
 
@@ -10,7 +10,7 @@ import { loadPlaywright } from "../utils/playwright-loader.js";
 import { getDeviceProfile } from "../config/device-profiles.js";
 import { logger } from "../utils/logger.js";
 import { ExecutionContext } from "../executor/context.js";
-import { snapshot, type SnapshotOptions } from "../api/snapshot.js";
+import { snapshot, type SnapshotOptions, type SnapshotStats } from "../api/snapshot.js";
 import type { AnnotationMapEntry } from "../api/screenshot.js";
 import type { AriaRefEntry } from "../executor/aria-ref-types.js";
 
@@ -29,12 +29,7 @@ export interface InspectCommandOptions {
    *  default `./skeptic-inspect-<ts>.png` path. */
   annotated?: boolean;
   annotateOutput?: string;
-  /**
-   * B10 — Commander surfaces `--no-daemon` as `daemon: false`. When false,
-   * inspect bypasses the persistent daemon and launches a fresh browser,
-   * identical to the pre-B10 inspect flow. `--connect <ws-url>` (CDP) is a
-   * separate code path and is unchanged.
-   */
+  /** Commander surfaces `--no-daemon` as `daemon: false`. */
   daemon?: boolean;
 }
 
@@ -51,10 +46,13 @@ interface InspectJsonOutput {
     href?: string;
     playwrightHint?: string;
   }>;
+  stats: SnapshotStats;
   summary: {
     total: number;
     aria: number;
     cursorInteractive: number;
+    rendered: number;
+    interactive: number;
   };
   annotations?: AnnotationMapEntry[];
   annotatedPath?: string;
@@ -75,11 +73,9 @@ export const runInspect = async (
   const wait = parseWait(opts.wait);
   const pw = await loadPlaywright();
 
-  // B10 audit fix (task #17) — pre-warm the daemon from the main process so
-  // `process.argv[1]` resolves to the CLI entry. Inspect runs everything in
-  // the main process anyway (no worker_threads), but routing through the
-  // shared helper keeps the gate behavior identical to `run` and exercises
-  // `commandUsesBrowser` on the production path.
+  // Pre-warm the daemon from the main process so `process.argv[1]` resolves
+  // to the CLI entry. Inspect runs in the main process, but routing through
+  // the shared helper keeps browser-command gating identical to `run`.
   const { prewarmDaemonIfNeeded } = await import("../daemon/auto-spawn.js");
   const prewarmed = await prewarmDaemonIfNeeded(process.argv, {
     engine: "chromium",
@@ -109,14 +105,14 @@ export const runInspect = async (
 
   try {
     if (opts.connect) {
-      // Path 1 — explicit CDP attach (unchanged from pre-B10).
+      // Path 1 — explicit CDP attach.
       const wsUrl = await discoverCdpUrl(opts.connect);
       browser = await pw.chromium.connectOverCDP(wsUrl);
       const contexts = browser.contexts();
       context = contexts[0] ?? (await browser.newContext());
       page = context.pages()[0] ?? (await context.newPage());
     } else if (noDaemon) {
-      // Path 2 — `--no-daemon` opt-out (pre-B10 one-shot launch).
+      // Path 2 — `--no-daemon` opt-out with a one-shot browser launch.
       browser = await pw.chromium.launch({ headless: !opts.headed });
       const ctxOpts = buildContextOptions(opts);
       context = await browser.newContext(ctxOpts);
@@ -233,6 +229,7 @@ interface RenderedTree {
   yaml: string;
   rawYaml: string;
   refs: Map<string, AriaRefEntry>;
+  stats: SnapshotStats;
   ariaRefCount: number;
   cursorInteractiveCount: number;
 }
@@ -297,8 +294,12 @@ const emitYaml = (
 
   // Per-ref selectorHint table.
   if (tree.refs.size > 0) {
+    const renderedRefs = new Set(
+      [...tree.yaml.matchAll(/\[ref=(e\d+)\]/g)].map((match) => match[1]!),
+    );
     process.stdout.write("\n");
     for (const entry of tree.refs.values()) {
+      if (!renderedRefs.has(entry.ref)) continue;
       const hint = buildSelectorHint(entry);
       process.stdout.write(`  ${entry.ref} selectorHint: ${hint}\n`);
       if (entry.href) {
@@ -326,9 +327,12 @@ const emitYaml = (
   }
 
   // Footer.
-  const total = tree.ariaRefCount + tree.cursorInteractiveCount;
   process.stdout.write(
-    `\n${total} refs (${tree.ariaRefCount} ARIA, ${tree.cursorInteractiveCount} cursor-interactive). ` +
+    `\nStats: ${formatNumber(tree.stats.lines)} lines, ${formatNumber(tree.stats.characters)} chars, ` +
+      `~${formatNumber(tree.stats.estimatedTokens)} tokens; ` +
+      `${formatNumber(tree.stats.renderedRefs)} refs rendered / ${formatNumber(tree.stats.totalRefs)} captured ` +
+      `(${formatNumber(tree.stats.ariaRefs)} ARIA, ${formatNumber(tree.stats.cursorInteractiveRefs)} cursor-interactive), ` +
+      `${formatNumber(tree.stats.interactiveRefs)} interactive.\n` +
       `Stable artifact: copy a selectorHint into your test — refs are NOT portable across inspect calls. ` +
       `Inside a test, use @eN only after a snapshot(page) call in the same run.\n`,
   );
@@ -344,7 +348,7 @@ const emitJson = (
   const out: InspectJsonOutput = {
     url,
     yaml: tree.yaml,
-    refs: [...tree.refs.values()].map((e) => {
+    refs: [...tree.refs.values()].filter((e) => tree.yaml.includes(`[ref=${e.ref}]`)).map((e) => {
       const item: InspectJsonOutput["refs"][number] = {
         ref: e.ref,
         kind: e.kind,
@@ -360,10 +364,13 @@ const emitJson = (
       }
       return item;
     }),
+    stats: tree.stats,
     summary: {
-      total: tree.ariaRefCount + tree.cursorInteractiveCount,
-      aria: tree.ariaRefCount,
-      cursorInteractive: tree.cursorInteractiveCount,
+      total: tree.stats.totalRefs,
+      aria: tree.stats.ariaRefs,
+      cursorInteractive: tree.stats.cursorInteractiveRefs,
+      rendered: tree.stats.renderedRefs,
+      interactive: tree.stats.interactiveRefs,
     },
   };
   if (annotations && annotations.length > 0) {
@@ -372,6 +379,8 @@ const emitJson = (
   if (annotatedPath) out.annotatedPath = annotatedPath;
   process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
 };
+
+const formatNumber = (value: number): string => new Intl.NumberFormat("en-US").format(value);
 
 /**
  * CDP discovery: try `/json/version` → `/json/list` → direct `/devtools/browser`

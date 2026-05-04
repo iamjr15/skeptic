@@ -9,7 +9,7 @@ export interface BrowsersInstallOptions {
 /**
  * `skeptic browsers install [--with-deps] [chromium|firefox|webkit|all]`
  *
- * Mirrors the playwright CLI install flow. Verified against
+ * Mirrors the Playwright CLI install sequence. Verified against
  * `playwright-core/lib/server/registry/index.js:979` (real `install`
  * signature) and `lib/cli/installActions.js:119-148` (CLI's call pattern:
  * resolveBrowsers → installDeps → install → validateHostRequirements).

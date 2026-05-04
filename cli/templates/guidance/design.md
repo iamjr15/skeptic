@@ -10,28 +10,27 @@ E2E is the right place for layout-integrity checks; it's the wrong place for pix
 
 ## Things worth asserting
 
-- [ ] Primary CTA is visible without scroll on the target viewport (use `device:` metadata + `assertVisible`).
+- [ ] Primary CTA is visible without scroll on the target viewport (use `test.use({ device })` or CLI `--device` plus `expect(locator).toBeVisible()`).
 - [ ] Text doesn't overflow its container — screen-dimension edge cases on long strings (German, tokens with no break points).
 - [ ] Z-index ordering holds: modal above page chrome, toast above modal, dropdown above sticky header.
 - [ ] Hover / active / focus states don't collapse the layout (no shift on interaction).
 
-## Flow patterns
+## Test patterns
 
 Visual regression on a key component, not the whole page:
 
-```yaml
-- navigate: /checkout
-- assertScreenshot:
-    path: checkout-cta.png
-    cropOn: "[data-testid=primary-cta]"
-    threshold: 0.02
+```ts
+await page.goto("/checkout");
+await screenshot("checkout-cta", {
+  annotate: true,
+  annotateScope: "[data-testid=primary-cta]",
+});
 ```
 
-For text-overflow checks, use `assertWithAI` with a specific prompt — deterministic DOM assertions miss rendered ellipsis/clipping:
+For text-overflow checks, use `ai.assert(...)` with a specific prompt — deterministic DOM assertions miss rendered ellipsis/clipping:
 
-```yaml
-- assertWithAI:
-    assertion: "The product title is fully visible (no '...' truncation) within its card."
+```ts
+await ai.assert("The product title is fully visible with no ellipsis truncation inside its card.");
 ```
 
 ## Red flags — file a bug

@@ -1,3 +1,0 @@
-
-
-0 refs (0 ARIA, 0 cursor-interactive). Stable artifact: copy a selectorHint into your test — refs are NOT portable across inspect calls. Inside a test, use @eN only after a snapshot(page) call in the same run.

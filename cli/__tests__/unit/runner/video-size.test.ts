@@ -63,6 +63,7 @@ const baseConfig = (overrides: Partial<WorkerStartConfig> = {}): WorkerStartConf
   headed: false,
   browserEngine: "chromium",
   retries: 0,
+  parallel: 1,
   ...overrides,
 });
 

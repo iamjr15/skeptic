@@ -33,20 +33,20 @@ export class ConsoleReporter implements Reporter {
     console.log(this.shardLabel ? `${this.shardLabel} ${line}` : line);
   }
 
-  onTestStart(flow: TestIdentifier): void {
+  onTestStart(test: TestIdentifier): void {
     if (this.concurrency > 1) {
       const lines = [
         "",
-        `${chalk.bold(`  ${flow.name}`)} ${chalk.dim(`(${flow.file})`)}`,
+        `${chalk.bold(`  ${test.name}`)} ${chalk.dim(`(${test.file})`)}`,
       ];
-      this.buffer.set(flow.name, lines);
+      this.buffer.set(test.name, lines);
     } else {
       this.write("");
-      this.write(`${chalk.bold(`  ${flow.name}`)} ${chalk.dim(`(${flow.file})`)}`);
+      this.write(`${chalk.bold(`  ${test.name}`)} ${chalk.dim(`(${test.file})`)}`);
     }
   }
 
-  onStepComplete(step: StepResult, index: number, total: number, flow: TestIdentifier): void {
+  onStepComplete(step: StepResult, index: number, total: number, test: TestIdentifier): void {
     const icon =
       step.status === "passed"
         ? chalk.green("  ✓")
@@ -75,8 +75,8 @@ export class ConsoleReporter implements Reporter {
     // Non-fatal warnings (soft-timeout, retryIfNoChange) — rendered in yellow after the step line.
     const warningLines: string[] = step.warnings?.map((w) => chalk.yellow(`      ⚠ ${w}`)) ?? [];
 
-    if (this.concurrency > 1 && flow) {
-      const buf = this.buffer.get(flow.name);
+    if (this.concurrency > 1 && test) {
+      const buf = this.buffer.get(test.name);
       if (buf) {
         buf.push(line);
         if (errorLine) buf.push(errorLine);
@@ -91,7 +91,7 @@ export class ConsoleReporter implements Reporter {
     }
   }
 
-  onTestComplete(result: TestResult, _flow: TestIdentifier): void {
+  onTestComplete(result: TestResult, _test: TestIdentifier): void {
     const status =
       result.status === "passed"
         ? chalk.bgGreen.black(" PASS ")

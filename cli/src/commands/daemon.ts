@@ -1,5 +1,5 @@
 // Source: agent-browser/cli/src/native/daemon.rs:19-150 © Vercel Inc., Apache 2.0
-// (foreground-blocking daemon entry; the auto-spawn flow in client.ts launches
+// (foreground-blocking daemon entry; the auto-spawn path in client.ts launches
 //  this with `spawn(node, [skeptic, daemon, start, ...], { detached: true }).unref()`.
 //  The status/stop/logs subcommands are skeptic-original wrappers around the
 //  sidecar files written by lifecycle.ts.)
@@ -29,7 +29,7 @@ const VALID_ENGINES: ReadonlySet<Engine> = new Set(["chromium", "firefox", "webk
 /**
  * `skeptic daemon start` — bind socket, launch BrowserServer, install signal
  * handlers, block until `daemon.shutdown` / SIGTERM / idle timeout. The
- * auto-spawn flow in `client.ts` calls this via a detached subprocess.
+ * auto-spawn path in `client.ts` calls this via a detached subprocess.
  */
 export const runDaemonStart = async (opts: DaemonStartOptions): Promise<void> => {
   const engine = (opts.engine ?? "chromium") as Engine;

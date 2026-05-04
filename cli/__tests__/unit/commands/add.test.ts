@@ -274,16 +274,17 @@ describe("add command", () => {
   });
 
   describe("runAddSkill", () => {
-    it("creates .claude/skills/skeptic.md for claude agent", async () => {
+    it("creates .claude/skills/skeptic/SKILL.md for claude agent", async () => {
       const { runAddSkill } = await import("../../../src/commands/add.js");
       await runAddSkill({ agent: "claude" });
 
-      const skillPath = path.join(tmpDir, ".claude/skills/skeptic.md");
+      const skillPath = path.join(tmpDir, ".claude/skills/skeptic/SKILL.md");
       expect(fs.existsSync(skillPath)).toBe(true);
 
       const content = fs.readFileSync(skillPath, "utf-8");
-      expect(content).toContain("skeptic");
+      expect(content).toContain("name: skeptic");
       expect(content).toContain("skeptic run");
+      expect(content).toContain("skeptic-agent-skill: managed by skeptic-cli");
     });
 
     it("creates .agents/skills/skeptic/SKILL.md for codex agent", async () => {
@@ -292,19 +293,84 @@ describe("add command", () => {
 
       const skillPath = path.join(tmpDir, ".agents/skills/skeptic/SKILL.md");
       expect(fs.existsSync(skillPath)).toBe(true);
+      expect(fs.existsSync(path.join(tmpDir, ".agents/skills/skeptic/agents/openai.yaml"))).toBe(
+        true,
+      );
     });
 
-    it("creates .cursor/skills/skeptic.md for cursor agent", async () => {
+    it("creates .cursor/skills/skeptic/SKILL.md for cursor agent", async () => {
       const { runAddSkill } = await import("../../../src/commands/add.js");
       await runAddSkill({ agent: "cursor" });
 
-      const skillPath = path.join(tmpDir, ".cursor/skills/skeptic.md");
+      const skillPath = path.join(tmpDir, ".cursor/skills/skeptic/SKILL.md");
       expect(fs.existsSync(skillPath)).toBe(true);
+    });
+
+    it("creates project skill directories for all supported agents", async () => {
+      const { runAddSkill } = await import("../../../src/commands/add.js");
+      await runAddSkill({ agent: "all" });
+
+      expect(fs.existsSync(path.join(tmpDir, ".claude/skills/skeptic/SKILL.md"))).toBe(true);
+      expect(fs.existsSync(path.join(tmpDir, ".agents/skills/skeptic/SKILL.md"))).toBe(true);
+      expect(fs.existsSync(path.join(tmpDir, ".cursor/skills/skeptic/SKILL.md"))).toBe(true);
+      expect(fs.existsSync(path.join(tmpDir, ".opencode/skills/skeptic/SKILL.md"))).toBe(true);
+    });
+
+    it("creates user skill directories for claude and codex", async () => {
+      const homeDir = path.join(tmpDir, "home");
+      const codexHome = path.join(tmpDir, "codex-home");
+      vi.stubEnv("HOME", homeDir);
+      vi.stubEnv("CODEX_HOME", codexHome);
+
+      const { runAddSkill } = await import("../../../src/commands/add.js");
+      await runAddSkill({ agent: "all", scope: "user" });
+
+      expect(fs.existsSync(path.join(homeDir, ".claude/skills/skeptic/SKILL.md"))).toBe(true);
+      expect(fs.existsSync(path.join(codexHome, "skills/skeptic/SKILL.md"))).toBe(true);
+      expect(fs.existsSync(path.join(homeDir, ".cursor/skills/skeptic/SKILL.md"))).toBe(true);
+      expect(fs.existsSync(path.join(homeDir, ".opencode/skills/skeptic/SKILL.md"))).toBe(true);
+    });
+
+    it("does not overwrite an existing non-skeptic skill", async () => {
+      const skillDir = path.join(tmpDir, ".claude/skills/skeptic");
+      fs.mkdirSync(skillDir, { recursive: true });
+      fs.writeFileSync(path.join(skillDir, "SKILL.md"), "---\nname: skeptic\n---\ncustom", "utf-8");
+
+      const { runAddSkill } = await import("../../../src/commands/add.js");
+      await runAddSkill({ agent: "claude" });
+
+      expect(fs.readFileSync(path.join(skillDir, "SKILL.md"), "utf-8")).toBe(
+        "---\nname: skeptic\n---\ncustom",
+      );
+      expect(process.exitCode).toBe(1);
+    });
+
+    it("updates an existing skeptic-managed skill", async () => {
+      const skillDir = path.join(tmpDir, ".agents/skills/skeptic");
+      fs.mkdirSync(skillDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(skillDir, "SKILL.md"),
+        "<!-- skeptic-agent-skill: managed by skeptic-cli -->\nold",
+        "utf-8",
+      );
+
+      const { runAddSkill } = await import("../../../src/commands/add.js");
+      await runAddSkill({ agent: "codex" });
+
+      const content = fs.readFileSync(path.join(skillDir, "SKILL.md"), "utf-8");
+      expect(content).toContain("name: skeptic");
+      expect(content).not.toContain("\nold");
     });
 
     it("sets exitCode for unknown agent", async () => {
       const { runAddSkill } = await import("../../../src/commands/add.js");
       await runAddSkill({ agent: "unknown-agent" });
+      expect(process.exitCode).toBe(1);
+    });
+
+    it("sets exitCode for unknown scope", async () => {
+      const { runAddSkill } = await import("../../../src/commands/add.js");
+      await runAddSkill({ agent: "claude", scope: "workspace" });
       expect(process.exitCode).toBe(1);
     });
   });

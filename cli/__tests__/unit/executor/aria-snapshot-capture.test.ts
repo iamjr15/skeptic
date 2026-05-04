@@ -33,6 +33,7 @@ function createMockPage(yaml: string, opts?: {
   } as unknown as Locator);
 
   const scope: Locator = {
+    first: vi.fn().mockReturnThis(),
     ariaSnapshot,
     getByRole: vi.fn().mockImplementation((role: string, ropts?: Record<string, unknown>) => {
       calls.getByRole.push({ role, opts: ropts });
@@ -48,6 +49,9 @@ function createMockPage(yaml: string, opts?: {
     _calls: calls,
     locator: vi.fn().mockImplementation((sel: string) => {
       calls.locator.push(sel);
+      if (sel.startsWith("aria-ref=")) {
+        return makeNthLocator(sel);
+      }
       return scope;
     }),
     viewportSize: vi.fn().mockReturnValue(opts?.viewportSize ?? { width: 1280, height: 720 }),
@@ -77,6 +81,10 @@ describe("captureAriaSnapshot", () => {
 
     expect(result.yaml).toBe(BASIC_YAML);
     expect(page.locator).toHaveBeenCalledWith("body");
+    const scopeLocator = vi.mocked(page.locator).mock.results[0]?.value as Locator & {
+      first: ReturnType<typeof vi.fn>;
+    };
+    expect(scopeLocator.first).toHaveBeenCalledOnce();
   });
 
   it("parses ref-annotated lines into entries with sequential refs and correct roles/names", async () => {
@@ -141,8 +149,8 @@ describe("captureAriaSnapshot", () => {
     const page = createMockPage(yaml, {
       viewportSize: { width: 1000, height: 800 },
       bounds: {
-        "button|InView": { x: 100, y: 100, width: 50, height: 30 },
-        "button|OffScreen": { x: 100, y: 2000, width: 50, height: 30 }, // y > viewport
+        "aria-ref=e1": { x: 100, y: 100, width: 50, height: 30 },
+        "aria-ref=e2": { x: 100, y: 2000, width: 50, height: 30 }, // y > viewport
       },
     });
     const { entries } = await captureAriaSnapshot(page, "body", { viewport: true });
@@ -155,8 +163,8 @@ describe("captureAriaSnapshot", () => {
     const page = createMockPage(yaml, {
       viewportSize: { width: 1000, height: 800 },
       bounds: {
-        "button|InView": { x: 100, y: 100, width: 50, height: 30 },
-        "button|OffScreen": { x: 100, y: 2000, width: 50, height: 30 },
+        "aria-ref=e1": { x: 100, y: 100, width: 50, height: 30 },
+        "aria-ref=e2": { x: 100, y: 2000, width: 50, height: 30 },
       },
     });
     const result = await captureAriaSnapshot(page, "body", { viewport: true });

@@ -109,7 +109,7 @@ describe.skipIf(!browser)("PlaywrightEngine collector lifecycle", () => {
 
   beforeEach(() => stubFactory.reset());
 
-  const runMinimalFlow = async (suffix: string): Promise<unknown> => {
+  const runMinimalTest = async (suffix: string): Promise<unknown> => {
     const engine = new PlaywrightEngine({
       outputDir: path.join(outputDir, suffix),
       observability: {
@@ -138,7 +138,7 @@ describe.skipIf(!browser)("PlaywrightEngine collector lifecycle", () => {
 
   it("attach → snapshot → detach called in order; metrics populated", async () => {
     stubFactory.add({ name: "performance", behavior: { snapshotValue: { stubMarker: 42 } } });
-    const result = (await runMinimalFlow("a")) as { metrics?: Record<string, unknown> };
+    const result = (await runMinimalTest("a")) as { metrics?: Record<string, unknown> };
 
     const spies = stubFactory.spy("performance");
     expect(spies.attach).toHaveBeenCalledOnce();
@@ -153,9 +153,9 @@ describe.skipIf(!browser)("PlaywrightEngine collector lifecycle", () => {
     expect(snapshotOrder).toBeLessThan(detachOrder);
   }, 60_000);
 
-  it("attach failure drops the collector; flow still runs; metrics omitted for that collector", async () => {
+  it("attach failure drops the collector; test still runs; metrics omitted for that collector", async () => {
     stubFactory.add({ name: "performance", behavior: { attachThrows: true } });
-    const result = (await runMinimalFlow("b")) as {
+    const result = (await runMinimalTest("b")) as {
       status: string;
       metrics?: Record<string, unknown>;
     };
@@ -171,18 +171,18 @@ describe.skipIf(!browser)("PlaywrightEngine collector lifecycle", () => {
   it("snapshot failure logs and skips that collector; siblings still populate", async () => {
     stubFactory.add({ name: "performance", behavior: { snapshotThrows: true } });
     stubFactory.add({ name: "network", behavior: { snapshotValue: { netOk: true } } });
-    const result = (await runMinimalFlow("c")) as { metrics?: Record<string, unknown> };
+    const result = (await runMinimalTest("c")) as { metrics?: Record<string, unknown> };
 
     expect(result.metrics).toEqual({ network: { netOk: true } });
     expect(result.metrics).not.toHaveProperty("performance");
   }, 60_000);
 
-  it("detach failure does not mask flow status", async () => {
+  it("detach failure does not mask test status", async () => {
     stubFactory.add({
       name: "performance",
       behavior: { detachThrows: true, snapshotValue: { ok: true } },
     });
-    const result = (await runMinimalFlow("d")) as {
+    const result = (await runMinimalTest("d")) as {
       status: string;
       metrics?: Record<string, unknown>;
     };
@@ -192,7 +192,7 @@ describe.skipIf(!browser)("PlaywrightEngine collector lifecycle", () => {
 
   it("null-valued snapshot is omitted from metrics", async () => {
     stubFactory.add({ name: "accessibility", behavior: { snapshotValue: null } });
-    const result = (await runMinimalFlow("e")) as { metrics?: Record<string, unknown> };
+    const result = (await runMinimalTest("e")) as { metrics?: Record<string, unknown> };
     expect(result.metrics).toBeUndefined();
   }, 60_000);
 });

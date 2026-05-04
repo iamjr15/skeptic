@@ -1,6 +1,8 @@
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import * as fs from "node:fs";
+import * as http from "node:http";
 import * as path from "node:path";
+import { chromium } from "playwright";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -16,6 +18,7 @@ const DIST = path.resolve(import.meta.dirname, "../../../dist/skeptic.mjs");
 const WORKER_DIST = path.resolve(import.meta.dirname, "../../../dist/worker.mjs");
 const distAvailable = fs.existsSync(DIST) && fs.existsSync(WORKER_DIST);
 const FIXTURE_DIR = path.resolve(import.meta.dirname, "../../fixtures/mcp");
+const chromiumAvailable = fs.existsSync(chromium.executablePath());
 
 interface ToolResult {
   content: Array<{ type: string; text?: string }>;
@@ -45,19 +48,34 @@ describe("MCP server (B1.5) — in-process", () => {
   });
 
   afterAll(async () => {
+    await client?.callTool({ name: "browser_close", arguments: {} }).catch(() => {});
     await client.close().catch(() => {});
     await serverTransport.close().catch(() => {});
   });
 
-  it("registers exactly the four B1.5 tools", async () => {
+  it("registers B1.5 test tools plus browser parity tools", async () => {
     const list = await client.listTools();
     const names = list.tools.map((t) => t.name).sort();
-    expect(names).toEqual(["generate_test", "list_tests", "run_test", "validate_tests"]);
+    expect(names).toEqual([
+      "browser_accessibility_audit",
+      "browser_close",
+      "browser_console_logs",
+      "browser_network_requests",
+      "browser_open",
+      "browser_performance_metrics",
+      "browser_playwright",
+      "browser_screenshot",
+      "browser_snapshot",
+      "generate_test",
+      "list_tests",
+      "run_test",
+      "validate_tests",
+    ]);
   });
 
-  it("each tool's description references the TS-pivot semantics, not YAML", async () => {
+  it("test tool descriptions reference TypeScript specs", async () => {
     const list = await client.listTools();
-    for (const tool of list.tools) {
+    for (const tool of list.tools.filter((t) => !t.name.startsWith("browser_"))) {
       expect(tool.description ?? "").not.toMatch(/yaml/i);
     }
     const runTest = list.tools.find((t) => t.name === "run_test");
@@ -94,6 +112,135 @@ describe("MCP server (B1.5) — in-process", () => {
       if (prevKeys.openai) process.env["OPENAI_API_KEY"] = prevKeys.openai;
       if (prevKeys.anthropic) process.env["ANTHROPIC_API_KEY"] = prevKeys.anthropic;
     }
+  });
+
+  describe.skipIf(!chromiumAvailable)("browser MCP tools", () => {
+    let app!: http.Server;
+    let baseUrl = "";
+
+    beforeAll(async () => {
+      app = http.createServer((req, res) => {
+        if (req.url === "/asset.js") {
+          res.writeHead(200, { "content-type": "application/javascript" });
+          res.end("console.info('asset loaded');");
+          return;
+        }
+        if (req.url === "/image.png") {
+          res.writeHead(200, { "content-type": "image/png" });
+          res.end(Buffer.from("iVBORw0KGgo=", "base64"));
+          return;
+        }
+        res.writeHead(200, { "content-type": "text/html" });
+        res.end(`<!doctype html>
+<html>
+  <head><title>Skeptic MCP Fixture</title><script src="/asset.js"></script></head>
+  <body>
+    <h1>Skeptic MCP Fixture</h1>
+    <button id="clicker">Click me</button>
+    <p id="status">idle</p>
+    <img src="/image.png">
+    <script>
+      document.getElementById('clicker').addEventListener('click', () => {
+        document.getElementById('status').textContent = 'clicked';
+        console.warn('button clicked');
+        fetch('/api/data').catch(() => {});
+      });
+    </script>
+  </body>
+</html>`);
+      });
+      await new Promise<void>((resolve) => {
+        app.listen(0, "127.0.0.1", () => resolve());
+      });
+      const addr = app.address();
+      if (!addr || typeof addr === "string") throw new Error("test server did not bind");
+      baseUrl = `http://127.0.0.1:${addr.port}`;
+    });
+
+    afterAll(async () => {
+      await client.callTool({ name: "browser_close", arguments: {} }).catch(() => {});
+      await new Promise<void>((resolve, reject) => {
+        app.close((err) => (err ? reject(err) : resolve()));
+      });
+    });
+
+    it("opens, snapshots, runs Playwright, captures diagnostics, and closes", async () => {
+      const opened = await callTool(client, "browser_open", {
+        url: baseUrl,
+        waitUntil: "networkidle",
+        snapshot: true,
+      });
+      expect(opened.isError).not.toBe(true);
+      expect((opened.structuredContent as { title: string }).title).toBe("Skeptic MCP Fixture");
+
+      const snapshotResult = await callTool(client, "browser_snapshot", {
+        compact: true,
+        interactive: true,
+      });
+      const snap = snapshotResult.structuredContent as {
+        yaml: string;
+        stats: { renderedInteractiveRefs: number };
+      };
+      expect(snap.yaml).toContain("[ref=e");
+      expect(snap.stats.renderedInteractiveRefs).toBeGreaterThan(0);
+
+      const playwrightResult = await callTool(client, "browser_playwright", {
+        code: "await page.getByRole('button', { name: 'Click me' }).click(); return await page.locator('#status').textContent();",
+        snapshotAfter: true,
+      });
+      const playwrightStructured = playwrightResult.structuredContent as {
+        result: string;
+        resultFile: string;
+        snapshot: { yaml: string };
+      };
+      expect(playwrightStructured.result).toBe("clicked");
+      expect(fs.existsSync(playwrightStructured.resultFile)).toBe(true);
+      expect(playwrightStructured.snapshot.yaml).toContain("Click me");
+
+      const consoleResult = await callTool(client, "browser_console_logs", {
+        type: "warning",
+      });
+      const consoleStructured = consoleResult.structuredContent as {
+        messages: Array<{ text: string }>;
+      };
+      expect(consoleStructured.messages.some((m) => m.text.includes("button clicked"))).toBe(true);
+
+      const networkResult = await callTool(client, "browser_network_requests", {
+        method: "GET",
+      });
+      const networkStructured = networkResult.structuredContent as {
+        requests: Array<{ url: string }>;
+      };
+      expect(networkStructured.requests.some((r) => r.url.includes("/asset.js"))).toBe(true);
+
+      const screenshotResult = await callTool(client, "browser_screenshot", {
+        mode: "annotated",
+      });
+      expect(screenshotResult.content.some((item) => item.type === "image")).toBe(true);
+      const screenshotStructured = screenshotResult.structuredContent as {
+        path: string;
+        annotations: unknown[];
+      };
+      expect(fs.existsSync(screenshotStructured.path)).toBe(true);
+      expect(screenshotStructured.annotations.length).toBeGreaterThan(0);
+
+      const a11yResult = await callTool(client, "browser_accessibility_audit", {});
+      const a11yStructured = a11yResult.structuredContent as {
+        summary: { violations: number };
+      };
+      expect(a11yStructured.summary.violations).toBeGreaterThan(0);
+
+      const perfResult = await callTool(client, "browser_performance_metrics", {});
+      const perfStructured = perfResult.structuredContent as {
+        reportPath: string;
+        performance: unknown;
+      };
+      expect(perfStructured.performance).toBeTruthy();
+      expect(fs.existsSync(perfStructured.reportPath)).toBe(true);
+
+      const closed = await callTool(client, "browser_close", {});
+      expect(closed.structuredContent).toEqual({ closed: true });
+    }, 120_000);
   });
 });
 
@@ -148,8 +295,8 @@ test("homepage smoke", async ({ page }) => {
       notes: string[];
     };
 
-    // The mock LLM was called with the description-driven prompt — proving
-    // the handler routes through flow-generator, not the old hand-rolled stub.
+    // The mock LLM was called with the description-driven prompt, proving the
+    // handler routes through the generated-spec validation path.
     expect(lastPrompt).toBeTruthy();
     expect(lastPrompt!).toContain("homepage smoke");
     expect(lastPrompt!).toContain("import { test, expect }");
@@ -324,7 +471,7 @@ describe.skipIf(!distAvailable)("MCP server (B1.5) — dist over stdio", () => {
       expect(eventTypes).toContain("test:start");
       expect(eventTypes).toContain("test:complete");
       // step:complete WILL fire here once the runner's worker IPC ships
-      // StepCompleteMessage; today only the test boundary events flow.
+      // StepCompleteMessage; today only the test boundary events are emitted.
       const completeEvent = events.find((e) => e.event === "test:complete");
       expect(completeEvent?.status).toBe("passed");
     },

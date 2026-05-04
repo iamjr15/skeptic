@@ -2,11 +2,11 @@ import type { StepResult, TestResult } from "../executor/types.js";
 import type { RunSummary } from "../reporter/types.js";
 
 export type TUIEvent =
-  | { type: "run:manifest"; flows: Array<{ name: string; file: string; stepCount: number }> }
-  | { type: "flow:start"; flowIndex: number; flow: { name: string; file: string } }
-  | { type: "step:start"; flowIndex: number; stepIndex: number; total: number; command: string; args: unknown }
-  | { type: "step:complete"; flowIndex: number; step: StepResult; index: number; total: number }
-  | { type: "flow:complete"; flowIndex: number; result: TestResult }
+  | { type: "run:manifest"; tests: Array<{ name: string; file: string; stepCount: number }> }
+  | { type: "test:start"; testIndex: number; test: { name: string; file: string } }
+  | { type: "step:start"; testIndex: number; stepIndex: number; total: number; command: string; args: unknown }
+  | { type: "step:complete"; testIndex: number; step: StepResult; index: number; total: number }
+  | { type: "test:complete"; testIndex: number; result: TestResult }
   | { type: "run:complete"; summary: RunSummary };
 
 export interface StepState {
@@ -19,8 +19,8 @@ export interface StepState {
   warnings?: string[];
 }
 
-export interface FlowState {
-  flowIndex: number;
+export interface TestState {
+  testIndex: number;
   name: string;
   file: string;
   phase: "queued" | "running" | "passed" | "failed" | "error";
@@ -33,29 +33,29 @@ export interface FlowState {
 
 export interface TUIState {
   phase: "running" | "complete";
-  flows: FlowState[];
+  tests: TestState[];
   startTime: number;
   summary: RunSummary | null;
-  expandedFlowIndex: number | null;
+  expandedTestIndex: number | null;
   verbose: boolean;
 }
 
 export const initialState: TUIState = {
   phase: "running",
-  flows: [],
+  tests: [],
   startTime: Date.now(),
   summary: null,
-  expandedFlowIndex: null,
+  expandedTestIndex: null,
   verbose: false,
 };
 
-const statusToPhase = (status: "passed" | "failed" | "error"): FlowState["phase"] => status;
+const statusToPhase = (status: "passed" | "failed" | "error"): TestState["phase"] => status;
 
 export const tuiReducer = (state: TUIState, event: TUIEvent): TUIState => {
   switch (event.type) {
     case "run:manifest": {
-      const flows: FlowState[] = event.flows.map((f, i) => ({
-        flowIndex: i,
+      const tests: TestState[] = event.tests.map((f, i) => ({
+        testIndex: i,
         name: f.name,
         file: f.file,
         phase: "queued",
@@ -70,21 +70,21 @@ export const tuiReducer = (state: TUIState, event: TUIEvent): TUIState => {
         startTime: 0,
         duration_ms: 0,
       }));
-      return { ...state, flows, startTime: Date.now() };
+      return { ...state, tests, startTime: Date.now() };
     }
 
-    case "flow:start": {
-      const flows = state.flows.map((f) =>
-        f.flowIndex === event.flowIndex
+    case "test:start": {
+      const tests = state.tests.map((f) =>
+        f.testIndex === event.testIndex
           ? { ...f, phase: "running" as const, startTime: Date.now() }
           : f,
       );
-      return { ...state, flows };
+      return { ...state, tests };
     }
 
     case "step:start": {
-      const flows = state.flows.map((f) => {
-        if (f.flowIndex !== event.flowIndex) return f;
+      const tests = state.tests.map((f) => {
+        if (f.testIndex !== event.testIndex) return f;
         const steps = f.steps.map((s, i) =>
           i === event.stepIndex
             ? { ...s, command: event.command, args: event.args, phase: "running" as const }
@@ -92,12 +92,12 @@ export const tuiReducer = (state: TUIState, event: TUIEvent): TUIState => {
         );
         return { ...f, steps, activeStepIndex: event.stepIndex };
       });
-      return { ...state, flows };
+      return { ...state, tests };
     }
 
     case "step:complete": {
-      const flows = state.flows.map((f) => {
-        if (f.flowIndex !== event.flowIndex) return f;
+      const tests = state.tests.map((f) => {
+        if (f.testIndex !== event.testIndex) return f;
         const steps = f.steps.map((s, i) =>
           i === event.index
             ? {
@@ -117,12 +117,12 @@ export const tuiReducer = (state: TUIState, event: TUIEvent): TUIState => {
         );
         return { ...f, steps };
       });
-      return { ...state, flows };
+      return { ...state, tests };
     }
 
-    case "flow:complete": {
-      const flows = state.flows.map((f) =>
-        f.flowIndex === event.flowIndex
+    case "test:complete": {
+      const tests = state.tests.map((f) =>
+        f.testIndex === event.testIndex
           ? {
               ...f,
               phase: statusToPhase(event.result.status),
@@ -130,7 +130,7 @@ export const tuiReducer = (state: TUIState, event: TUIEvent): TUIState => {
             }
           : f,
       );
-      return { ...state, flows };
+      return { ...state, tests };
     }
 
     case "run:complete": {

@@ -1,11 +1,8 @@
 /**
- * ACP server for IDE / agent integration. The B1.5 TS-pivot rewires the prompt
- * dispatcher around `*.spec.ts` instead of YAML flows; the realpath sandboxing
- * envelope (lessons.md #20) and the SDK shape (lessons.md #18, #19) are
- * preserved verbatim — only the tool semantics shift.
+ * ACP server for IDE and agent integrations.
  *
  * Stdio framing: the SDK frames newline-delimited JSON over stdout, so logs
- * are diverted to stderr via `redirectStdoutLogsToStderr()` BEFORE the
+ * are diverted to stderr via `redirectStdoutLogsToStderr()` before the
  * transport opens.
  */
 import * as fs from "node:fs";
@@ -78,12 +75,8 @@ export const boundPath = (
   return resolved;
 };
 
-/**
- * Glob expansion variant of boundPath. The realpath validation is preserved
- * verbatim — B1.5's TS-spec rewrite swaps the trailing parseFlowFile call for
- * the runner's discovery pass, but the security envelope must not change.
- */
-export const boundResolveFlows = async (
+/** Glob expansion variant of boundPath for spec files. */
+export const boundResolveSpecs = async (
   rootDir: string,
   rootDirReal: string,
   patterns: string | string[],
@@ -145,6 +138,7 @@ const buildAcpWorkerConfig = (
     browserEngine: cfg.browser.engine,
     viewport: cfg.browser.viewport,
     retries: cfg.execution.retries,
+    parallel: cfg.execution.parallel,
   };
   if (cfg.url) workerConfig.baseUrl = cfg.url;
   if (cfg.browser.device) workerConfig.device = cfg.browser.device;
@@ -370,10 +364,10 @@ class SkepticAgent implements Agent {
     toolCallId: string,
   ): Promise<void> {
     const pattern = this.resolvePattern(session, dispatch);
-    // boundResolveFlows enforces the realpath envelope on globs; non-glob
+    // boundResolveSpecs enforces the realpath envelope on globs; non-glob
     // single files are validated by resolvePattern.
     if (typeof pattern === "string" && /[*?[]/.test(pattern)) {
-      await boundResolveFlows(session.cwd, session.cwdReal, pattern);
+      await boundResolveSpecs(session.cwd, session.cwdReal, pattern);
     }
     const { manifests } = await listSpecs(pattern, session.cwd);
     await this.connection.sessionUpdate({
@@ -397,7 +391,7 @@ class SkepticAgent implements Agent {
     const pattern = this.resolvePattern(session, dispatch);
     const targets = Array.isArray(pattern)
       ? await Promise.all(pattern.map(async (f) => boundPath(session.cwd, session.cwdReal, f)))
-      : (await boundResolveFlows(session.cwd, session.cwdReal, pattern));
+      : (await boundResolveSpecs(session.cwd, session.cwdReal, pattern));
 
     const { manifests } = await listSpecs(targets, session.cwd);
     const importErrors = new Map<string, string>();
@@ -445,7 +439,7 @@ class SkepticAgent implements Agent {
   ): Promise<void> {
     const pattern = this.resolvePattern(session, dispatch);
     if (typeof pattern === "string" && /[*?[]/.test(pattern)) {
-      await boundResolveFlows(session.cwd, session.cwdReal, pattern);
+      await boundResolveSpecs(session.cwd, session.cwdReal, pattern);
     }
 
     const cfg = loadConfig({ searchCwd: session.cwd });
@@ -685,5 +679,5 @@ export const runAcp = async (): Promise<void> => {
   await connection.closed;
 };
 
-// Test-only export — preserved for compile compatibility with prior unit tests.
+// Test-only export for unit coverage of worker config construction.
 export const __testing = { SkepticAgent };

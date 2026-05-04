@@ -80,13 +80,10 @@ describe.skipIf(!browser)("--observability-write-sidecars produces the three sid
       const result = await engine.runTest(input);
       expect(result.status).toBe("passed");
 
-      // Three sidecar paths populated. flow.json is intentionally NOT emitted (redundant
-      // with results.json.flows[N]); the TestArtifacts.flowJson type field stays in place
-      // for any external tooling that synthesizes a flow.json elsewhere.
+      // Three sidecar paths populated.
       expect(result.artifacts.perfTrace).toBeDefined();
       expect(result.artifacts.consoleSnapshot).toBeDefined();
       expect(result.artifacts.networkSnapshot).toBeDefined();
-      expect(result.artifacts.flowJson).toBeUndefined();
 
       // Files exist on disk
       expect(fs.existsSync(result.artifacts.perfTrace!)).toBe(true);

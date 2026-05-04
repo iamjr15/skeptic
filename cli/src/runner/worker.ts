@@ -18,6 +18,7 @@ import { buildFixture, type ActionEvent } from "../api/fixture.js";
 import { ExecutionContext } from "../executor/context.js";
 import { loadPlaywright } from "../utils/playwright-loader.js";
 import { buildCollectors } from "../observability/registry.js";
+import { AccessibilityCollector } from "../observability/collectors/accessibility-collector.js";
 import type { Collector, CollectorName } from "../observability/types.js";
 import type {
   ArtifactRuntimeConfig,
@@ -93,18 +94,21 @@ const runOneTest = async (
 ): Promise<TestResult> => {
   const start = performance.now();
   const safeName = sanitizeName(test.name || `test-${test.ordinal}`);
-  const flowDir = path.join(config.outputDir, `${safeName}-${test.ordinal}`);
-  await mkdir(flowDir, { recursive: true });
+  const testDir = path.join(config.outputDir, `${safeName}-${test.ordinal}`);
+  await mkdir(testDir, { recursive: true });
 
   const merged = { ...registry.fileUse, ...test.use };
   const viewport = merged.viewport ?? config.viewport ?? { width: 1280, height: 720 };
+  const effectiveTimeout = merged.timeout ?? config.timeout;
+  const effectiveHardTimeout =
+    merged.hardTimeout ?? (merged.timeout !== undefined ? merged.timeout : config.hardTimeout);
   // Precedence: CLI flag > test.use override > viewport. Earlier draft had
   // the operands reversed — see velvety-finding-beacon.md §B8 / Codex round 1 #6.
   const videoSize = config.videoSize ?? merged.videoSize ?? viewport;
 
   const context: BrowserContext = await browser.newContext({
     viewport,
-    ...(config.video ? { recordVideo: { dir: flowDir, size: videoSize } } : {}),
+    ...(config.video ? { recordVideo: { dir: testDir, size: videoSize } } : {}),
   });
   if (config.trace) {
     await context.tracing.start({ screenshots: true, snapshots: true, sources: false });
@@ -122,7 +126,7 @@ const runOneTest = async (
       });
     }
   }
-  context.setDefaultTimeout(config.timeout);
+  context.setDefaultTimeout(effectiveTimeout);
   const page: Page = await context.newPage();
 
   // Resolve which collectors to attach: --observability forces all four; otherwise
@@ -166,11 +170,11 @@ const runOneTest = async (
   const ctx = new ExecutionContext(
     page,
     config.baseUrl ?? merged.url ?? "",
-    flowDir,
+    testDir,
     path.dirname(registry.file),
     undefined,
     undefined,
-    config.timeout,
+    effectiveTimeout,
     collectors,
     artifactConfig,
   );
@@ -235,10 +239,10 @@ const runOneTest = async (
   let ceilingTimer: NodeJS.Timeout | undefined;
   const ceiling = new Promise<"hard-timeout">((resolve) => {
     ceilingTimer = setTimeout(() => {
-      ctx.abortReason = `test timeout exceeded (${config.hardTimeout}ms)`;
+      ctx.abortReason = `test timeout exceeded (${effectiveHardTimeout}ms)`;
       page.context().close().catch(() => {});
       resolve("hard-timeout");
-    }, config.hardTimeout);
+    }, effectiveHardTimeout);
   });
 
   let testError: string | undefined;
@@ -252,7 +256,7 @@ const runOneTest = async (
     ]);
     if (outcome === "hard-timeout") {
       result.status = "failed";
-      testError = ctx.abortReason ?? `test timeout exceeded (${config.hardTimeout}ms)`;
+      testError = ctx.abortReason ?? `test timeout exceeded (${effectiveHardTimeout}ms)`;
     }
   } catch (err) {
     result.status = "failed";
@@ -279,6 +283,32 @@ const runOneTest = async (
     ctx.inTeardown = false;
   }
 
+  // Auto a11y audit before collector snapshots. `--observability` yields an
+  // accessibility metric even when the spec did not explicitly call
+  // observability.expectAccessible().
+  const a11yCollector = ctx.collectors.get("accessibility");
+  if (
+    a11yCollector instanceof AccessibilityCollector &&
+    observabilityConfig.autoAccessibilityAudit &&
+    ctx.abortReason === null &&
+    !page.isClosed()
+  ) {
+    const userAuditRan = (await a11yCollector.snapshot()) !== undefined;
+    if (!userAuditRan) {
+      try {
+        await a11yCollector.audit({
+          standard: observabilityConfig.accessibilityStandard,
+        });
+      } catch (err) {
+        post({
+          type: "log",
+          level: "warn",
+          message: `[skeptic] auto a11y audit failed: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      }
+    }
+  }
+
   // Snapshot collectors before context close — collectors lose their wiring once the page goes.
   const metricsMap: Record<string, unknown> = {};
   for (const collector of ctx.collectors.values()) {
@@ -303,7 +333,7 @@ const runOneTest = async (
 
   if (config.trace) {
     try {
-      const tracePath = path.join(flowDir, `${safeName}.trace.zip`);
+      const tracePath = path.join(testDir, `${safeName}.trace.zip`);
       await context.tracing.stop({ path: tracePath });
       result.artifacts.trace = tracePath;
     } catch {
@@ -315,7 +345,7 @@ const runOneTest = async (
 
   if (artifactConfig.writeSidecars && Object.keys(metricsMap).length > 0) {
     await writeSidecars({
-      flowDir,
+      testDir,
       metrics: metricsMap,
       artifacts: result.artifacts,
       observabilityConfig,
@@ -326,13 +356,13 @@ const runOneTest = async (
   // (daemon mode) records server-side and does NOT automatically flush to the
   // client-supplied `recordVideo.dir` absolute path. Closing the page first
   // forces the BrowserServer to finalize the stream; `video.saveAs(...)` then
-  // copies the file to `flowDir/<safeName>.webm` which the test reporter
+  // copies the file to `testDir/<safeName>.webm` which the test reporter
   // expects. The `--no-daemon` path also benefits — saveAs is idempotent.
   if (config.video) {
     try {
       const video = page.video();
       if (video) {
-        const destPath = path.join(flowDir, `${safeName}.webm`);
+        const destPath = path.join(testDir, `${safeName}.webm`);
         await page.close().catch(() => {});
         await video.saveAs(destPath);
         result.artifacts.video = {
@@ -414,7 +444,7 @@ const handleExecute = async (start: WorkerStartMessage): Promise<void> => {
   let daemonDisconnect: (() => Promise<void>) | null = null;
   try {
     if (start.config.noDaemon) {
-      // --no-daemon path: pre-B10 behavior, fresh browser launch per worker.
+      // --no-daemon path: fresh browser launch per worker.
       browser = await launcher.launch({ headless: !start.config.headed });
     } else {
       // Daemon path: connect to (or auto-spawn) the persistent BrowserServer.

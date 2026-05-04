@@ -61,7 +61,7 @@ export interface PerformanceSnapshot {
   inp: number | null;
   ttfb: number | null;
   longAnimationFrames: LongAnimationFrame[];
-  /** Best-effort navigation-timing read at snapshot. Optional for back-compat with hand-built fixtures. */
+  /** Best-effort navigation-timing read at snapshot. */
   navigationTiming?: NavigationTiming;
   /** PerformanceResourceTiming entries, captured once at snapshot. Optional. */
   resources?: ResourceTiming[];
@@ -108,6 +108,20 @@ export interface NetworkSnapshot {
     mixedContent: string[];
     corsErrors: Array<{ url: string; method: string; reason: string }>;
   };
+  summary?: {
+    requestCount: number;
+    failedRequestCount: number;
+    networkFailureCount: number;
+    duplicateGroupCount: number;
+    mixedContentCount: number;
+    corsErrorCount: number;
+    issueCount: number;
+    captureLimit: number;
+    truncated: boolean;
+    resourceTypes: Record<string, number>;
+    methods: Record<string, number>;
+    statusCodes: Record<string, number>;
+  };
 }
 
 export interface AccessibilityViolation {
@@ -127,16 +141,12 @@ export interface AccessibilitySnapshot {
     incomplete: number;
     dualEngine: boolean;
     /**
-     * Engines the audit was configured to run (always includes "axe"; includes
-     * "equal-access" when dualEngine is true AND the optional peer is installed).
-     * Optional for back-compat with hand-built test fixtures predating this field —
-     * absent means "axe only" by default. Always emitted alongside `enginesErrored`.
+     * Engines the audit was configured to run. Always includes "axe"; includes
+     * "equal-access" when dualEngine is true and the optional peer is installed.
      */
     enginesRequested?: Array<"axe" | "equal-access">;
     /**
-     * Engines whose audit threw or otherwise failed to produce results. Empty when
-     * all requested engines succeeded. Optional for back-compat — absent means "no
-     * engines errored" by default. Always emitted alongside `enginesRequested`.
+     * Engines whose audit threw or otherwise failed to produce results.
      */
     enginesErrored?: Array<{ engine: "axe" | "equal-access"; reason: string }>;
   };

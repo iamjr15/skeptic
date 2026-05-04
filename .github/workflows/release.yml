@@ -1,0 +1,503 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  bundle:
+    name: Bundle (ubuntu-22.04, Node 25)
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        shell: bash
+        working-directory: cli
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Node 25.5+ is required for ESM SEA. Node 24 only supports CJS
+          # SEA, which is incompatible with our `mainFormat: "module"` bundle.
+          node-version: "25.5"
+          cache: npm
+          cache-dependency-path: cli/package-lock.json
+
+      - name: Bump versions to tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          npm version --no-git-tag-version "$VERSION"
+          for d in ../cli-bin-*; do
+            (cd "$d" && npm version --no-git-tag-version "$VERSION")
+          done
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build bundle
+        run: npm run build
+
+      - name: Verify version stamping
+        run: |
+          # The build bakes __SKEPTIC_CLI_VERSION__ from package.json. Catch
+          # forgotten version bumps before the binaries are produced.
+          STAMPED="$(node dist/skeptic.mjs --version)"
+          EXPECTED="${GITHUB_REF_NAME#v}"
+          if [[ "$STAMPED" != "$EXPECTED" ]]; then
+            echo "::error::Version mismatch: bundle prints $STAMPED but tag is $EXPECTED"
+            exit 1
+          fi
+
+      - name: Validate npm pack layout
+        run: npm pack --dry-run
+
+      - name: Upload bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-dist
+          path: cli/dist
+          retention-days: 1
+
+  binary-build:
+    name: Binary (${{ matrix.target }})
+    needs: bundle
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        # Critical: Windows runner default is pwsh, which doesn't parse the
+        # POSIX `BIN_NAME=` and `bash scripts/...` invocations below. bash
+        # is available on every GitHub-hosted runner (Git Bash on Windows).
+        shell: bash
+        working-directory: cli
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-arm64
+            runner: macos-14
+            os: darwin
+            arch: arm64
+          - target: darwin-x64
+            runner: macos-13
+            os: darwin
+            arch: x64
+          - target: linux-x64
+            runner: ubuntu-22.04
+            os: linux
+            arch: x64
+          - target: linux-arm64
+            runner: ubuntu-22.04-arm
+            os: linux
+            arch: arm64
+          - target: win32-x64
+            runner: windows-2022
+            os: win32
+            arch: x64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "25.5"
+          cache: npm
+          cache-dependency-path: cli/package-lock.json
+
+      - name: Download bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: cli-dist
+          path: cli/dist
+
+      - name: Install dependencies
+        # `npm ci` is required so `gen-sea-config.mjs` can find
+        # node_modules/web-vitals/dist/web-vitals.iife.js to stage as a SEA
+        # asset. Without this, the SEA binary's performance collector would
+        # fail to read web-vitals at runtime.
+        run: npm ci
+
+      - name: Compute binary name
+        id: binname
+        run: |
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            echo "name=skeptic.exe" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=skeptic" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build SEA binary
+        run: |
+          mkdir -p "../cli-bin-${{ matrix.target }}"
+          bash scripts/build-sea.sh --out=../cli-bin-${{ matrix.target }}/${{ steps.binname.outputs.name }}
+
+      - name: Stage sidecar node_modules
+        # The SEA binary cannot resolve filesystem modules — the four
+        # canonical externals (playwright, playwright-core, better-sqlite3,
+        # oxc-resolver) must live in a sibling node_modules/ that
+        # createRequire (in src/utils/sea-require.ts) can find.
+        run: |
+          STAGE_DIR="../cli-bin-${{ matrix.target }}"
+          mkdir -p "$STAGE_DIR/node_modules"
+          # Copy only the four externals from the build cli/node_modules.
+          # Each carries its own transitive deps which must all stay
+          # together for require() to resolve them.
+          for dep in playwright playwright-core better-sqlite3 oxc-resolver; do
+            if [[ -d "node_modules/$dep" ]]; then
+              cp -R "node_modules/$dep" "$STAGE_DIR/node_modules/"
+            fi
+          done
+
+      - name: Stamp bin-package version
+        run: |
+          node scripts/gen-bin-package.mjs \
+            --bin-pkg "../cli-bin-${{ matrix.target }}" \
+            --version "${GITHUB_REF_NAME#v}"
+
+      - name: macOS — sign binary + sidecar .node addons
+        if: matrix.os == 'darwin'
+        env:
+          APPLE_DEVELOPER_ID: ${{ secrets.APPLE_DEVELOPER_ID }}
+        run: |
+          STAGE_DIR="../cli-bin-${{ matrix.target }}"
+          # 1. Sign the SEA binary itself (Hardened Runtime + Developer ID).
+          codesign --force --options runtime --timestamp \
+            --sign "$APPLE_DEVELOPER_ID" \
+            "$STAGE_DIR/${{ steps.binname.outputs.name }}"
+          # 2. Sign every .node native addon in the sidecar. Hardened
+          #    Runtime library validation rejects unsigned/foreign-team
+          #    .node files, so better-sqlite3.node etc. need our cert.
+          find "$STAGE_DIR/node_modules" -name "*.node" -print0 | \
+            xargs -0 -I {} codesign --force --options runtime --timestamp \
+              --sign "$APPLE_DEVELOPER_ID" {}
+
+      - name: macOS — zip + notarize
+        if: matrix.os == 'darwin'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          STAGE_DIR="../cli-bin-${{ matrix.target }}"
+          # notarytool rejects raw binaries — wrap the whole bin-package dir
+          # so the .node files inside node_modules/ also get a notarization
+          # ticket.
+          ditto -c -k --keepParent "$STAGE_DIR" "$STAGE_DIR.zip"
+          xcrun notarytool submit "$STAGE_DIR.zip" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait
+
+      - name: Tarball platform package
+        run: |
+          tar -czf "skeptic-${{ matrix.target }}.tar.gz" -C .. "cli-bin-${{ matrix.target }}"
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: skeptic-${{ matrix.target }}
+          path: |
+            cli/skeptic-${{ matrix.target }}.tar.gz
+            cli-bin-${{ matrix.target }}/
+
+  smoke-test:
+    name: Smoke test (${{ matrix.target }})
+    needs: binary-build
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-arm64
+            runner: macos-14
+          - target: darwin-x64
+            runner: macos-13
+          - target: linux-x64
+            runner: ubuntu-22.04
+          - target: linux-arm64
+            runner: ubuntu-22.04-arm
+          - target: win32-x64
+            runner: windows-2022
+    steps:
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: skeptic-${{ matrix.target }}
+
+      - name: Compute binary name
+        id: binname
+        run: |
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            echo "name=skeptic.exe" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=skeptic" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Smoke — --version
+        run: ./cli-bin-${{ matrix.target }}/${{ steps.binname.outputs.name }} --version
+
+      - name: Smoke — init
+        run: ./cli-bin-${{ matrix.target }}/${{ steps.binname.outputs.name }} init /tmp/skeptic-smoke
+
+      - name: Smoke — browsers install
+        run: ./cli-bin-${{ matrix.target }}/${{ steps.binname.outputs.name }} browsers install chromium
+
+      # The crucial functional test: exercise the main `skeptic test` path so
+      # the sidecar `node_modules/playwright` is actually loaded via the
+      # SEA-aware loadPlaywright() and PlaywrightEngine.launch() runs end-to-
+      # end. None of the prior smoke steps cover this — they exercise
+      # version, init, and the registry install but never instantiate a
+      # browser. The flow itself comes from the templates/example.flow.yaml
+      # that `skeptic init` already wrote into /tmp/skeptic-smoke (it navigates
+      # to https://example.com and asserts the well-known body).
+      #
+      # Path note: we cd into /tmp/skeptic-smoke so the test command finds the
+      # flow at tests/example.flow.yaml. The binary path must be ABSOLUTE
+      # because `../cli-bin-${matrix.target}/...` would resolve to /cli-bin-
+      # rather than the workspace root after the cd. $GITHUB_WORKSPACE is
+      # set by the runner to the artifact-download directory and works on
+      # every OS (Git Bash translates Windows paths consistently).
+      - name: Smoke — skeptic test (sidecar Playwright load)
+        run: |
+          cd /tmp/skeptic-smoke
+          "$GITHUB_WORKSPACE/cli-bin-${{ matrix.target }}/${{ steps.binname.outputs.name }}" test
+
+      # macOS-only: verify signed `.node` loads under Hardened Runtime by
+      # exercising --cookies (which loads better-sqlite3.node).
+      - name: Smoke — macOS signed .node load via --cookies
+        if: startsWith(matrix.target, 'darwin')
+        run: ./cli-bin-${{ matrix.target }}/${{ steps.binname.outputs.name }} cookies list
+
+  install-from-tarball-test:
+    # Catch optionalDependencies-resolution regressions before publish.
+    # Today's smoke-test runs the binary tarball directly; nothing
+    # verifies that `npm install -g skeptic-cli` actually resolves the
+    # matching skeptic-cli-bin-${platform} package and that
+    # bin/launcher.mjs routes through it. This job exercises the install
+    # path against a local Verdaccio so a broken `bin` field, a wrong
+    # `os`/`cpu` filter, or a stale `optionalDependencies` version range
+    # fails publish-blocking instead of shipping.
+    name: Install-from-tarball test (${{ matrix.target }})
+    needs: binary-build
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-arm64
+            runner: macos-14
+          - target: darwin-x64
+            runner: macos-13
+          - target: linux-x64
+            runner: ubuntu-22.04
+          - target: linux-arm64
+            runner: ubuntu-22.04-arm
+          - target: win32-x64
+            runner: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "25.5"
+          cache: npm
+          cache-dependency-path: cli/package-lock.json
+
+      - name: Download all binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Stage bin packages with binaries + bump versions
+        working-directory: cli
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Bump the main package version. `npm version` writes the new
+          # value but does NOT update `optionalDependencies.skeptic-cli-bin-*`
+          # ranges referencing sibling packages — those are pinned at the
+          # initial version in cli/package.json and must be rewritten to
+          # match the tag, otherwise the install resolves an old (or
+          # missing) bin package.
+          npm version --no-git-tag-version "$VERSION"
+          node -e "
+            const fs = require('fs');
+            const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            for (const k of Object.keys(p.optionalDependencies || {})) {
+              if (k.startsWith('skeptic-cli-bin-')) p.optionalDependencies[k] = '$VERSION';
+            }
+            fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n');
+          "
+          for d in ../cli-bin-*; do
+            (cd "$d" && npm version --no-git-tag-version "$VERSION")
+            target="$(basename "$d" | sed 's/^cli-bin-//')"
+            cp -R "../artifacts/skeptic-$target/cli-bin-$target/." "$d/"
+          done
+          npm ci && npm run build
+
+      - name: Start Verdaccio
+        run: |
+          # CRITICAL: skeptic-cli + skeptic-cli-bin-* must NOT proxy to npmjs.
+          # If Verdaccio tries to fetch them upstream first, it 404s and
+          # then falls back to local — but on a re-publish (same version)
+          # the upstream cache wins and our local tarball is shadowed.
+          # The explicit "skeptic-cli" + "skeptic-cli-bin-*" rules above the
+          # catchall "**" disable proxying for our own packages.
+          cat > /tmp/verdaccio.yaml <<'YML'
+          storage: ./verdaccio-storage
+          uplinks:
+            npmjs:
+              url: https://registry.npmjs.org/
+          packages:
+            "skeptic-cli":
+              access: $all
+              publish: $all
+            "skeptic-cli-bin-*":
+              access: $all
+              publish: $all
+            "@*/*":
+              access: $all
+              publish: $all
+              proxy: npmjs
+            "**":
+              access: $all
+              publish: $all
+              proxy: npmjs
+          logs: { type: stdout, format: pretty, level: warn }
+          YML
+          npx --yes verdaccio --config /tmp/verdaccio.yaml &
+          # Wait for the server to bind.
+          timeout 30 bash -c 'until curl -fsS http://localhost:4873 >/dev/null; do sleep 1; done'
+          # Configure npm to publish anonymously to the local registry.
+          echo "//localhost:4873/:_authToken=fake-token" >> ~/.npmrc
+          npm config set registry http://localhost:4873
+
+      - name: Pack + publish all packages locally
+        run: |
+          ( cd cli && npm pack )
+          for d in cli-bin-*; do (cd "$d" && npm pack); done
+          for tgz in cli/*.tgz cli-bin-*/*.tgz; do
+            npm publish "$tgz"
+          done
+
+      - name: Install + verify
+        run: |
+          # Install in a scratch directory so we exercise the global
+          # bin-link path without polluting the build tree.
+          mkdir -p /tmp/skeptic-install-test && cd /tmp/skeptic-install-test
+          npm install -g skeptic-cli
+          VERSION="${GITHUB_REF_NAME#v}"
+          STAMPED="$(skeptic --version)"
+          if [[ "$STAMPED" != "$VERSION" ]]; then
+            echo "::error::skeptic --version printed '$STAMPED', expected '$VERSION'"
+            exit 1
+          fi
+          # Confirm the platform binary was actually installed.
+          # `npm root -g` returns the global node_modules dir on every
+          # platform (Unix: /usr/local/lib/node_modules,
+          # Windows: %APPDATA%/npm/node_modules). The naïve
+          # `npm prefix -g + /lib/node_modules` is Unix-only — Windows has
+          # no `lib/` subdirectory under the prefix.
+          NPM_ROOT="$(npm root -g)"
+          BIN_PKG_DIR="$NPM_ROOT/skeptic-cli/node_modules/skeptic-cli-bin-${{ matrix.target }}"
+          BIN_NAME="skeptic"
+          [[ "$RUNNER_OS" == "Windows" ]] && BIN_NAME="skeptic.exe"
+          if [[ ! -x "$BIN_PKG_DIR/$BIN_NAME" ]]; then
+            echo "::error::Platform binary not installed at $BIN_PKG_DIR/$BIN_NAME"
+            ls -la "$BIN_PKG_DIR" || true
+            exit 1
+          fi
+
+  publish:
+    name: Publish to npm + GitHub Releases
+    # Both gates must pass: smoke-test covers the binary's runtime
+    # (`--version`, `init`, `browsers install`, the macOS signed-`.node`
+    # load via `cookies list`, plus the new `skeptic test` end-to-end), and
+    # install-from-tarball-test covers the npm install path
+    # (optionalDependencies resolution, launcher routing). Removing
+    # smoke-test from this list would silently lose the macOS Hardened
+    # Runtime check.
+    needs: [smoke-test, install-from-tarball-test]
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        shell: bash
+        working-directory: cli
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "25.5"
+          registry-url: https://registry.npmjs.org
+
+      - name: Bump versions to tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Bump main package version. `npm version` writes the new value
+          # but does NOT update `optionalDependencies.skeptic-cli-bin-*`
+          # ranges referencing sibling packages — those are pinned in
+          # cli/package.json and must be rewritten to match the tag,
+          # otherwise users running `npm install -g skeptic-cli@${VERSION}`
+          # resolve a stale (or missing) bin package. The
+          # install-from-tarball-test gate would not catch this if the
+          # rewrite only lived there: it stages its own copy of
+          # cli/package.json, so a publish-job omission is invisible to
+          # the local Verdaccio install. The rewrite must run in BOTH
+          # jobs.
+          npm version --no-git-tag-version "$VERSION"
+          node -e "
+            const fs = require('fs');
+            const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            for (const k of Object.keys(p.optionalDependencies || {})) {
+              if (k.startsWith('skeptic-cli-bin-')) p.optionalDependencies[k] = '$VERSION';
+            }
+            fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n');
+          "
+          for d in ../cli-bin-*; do
+            (cd "$d" && npm version --no-git-tag-version "$VERSION")
+          done
+
+      - name: Download all binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ../artifacts
+
+      - name: Stage bin packages with binaries
+        run: |
+          for d in ../cli-bin-*; do
+            target="$(basename "$d" | sed 's/^cli-bin-//')"
+            cp -R "../artifacts/skeptic-$target/cli-bin-$target/." "$d/"
+          done
+
+      - name: Install + build (for npm-fallback bundle)
+        run: |
+          npm ci
+          npm run build
+
+      - name: Publish bin packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          for d in ../cli-bin-*; do
+            (cd "$d" && npm publish --access public)
+          done
+
+      - name: Publish main package
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            ../artifacts/skeptic-*/skeptic-*.tar.gz \
+            --title "skeptic ${GITHUB_REF_NAME}" \
+            --generate-notes

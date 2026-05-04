@@ -239,6 +239,16 @@ describe("NetworkCollector", () => {
     const snap = await collector.snapshot();
     expect(snap.issues.duplicates).toHaveLength(1);
     expect(snap.issues.duplicates[0]?.count).toBe(2);
+    expect(snap.summary).toMatchObject({
+      requestCount: 2,
+      duplicateGroupCount: 1,
+      issueCount: 1,
+      captureLimit: 500,
+      truncated: false,
+      resourceTypes: { xhr: 2 },
+      methods: { GET: 2 },
+      statusCodes: {},
+    });
   });
 
   it("two identical GETs 1s apart → NOT a duplicate (outside 500ms window)", async () => {
@@ -299,7 +309,7 @@ describe("NetworkCollector", () => {
       url: "http://cdn.example/x.png",
       method: "GET",
       resourceType: "image",
-      frameUrl: "http://legacy.example/",
+      frameUrl: "http://archive.example/",
     });
     page.emit("request", req);
 

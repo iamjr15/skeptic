@@ -63,15 +63,18 @@ describe("B9 — accessibility cap + audit.md", () => {
     const snap = buildSnapshot(15); // 30 total
     const artifacts: TestArtifacts = {};
     await writeSidecars({
-      flowDir: dir,
+      testDir: dir,
       metrics: { accessibility: snap },
       artifacts,
     });
 
     expect(artifacts.accessibilityAudit).toBe(join(dir, "audit.md"));
+    expect(artifacts.accessibilityJson).toBe(join(dir, "accessibility.json"));
     const md = await readFile(artifacts.accessibilityAudit!, "utf-8");
     expect(md).toContain("# Accessibility Audit");
     expect(md).toContain("**30 violation(s)**");
+    expect(md).toContain("```html");
+    expect(md).toContain(`<div id="node-0">x</div>`);
     // Every rule must be rendered — no truncation in audit.md.
     for (let i = 0; i < 15; i++) {
       expect(md).toContain(`critical-rule-${i}`);
@@ -86,7 +89,7 @@ describe("B9 — accessibility cap + audit.md", () => {
     const snap = buildSnapshot(15);
     const artifacts: TestArtifacts = {};
     await writeSidecars({
-      flowDir: dir,
+      testDir: dir,
       metrics: { accessibility: snap },
       artifacts,
     });
@@ -110,18 +113,19 @@ describe("B9 — accessibility cap + audit.md", () => {
     };
     const artifacts: TestArtifacts = {};
     await writeSidecars({
-      flowDir: dir,
+      testDir: dir,
       metrics: { accessibility: empty },
       artifacts,
     });
     expect(artifacts.accessibilityAudit).toBeUndefined();
+    expect(artifacts.accessibilityJson).toBe(join(dir, "accessibility.json"));
   });
 
   it("honors a low cap in perf-trace.md (truncation banner) but still writes the full audit.md", async () => {
     const snap = buildSnapshot(15); // 15 per bucket
     const artifacts: TestArtifacts = {};
     await writeSidecars({
-      flowDir: dir,
+      testDir: dir,
       metrics: { accessibility: snap },
       artifacts,
       observabilityConfig: {

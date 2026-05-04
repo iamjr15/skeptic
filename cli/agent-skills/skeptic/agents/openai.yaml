@@ -1,0 +1,4 @@
+interface:
+  display_name: "Skeptic"
+  short_description: "Use Skeptic to inspect pages, write TypeScript E2E tests, run browser QA, and collect observability evidence."
+  default_prompt: "Use Skeptic to verify this UI or browser behavior with real evidence and report the relevant artifacts."

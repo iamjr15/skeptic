@@ -29,6 +29,7 @@ function createFakePage(opts: {
     hasCursorPointer: boolean;
     hasTabIndex: boolean;
     ariaRoleHint: string | null;
+    bbox?: [number, number, number, number];
   }>;
   selectorHints?: Record<number, string>;
 }): Page {
@@ -59,6 +60,7 @@ function createFakePage(opts: {
 
   const scope: Locator = {
     ariaSnapshot,
+    first: vi.fn().mockReturnValue({ ariaSnapshot }),
     getByRole: vi.fn().mockReturnValue(makeRoleLocator()),
   } as unknown as Locator;
 
@@ -74,7 +76,10 @@ function createFakePage(opts: {
       // Subsequent calls (with `arg = handle`): return the selectorHint.
       if (arg === undefined) {
         evalCalls.count++;
-        return opts.cursorEval;
+        return opts.cursorEval.map((entry) => ({
+          bbox: [100, 100, 30, 20],
+          ...entry,
+        }));
       }
       const idx = (arg as { _idx?: number })._idx ?? -1;
       return opts.selectorHints?.[idx] ?? "";

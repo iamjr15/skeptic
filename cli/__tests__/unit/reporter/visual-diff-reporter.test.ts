@@ -6,7 +6,7 @@ import { ConsoleReporter } from "../../../src/reporter/console-reporter.js";
 import { HtmlReporter } from "../../../src/reporter/html-reporter.js";
 import type { StepResult, TestIdentifier, TestResult, RunSummary } from "../../../src/reporter/types.js";
 
-const flowId: TestIdentifier = { name: "visual-flow", file: "/tmp/v.yaml", testIndex: 0 };
+const flowId: TestIdentifier = { name: "visual-test", file: "/tmp/v.spec.ts", testIndex: 0 };
 
 function stepFailure(overrides: Partial<StepResult> = {}): StepResult {
   return {
@@ -19,8 +19,8 @@ function stepFailure(overrides: Partial<StepResult> = {}): StepResult {
   };
 }
 
-function buildSummary(flow: TestResult): RunSummary {
-  return { total: 1, passed: 0, failed: 1, duration_ms: flow.duration_ms, tests: [flow] };
+function buildSummary(test: TestResult): RunSummary {
+  return { total: 1, passed: 0, failed: 1, duration_ms: test.duration_ms, tests: [test] };
 }
 
 describe("console reporter — visual diff output", () => {
@@ -86,16 +86,16 @@ describe("html reporter — visual diff output", () => {
 
   it("renders a 3-column visual-diff grid for visual regression failures", () => {
     const reporter = new HtmlReporter(tmpDir);
-    const flow: TestResult = {
-      name: "visual-flow",
-      file: "/tmp/v.yaml",
+    const test: TestResult = {
+      name: "visual-test",
+      file: "/tmp/v.spec.ts",
       status: "failed",
       duration_ms: 42,
       steps: [
         stepFailure({ baselinePath, currentPath, diffPath, screenshot: diffPath }),
       ],
     };
-    reporter.onRunComplete(buildSummary(flow));
+    reporter.onRunComplete(buildSummary(test));
     const html = fs.readFileSync(path.join(tmpDir, "report.html"), "utf-8");
     expect(html).toContain(`class="visual-diff"`);
     expect(html).toMatch(/<figure><figcaption>Baseline<\/figcaption>/);
@@ -105,16 +105,16 @@ describe("html reporter — visual diff output", () => {
 
   it("falls back to single screenshot rendering for non-visual failures", () => {
     const reporter = new HtmlReporter(tmpDir);
-    const flow: TestResult = {
-      name: "click-flow",
-      file: "/tmp/c.yaml",
+    const test: TestResult = {
+      name: "click-test",
+      file: "/tmp/c.spec.ts",
       status: "failed",
       duration_ms: 10,
       steps: [
         stepFailure({ command: "click", screenshot: diffPath }),
       ],
     };
-    reporter.onRunComplete(buildSummary(flow));
+    reporter.onRunComplete(buildSummary(test));
     const html = fs.readFileSync(path.join(tmpDir, "report.html"), "utf-8");
     expect(html).toContain(`class="screenshot"`);
     expect(html).not.toContain(`class="visual-diff"`);

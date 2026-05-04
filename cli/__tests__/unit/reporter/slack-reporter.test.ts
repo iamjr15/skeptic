@@ -16,13 +16,13 @@ function makeConfig(overrides: Partial<SlackNotificationConfig> = {}): SlackNoti
   };
 }
 
-function makeSummary(failed = 0, total = 2, totalFailedFlows = 0): RunSummary {
+function makeSummary(failed = 0, total = 2): RunSummary {
   const passed = total - failed;
   const tests = [];
   for (let i = 0; i < passed; i++) {
     tests.push({
-      name: `Pass Flow ${i + 1}`,
-      file: `tests/pass-${i + 1}.yaml`,
+      name: `Pass Test ${i + 1}`,
+      file: `tests/pass-${i + 1}.spec.ts`,
       status: "passed" as const,
       duration_ms: 100,
       steps: [],
@@ -31,8 +31,8 @@ function makeSummary(failed = 0, total = 2, totalFailedFlows = 0): RunSummary {
   }
   for (let i = 0; i < failed; i++) {
     tests.push({
-      name: `Fail Flow ${i + 1}`,
-      file: `tests/fail-${i + 1}.yaml`,
+      name: `Fail Test ${i + 1}`,
+      file: `tests/fail-${i + 1}.spec.ts`,
       status: "failed" as const,
       duration_ms: 200,
       steps: [{ command: "click", args: {}, status: "failed" as const, duration_ms: 50, error: "boom" }],
@@ -146,7 +146,7 @@ describe("buildSlackPayload structure", () => {
     expect(payload.blocks.find((b) => b.type === "context")).toBeUndefined();
   });
 
-  it("truncates failed-flow list at 5 with overflow indicator", () => {
+  it("truncates failed-test list at 5 with overflow indicator", () => {
     const payload = buildSlackPayload(makeSummary(7, 8, 7), makeConfig(), undefined);
     const failedBlocks = payload.blocks.filter(
       (b) => b.type === "section" && b.text?.type === "mrkdwn" && b.text.text.includes("•"),
@@ -158,7 +158,7 @@ describe("buildSlackPayload structure", () => {
     expect(text).toContain("…and 2 more");
   });
 
-  it("appends shardId suffix to failed-flow bullet under sharding", () => {
+  it("appends shardId suffix to failed-test bullet under sharding", () => {
     const summary: RunSummary = {
       total: 2,
       passed: 0,
@@ -166,16 +166,16 @@ describe("buildSlackPayload structure", () => {
       duration_ms: 1000,
       tests: [
         {
-          name: "Login Flow",
-          file: "tests/login.yaml",
+          name: "Login Test",
+          file: "tests/login.spec.ts",
           status: "failed",
           duration_ms: 200,
           steps: [{ command: "click", args: {}, status: "failed", duration_ms: 50, error: "boom" }],
           shardId: 0,
         },
         {
-          name: "Login Flow",
-          file: "tests/login.yaml",
+          name: "Login Test",
+          file: "tests/login.spec.ts",
           status: "failed",
           duration_ms: 210,
           steps: [{ command: "click", args: {}, status: "failed", duration_ms: 50, error: "boom" }],
@@ -189,8 +189,8 @@ describe("buildSlackPayload structure", () => {
     );
     expect(failedBlocks).toHaveLength(1);
     const text = failedBlocks[0]!.text!.text;
-    expect(text).toContain("• Login Flow [shard 1]");
-    expect(text).toContain("• Login Flow [shard 2]");
+    expect(text).toContain("• Login Test [shard 1]");
+    expect(text).toContain("• Login Test [shard 2]");
   });
 });
 

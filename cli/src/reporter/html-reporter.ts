@@ -26,16 +26,16 @@ export class HtmlReporter implements Reporter {
     this.outputDir = outputDir;
   }
 
-  onTestStart(_flow: TestIdentifier): void {}
-  onStepComplete(_step: StepResult, _index: number, _total: number, _flow: TestIdentifier): void {}
-  onTestComplete(_result: TestResult, _flow: TestIdentifier): void {}
+  onTestStart(_test: TestIdentifier): void {}
+  onStepComplete(_step: StepResult, _index: number, _total: number, _test: TestIdentifier): void {}
+  onTestComplete(_result: TestResult, _test: TestIdentifier): void {}
 
   onRunComplete(summary: RunSummary): void {
     fs.mkdirSync(this.outputDir, { recursive: true });
     const outPath = path.join(this.outputDir, "report.html");
 
-    const flowsHtml = summary.tests
-      .map((flow, i) => buildFlowSection(flow, i, summary.tests))
+    const testsHtml = summary.tests
+      .map((test, i) => buildTestSection(test, i, summary.tests))
       .join("\n");
     const passRate = summary.total > 0 ? Math.round((summary.passed / summary.total) * 100) : 0;
     const duration = formatDuration(summary.duration_ms);
@@ -59,18 +59,18 @@ export class HtmlReporter implements Reporter {
   .failed .value { color: #f44336; }
   .total .value { color: #ffd700; }
   .duration .value { color: #90caf9; font-size: 1.5rem; }
-  .flow { background: #1a1a1a; border-radius: 8px; margin-bottom: 1rem; overflow: hidden; }
-  .flow-header { padding: 1rem 1.25rem; cursor: pointer; display: flex; align-items: center; gap: 0.75rem; user-select: none; }
-  .flow-header:hover { background: #222; }
-  .flow-header .badge { font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 4px; text-transform: uppercase; }
+  .test { background: #1a1a1a; border-radius: 8px; margin-bottom: 1rem; overflow: hidden; }
+  .test-header { padding: 1rem 1.25rem; cursor: pointer; display: flex; align-items: center; gap: 0.75rem; user-select: none; }
+  .test-header:hover { background: #222; }
+  .test-header .badge { font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 4px; text-transform: uppercase; }
   .badge-pass { background: #1b5e20; color: #4caf50; }
   .badge-fail { background: #b71c1c; color: #ef9a9a; }
-  .flow-header .name { flex: 1; font-weight: 600; }
-  .flow-header .dur { color: #888; font-size: 0.85rem; }
-  .flow-header .arrow { color: #666; transition: transform 0.2s; }
-  .flow.open .flow-header .arrow { transform: rotate(90deg); }
-  .flow-body { display: none; padding: 0 1.25rem 1rem; }
-  .flow.open .flow-body { display: block; }
+  .test-header .name { flex: 1; font-weight: 600; }
+  .test-header .dur { color: #888; font-size: 0.85rem; }
+  .test-header .arrow { color: #666; transition: transform 0.2s; }
+  .test.open .test-header .arrow { transform: rotate(90deg); }
+  .test-body { display: none; padding: 0 1.25rem 1rem; }
+  .test.open .test-body { display: block; }
   .file { color: #666; font-size: 0.8rem; margin-top: 0.25rem; margin-bottom: 0.5rem; }
 
   .artifacts { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin: 0.75rem 0; padding: 0.75rem; background: #141414; border-radius: 6px; border: 1px solid #222; }
@@ -105,8 +105,8 @@ export class HtmlReporter implements Reporter {
   .visual-diff figcaption { font-size: 0.8rem; color: #888; margin-bottom: 0.25rem; }
   .visual-diff img { max-width: 100%; border: 1px solid #333; border-radius: 4px; }
 
-  .flow-metrics { margin-top: 0.75rem; padding: 0.75rem 1rem; background: #141414; border-radius: 6px; }
-  .flow-metrics summary { cursor: pointer; color: #90caf9; font-weight: 600; }
+  .test-metrics { margin-top: 0.75rem; padding: 0.75rem 1rem; background: #141414; border-radius: 6px; }
+  .test-metrics summary { cursor: pointer; color: #90caf9; font-weight: 600; }
   .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.75rem; margin-top: 0.5rem; }
   .metric-card { background: #1f1f1f; padding: 0.75rem; border-radius: 4px; }
   .metric-card h4 { font-size: 0.85rem; color: #ffd700; margin-bottom: 0.5rem; }
@@ -129,14 +129,14 @@ export class HtmlReporter implements Reporter {
   <div class="card duration"><div class="value">${duration}</div><div class="label">Duration</div></div>
 </div>
 
-${flowsHtml}
+${testsHtml}
 
 <script>
-document.querySelectorAll('.flow-header').forEach(h => {
+document.querySelectorAll('.test-header').forEach(h => {
   h.addEventListener('click', () => h.parentElement.classList.toggle('open'));
 });
-// Auto-open failed flows
-document.querySelectorAll('.flow.failed').forEach(f => f.classList.add('open'));
+// Auto-open failed tests
+document.querySelectorAll('.test.failed').forEach(f => f.classList.add('open'));
 // Copy-to-clipboard for trace command
 document.querySelectorAll('.copy-btn').forEach(btn => {
   btn.addEventListener('click', (e) => {
@@ -159,32 +159,31 @@ document.querySelectorAll('.copy-btn').forEach(btn => {
   }
 }
 
-function buildFlowSection(flow: TestResult, _index: number, siblings: TestResult[]): string {
-  const isPassed = flow.status === "passed";
+function buildTestSection(test: TestResult, _index: number, siblings: TestResult[]): string {
+  const isPassed = test.status === "passed";
   const badge = isPassed
     ? '<span class="badge badge-pass">PASS</span>'
     : '<span class="badge badge-fail">FAIL</span>';
 
-  const stepsHtml = flow.steps.map((step) => buildStepRow(step)).join("\n");
+  const stepsHtml = test.steps.map((step) => buildStepRow(step)).join("\n");
 
-  // Bundle 3 — artifacts panel pulls everything from flow.artifacts.*
-  const videoPath = flow.artifacts?.video?.path;
+  const videoPath = test.artifacts?.video?.path;
   const videoLink = videoPath
     ? `<span style="color:#90caf9;font-size:0.8rem;margin-left:0.5rem;" title="${esc(videoPath)}">&#127909; Video</span>`
     : "";
 
-  const artifactsPanel = buildArtifactsPanel(flow);
-  const metricsHtml = buildMetricsSection(flow.metrics);
+  const artifactsPanel = buildArtifactsPanel(test);
+  const metricsHtml = buildMetricsSection(test.metrics);
 
-  return `<div class="flow ${isPassed ? "passed" : "failed"}">
-  <div class="flow-header">
+  return `<div class="test ${isPassed ? "passed" : "failed"}">
+  <div class="test-header">
     ${badge}
-    <span class="name">${esc(formatTestDisplayName(flow, siblings))}${videoLink}</span>
-    <span class="dur">${formatDuration(flow.duration_ms)}</span>
+    <span class="name">${esc(formatTestDisplayName(test, siblings))}${videoLink}</span>
+    <span class="dur">${formatDuration(test.duration_ms)}</span>
     <span class="arrow">&#9654;</span>
   </div>
-  <div class="flow-body">
-    <div class="file">${esc(flow.file)}</div>
+  <div class="test-body">
+    <div class="file">${esc(test.file)}</div>
 ${artifactsPanel}
 ${stepsHtml}${metricsHtml}
   </div>
@@ -249,16 +248,16 @@ function buildStepRow(step: StepResult): string {
     </div>${extra}`;
 }
 
-function buildArtifactsPanel(flow: TestResult): string {
-  const a = flow.artifacts ?? {};
+function buildArtifactsPanel(test: TestResult): string {
+  const a = test.artifacts ?? {};
   const cards: string[] = [];
 
   // Screenshot card — pick the most relevant: failure auto-cap if present, else the last
   // explicit `screenshot:` step result.
-  const failureStep = flow.steps.find(
+  const failureStep = test.steps.find(
     (s) => (s.status === "failed" || s.status === "error") && s.screenshot,
   );
-  const lastShot = [...flow.steps].reverse().find((s) => s.screenshot && s.command === "screenshot");
+  const lastShot = [...test.steps].reverse().find((s) => s.screenshot && s.command === "screenshot");
   const heroPath = failureStep?.screenshot ?? lastShot?.screenshot ?? a.screenshots?.[a.screenshots.length - 1];
   if (heroPath) {
     const asset = readScreenshotAsset(heroPath);
@@ -274,7 +273,7 @@ function buildArtifactsPanel(flow: TestResult): string {
 
   // Video card — embed playable
   if (a.video) {
-    const rel = path.relative(path.dirname(flow.file), a.video.path) || a.video.path;
+    const rel = path.relative(path.dirname(test.file), a.video.path) || a.video.path;
     cards.push(
       `<div class="artifact-card"><h4>Video (${a.video.width}×${a.video.height})</h4><video controls preload="metadata" src="${esc(a.video.path)}"></video><div class="hint">${esc(rel)}</div></div>`,
     );
@@ -306,6 +305,7 @@ function buildArtifactsPanel(flow: TestResult): string {
   const sidecarLinks: string[] = [];
   if (a.consoleSnapshot) sidecarLinks.push(`<a href="${esc(a.consoleSnapshot)}">console.json</a>`);
   if (a.networkSnapshot) sidecarLinks.push(`<a href="${esc(a.networkSnapshot)}">network.json</a>`);
+  if (a.accessibilityJson) sidecarLinks.push(`<a href="${esc(a.accessibilityJson)}">accessibility.json</a>`);
   if (a.testJson) sidecarLinks.push(`<a href="${esc(a.testJson)}">test.json</a>`);
   if (sidecarLinks.length > 0) {
     cards.push(
@@ -413,7 +413,7 @@ function buildMetricsSection(metrics: Record<string, unknown> | undefined): stri
   }
 
   if (cards.length === 0) return "";
-  return `\n    <details class="flow-metrics" open><summary>Metrics</summary><div class="metrics-grid">${cards.join("")}</div></details>`;
+  return `\n    <details class="test-metrics" open><summary>Metrics</summary><div class="metrics-grid">${cards.join("")}</div></details>`;
 }
 
 function formatMsValue(v: number): string {

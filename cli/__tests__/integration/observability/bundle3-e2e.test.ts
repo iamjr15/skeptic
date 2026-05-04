@@ -61,7 +61,7 @@ describe.skipIf(!browser)("Bundle 3 combined E2E", () => {
     if (browser) await browser.close();
   });
 
-  it("runs all three collectors against one flow and populates TestResult.metrics", async () => {
+  it("runs all three collectors against one test and populates TestResult.metrics", async () => {
     const collectors: CollectorName[] = ["performance", "network", "accessibility"];
     const engine = new PlaywrightEngine({
       outputDir,

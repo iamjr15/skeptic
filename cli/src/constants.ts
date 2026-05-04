@@ -9,4 +9,3 @@ export const CONFIG_FILENAME = "skeptic.config.yaml";
 export const OUTPUT_DIR_DEFAULT = "./skeptic-output";
 export const GENERATED_DIR = ".skeptic/generated";
 export const NPM_PACKAGE_NAME = "skeptic-cli";
-export const SAVED_FLOWS_DIR = ".skeptic/flows";

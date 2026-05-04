@@ -1,0 +1,22 @@
+{
+  "name": "skeptic-cli-bin-win32-x64",
+  "version": "0.1.0",
+  "description": "Platform-specific skeptic CLI binary for win32-x64",
+  "license": "MIT",
+  "os": ["win32"],
+  "cpu": ["x64"],
+  "bin": { "skeptic-bin": "./skeptic.exe" },
+  "files": ["skeptic.exe", "node_modules"],
+  "dependencies": {
+    "playwright": "0.0.0-LOCKFILE",
+    "playwright-core": "0.0.0-LOCKFILE",
+    "better-sqlite3": "0.0.0-LOCKFILE",
+    "oxc-resolver": "0.0.0-LOCKFILE"
+  },
+  "bundleDependencies": [
+    "playwright",
+    "playwright-core",
+    "better-sqlite3",
+    "oxc-resolver"
+  ]
+}

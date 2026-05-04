@@ -1,9 +1,3 @@
-// AI_EXPOSED_COMMANDS used to enumerate YAML step commands the AI could suggest.
-// In the TS-pivot the AI generates fixture-API calls (page.goto, click, etc.)
-// instead — B5.5 rewrote every prompt that referenced this list. The constant
-// is kept so historical references compile, but is no longer interpolated.
-export const AI_EXPOSED_COMMANDS: readonly string[] = [];
-
 // === CACHE BOUNDARY MARKER ===
 //
 // Each cacheable prompt is split into two exports:
@@ -14,8 +8,8 @@ export const AI_EXPOSED_COMMANDS: readonly string[] = [];
 //   - `<name>DynamicSuffix(args)` — a function returning the entire
 //     remainder of the prompt with every placeholder substituted.
 //
-// The combined `<NAME>_PROMPT` export is retained for backwards
-// compatibility with `.replace(placeholder, value)` consumers.
+// The combined `<NAME>_PROMPT` exports keep prompt callers simple while the
+// static/dynamic pieces remain available for provider-side caching.
 
 // VISUAL_ASSERTION_PROMPT is fully static (no placeholders).
 export const VISUAL_ASSERTION_PROMPT = `You are a QA engineer reviewing screenshots from an automated E2E test.
@@ -114,7 +108,7 @@ test("hero CTA navigates to signup", async ({ page, snapshot, screenshot }) => {
 \`\`\``;
 
 const TS_SPEC_RULES = [
-  "- Output a SINGLE TypeScript file. No markdown fences in the response, no commentary, no YAML.",
+  "- Output a SINGLE TypeScript file. No markdown fences in the response and no commentary.",
   '- The file MUST start with: import { test, expect } from "skeptic-cli";',
   '- Every action belongs inside `test("name", async ({ page, snapshot, screenshot }) => { ... })`.',
   "- Use `await page.goto(...)`, `await page.click(...)`, `await page.fill(...)`, `await page.hover(...)`, `await page.goBack()` for browser actions.",
@@ -145,11 +139,11 @@ For the changed feature(s), produce ONE skeptic spec file that probes:
 - XSS strings in text inputs (e.g. <script>alert(1)</script>)
 - SQL injection patterns in search/filter fields
 - Double-submission (click submit twice rapidly)
-- Back-button mid-flow (navigate back during multi-step processes)
+- Back-button during multi-step processes
 - Invalid data formats (wrong email format, future dates, unicode, emoji, RTL text)
 - State corruption (skip required steps, revisit completed steps)
 
-ALSO include one happy-path \`test(...)\` that verifies the core functionality. Prefer multiple \`test(...)\` blocks in the same file over a monolithic flow.
+ALSO include one happy-path \`test(...)\` that verifies the core functionality. Prefer multiple focused \`test(...)\` blocks in the same file over one monolithic test.
 
 Spec rules:
 ${TS_SPEC_RULES}
@@ -185,7 +179,7 @@ Include in the same file, as separate \`test(...)\` blocks:
 1. One happy-path test verifying the core functionality.
 2. One edge-case test (empty inputs, boundary values, special characters: unicode, emoji, RTL).
 3. One error-path test (invalid data, missing required fields, wrong formats).
-4. One abuse test (XSS payload, rapid double-clicks, or back-button mid-flow).
+4. One abuse test (XSS payload, rapid double-clicks, or back-button during a multi-step process).
 
 Spec rules:
 ${TS_SPEC_RULES}

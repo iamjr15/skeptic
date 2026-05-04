@@ -17,6 +17,15 @@ function parsePositiveInt(value: string): number {
   return Number(value);
 }
 
+function parseWaitUntil(value: string): "load" | "domcontentloaded" | "networkidle" | "commit" {
+  if (value === "load" || value === "domcontentloaded" || value === "networkidle" || value === "commit") {
+    return value;
+  }
+  throw new InvalidArgumentError(
+    `expected one of load, domcontentloaded, networkidle, or commit; got "${value}"`,
+  );
+}
+
 const SHARD_MAX = 64;
 function parseShardCount(value: string): number {
   const n = parsePositiveInt(value);
@@ -56,7 +65,7 @@ program
 
 program
   .command("run")
-  .description("Run TS test specs (the v0.2 successor to `test`)")
+  .description("Run TypeScript test specs")
   .argument("[specs...]", "spec file globs (default: tests/**/*.spec.ts)")
   .option("-c, --config <path>", "path to config file")
   .option("--headed", "run browser in headed mode")
@@ -85,20 +94,18 @@ program
   .option("--no-tui", "disable interactive TUI, use plain text output")
   .option("--trace", "record Playwright trace for each test")
   .option("--observability", "enable the full observability bundle: settle + fullPage + perf+net+console+a11y(auto) + sidecar md")
-  .option("--observe", "alias of --observability")
   .option("--full-page-screenshot", "force fullPage=true on all screenshot calls")
   .option("--no-full-page-screenshot", "force fullPage=false (overrides config)")
   .option("--visual-settle", "enable the visual-settle helper before screenshots")
   .option("--no-visual-settle", "disable the visual-settle helper")
   .option("--blank-frame-detection <mode>", "off | warn | fail")
   .option("--observability-write-sidecars", "write per-test perf-trace.md + console.json + network.json")
-  .option("--sidecars", "alias of --observability-write-sidecars")
   .option("--list", "discover tests without running them")
   .option("--tag <tag...>", "filter tests by tag (declared via test.use({ tags }))")
   .option("--connect <url>", "connect to a running browser via CDP (B2)")
   .option("--env <KEY=VALUE...>", "set environment variables")
   .option("--analyze", "use AI to analyze test failures (best-effort post-run)")
-  .option("--no-daemon", "bypass the persistent BrowserServer daemon (pre-B10 fresh-launch behavior)")
+  .option("--no-daemon", "bypass the persistent BrowserServer daemon")
   .option(
     "--daemon-idle-timeout <seconds>",
     "auto-stop the daemon after N seconds idle (default 300; 0 disables)",
@@ -111,12 +118,12 @@ program
 
 program
   .command("generate")
-  .description("Generate test flows using AI")
+  .description("Generate TypeScript tests using AI")
   .option("--diff", "generate from git diff")
   .option("--target <mode>", "diff scope: changes, unstaged, branch", "changes")
-  .option("-u, --url <url>", "base URL for generated flows")
+  .option("-u, --url <url>", "base URL for generated tests")
   .option("-m, --message <description>", "generate from a text description")
-  .option("-o, --output <dir>", "output directory for generated flows")
+  .option("-o, --output <dir>", "output directory for generated tests")
   .option("--save", "save to .skeptic/generated/ with timestamp")
   .option("--model <model>", "AI model to use (overrides ai.model in config)")
   .option("-c, --config <path>", "path to config file")
@@ -154,7 +161,8 @@ addCmd
 addCmd
   .command("skill")
   .description("Install skeptic skill for an AI coding agent")
-  .option("--agent <name>", "agent name: claude, codex, cursor")
+  .option("--agent <name>", "agent name: claude, codex, cursor, opencode, all")
+  .option("--scope <scope>", "skill scope: project or user", "project")
   .action(async (cmdOpts: AddSkillOptions) => {
     const { runAddSkill } = await import("./commands/add.js");
     await runAddSkill(cmdOpts);
@@ -222,6 +230,42 @@ program
   });
 
 program
+  .command("doctor")
+  .description("Diagnose skeptic setup, browser installs, optional engines, daemon state, and agent DX")
+  .option("--json", "emit machine-readable JSON")
+  .option("--quick", "skip live browser launch checks")
+  .option("--fix", "create missing skeptic-owned directories when safe")
+  .action(async (cmdOpts: import("./commands/doctor.js").DoctorOptions) => {
+    const { runDoctor } = await import("./commands/doctor.js");
+    await runDoctor(cmdOpts);
+  });
+
+program
+  .command("observe")
+  .description("Run one ad hoc browser observability pass and write a full artifact bundle")
+  .argument("<url>", "URL to observe")
+  .option("-c, --config <path>", "path to config file")
+  .option("--headed", "run browser in headed mode")
+  .option("--device <id>", "device profile for viewport emulation")
+  .option("--output <dir>", "output directory for reports")
+  .option("--wait <ms>", "extra wait after navigation before capture", parseInt)
+  .option("--wait-until <strategy>", "navigation wait strategy: load, domcontentloaded, networkidle, or commit", parseWaitUntil)
+  .option("--full-page", "capture full-page screenshots")
+  .option("--video", "record video of the observation")
+  .option("--no-video", "disable video recording")
+  .option("--video-size <WxH>", "video recording resolution (e.g., 1920x1080)")
+  .option("--trace", "record Playwright trace")
+  .option("--no-trace", "disable Playwright trace")
+  .option("--cookies", "enable browser cookie extraction")
+  .option("--cookies-from <browser>", "extract cookies from specific browser only")
+  .option("--timeout <ms>", "default timeout in ms", parseInt)
+  .option("--no-tui", "disable interactive console progress")
+  .action(async (url: string, cmdOpts: import("./commands/observe.js").ObserveCommandOptions) => {
+    const { runObserve } = await import("./commands/observe.js");
+    await runObserve(url, cmdOpts);
+  });
+
+program
   .command("acp")
   .description("Start ACP agent server for IDE integration (stdio)")
   .action(async () => {
@@ -249,7 +293,7 @@ program
   .option("--with-playwright-hints", "also emit Playwright snippet per ref")
   .option("--annotated", "capture an annotated PNG with numbered badges over each ref")
   .option("--annotate-output <path>", "output path for the annotated PNG (defaults to ./skeptic-inspect-<ts>.png)")
-  .option("--no-daemon", "bypass the persistent daemon and launch a fresh browser (pre-B10)")
+  .option("--no-daemon", "bypass the persistent daemon and launch a fresh browser")
   .action(async (url: string, cmdOpts: import("./commands/inspect.js").InspectCommandOptions) => {
     const { runInspect } = await import("./commands/inspect.js");
     await runInspect(url, cmdOpts);
@@ -349,6 +393,7 @@ export type {
   ExecutionConfig,
   OutputConfig,
   AIConfig,
+  SafetyConfig,
 } from "./config/schema.js";
 export type { DeviceProfile, DeviceCategory } from "./config/device-profiles.js";
 export type { EnvironmentInfo } from "./utils/ci-detect.js";

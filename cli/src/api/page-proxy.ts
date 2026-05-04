@@ -111,6 +111,7 @@ const tryGetCenter = async (
 const wrapLocator = (locator: Locator, page: Page): Locator => {
   return new Proxy(locator, {
     get(target, prop, receiver): unknown {
+      if (prop === "constructor") return target.constructor;
       const value = Reflect.get(target, prop, receiver);
       if (typeof value !== "function") return value;
       const name = typeof prop === "string" ? prop : "";
@@ -163,6 +164,7 @@ const wrapLocator = (locator: Locator, page: Page): Locator => {
 export const wrapPageWithCursor = (page: Page): Page => {
   return new Proxy(page, {
     get(target, prop, receiver): unknown {
+      if (prop === "constructor") return target.constructor;
       const value = Reflect.get(target, prop, receiver);
       if (typeof value !== "function") return value;
       const name = typeof prop === "string" ? prop : "";

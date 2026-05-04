@@ -2,16 +2,16 @@ import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { boundPath, boundResolveFlows } from "../../../src/commands/acp.js";
+import { boundPath, boundResolveSpecs } from "../../../src/commands/acp.js";
 
-// Lessons.md #20 lists three traversal vectors that boundPath / boundResolveFlows
+// Sandboxing covers traversal, absolute paths, and symlink escapes.
 // must reject:
 //   1. Absolute paths (/etc/passwd)
 //   2. Lexical traversal (../../etc/passwd)
 //   3. Symlink escape (root-internal symlink that realpaths outside the root)
 // This test pins all three so any future change to the sandbox is caught.
 
-describe("ACP sandboxing (boundPath, boundResolveFlows)", () => {
+describe("ACP sandboxing (boundPath, boundResolveSpecs)", () => {
   let root: string;
   let rootReal: string;
   let outside: string;
@@ -66,15 +66,15 @@ describe("ACP sandboxing (boundPath, boundResolveFlows)", () => {
     );
   });
 
-  it("boundResolveFlows globs in-root specs but excludes symlink escapes", async () => {
-    await expect(boundResolveFlows(root, rootReal, "tests/**/*.spec.ts")).rejects.toThrow(
+  it("boundResolveSpecs globs in-root specs but excludes symlink escapes", async () => {
+    await expect(boundResolveSpecs(root, rootReal, "tests/**/*.spec.ts")).rejects.toThrow(
       /Glob match escapes session root via symlink/,
     );
   });
 
-  it("boundResolveFlows rejects glob patterns containing ../", async () => {
+  it("boundResolveSpecs rejects glob patterns containing ../", async () => {
     await expect(
-      boundResolveFlows(root, rootReal, "../**/*.spec.ts"),
+      boundResolveSpecs(root, rootReal, "../**/*.spec.ts"),
     ).rejects.toThrow(/relative to session root/);
   });
 });

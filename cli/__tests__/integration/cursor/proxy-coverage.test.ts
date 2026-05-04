@@ -107,6 +107,30 @@ const clearLabelCallCount = (log: CallLog): number => {
 };
 
 describe("Page Proxy coverage — 8 representative call shapes", () => {
+  it("preserves Page constructor identity for Playwright expect type checks", () => {
+    class Page {
+      locator(): Locator {
+        return {} as Locator;
+      }
+    }
+    const proxied = wrapPageWithCursor(new Page() as unknown as import("playwright").Page);
+    expect(proxied.constructor.name).toBe("Page");
+  });
+
+  it("preserves Locator constructor identity for Playwright expect type checks", () => {
+    class Locator {
+      click(): void {
+        /* noop */
+      }
+    }
+    const page = {
+      locator: () => new Locator(),
+      evaluate: async () => undefined,
+    } as unknown as Page;
+    const locator = wrapPageWithCursor(page).locator("button");
+    expect(locator.constructor.name).toBe("Locator");
+  });
+
   it("CAUGHT: page.click(selector)", async () => {
     const log = newLog();
     const proxied = wrapPageWithCursor(buildStubPage(log));

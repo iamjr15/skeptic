@@ -10,22 +10,22 @@ Animations are where flaky E2E tests breed. Assert what's stable, not what's mov
 
 ## Things worth asserting
 
-- [ ] Element reaches its final state within 500ms of the trigger. Use `waitForElement` with an explicit `timeout`, not a fixed `wait:` sleep.
+- [ ] Element reaches its final state within 500ms of the trigger. Use `expect(locator).toBeVisible({ timeout })`, not a fixed sleep.
 - [ ] Transitions respect `prefers-reduced-motion`: if the test environment sets it, motion duration collapses to ≤10ms.
 - [ ] Enter animations complete before the next interaction is allowed (no click-through on fade-in modals).
-- [ ] Exit animations don't leave ghost elements behind — assert `assertNotVisible` after dismissal, not just "clicked the X".
+- [ ] Exit animations don't leave ghost elements behind — assert `expect(locator).toBeHidden()` after dismissal, not just "clicked the X".
 
-## Flow patterns
+## Test patterns
 
 Wait for the final state, not the start:
 
-```yaml
-- click: "[data-testid=open-modal]"
-- waitForElement: "[data-testid=modal]:not(.entering)"
-- assertVisible: "[data-testid=modal-title]"
+```ts
+await page.getByTestId("open-modal").click();
+await expect(page.locator("[data-testid=modal]:not(.entering)")).toBeVisible({ timeout: 500 });
+await expect(page.getByTestId("modal-title")).toBeVisible();
 ```
 
-For reduced-motion suites, set the media query via Playwright config (browser emulation) and assert the "no motion" path — do NOT `wait: 50` to approximate a fast animation.
+For reduced-motion suites, set the media query through Playwright emulation and assert the "no motion" path. Do not use `page.waitForTimeout(50)` to approximate a fast animation.
 
 ## Red flags — file a bug
 

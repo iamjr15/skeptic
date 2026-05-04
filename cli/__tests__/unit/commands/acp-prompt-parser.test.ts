@@ -90,17 +90,17 @@ describe("acp-prompt-parser (B1.5: spec-glob)", () => {
     });
   });
 
-  it("never returns a YAML-shaped tool name", () => {
-    const yamlInputs = [
-      "run flows/login.yaml",
-      "validate flows/login.yaml",
-      "list flows",
-      "generate a flow that does X",
+  it("never returns obsolete tool names", () => {
+    const invalidInputs = [
+      "run notes.md",
+      "validate readme.txt",
+      "list scenarios",
+      "generate a scenario that does X",
     ];
-    for (const input of yamlInputs) {
+    for (const input of invalidInputs) {
       const result = dispatch(input);
       if (result) {
-        expect(result.tool).not.toMatch(/_flow|^list_flows$|^run_flow$|^generate_flow$|^validate_flow$/);
+        expect(result.tool).toMatch(/_test|_tests|list_devices|load_guidance/);
       }
     }
   });
@@ -110,10 +110,8 @@ describe("acp-prompt-parser (B1.5: spec-glob)", () => {
     expect(dispatch("hello there")).toBeNull();
   });
 
-  it("helpMessage references *.spec.ts (not YAML)", () => {
+  it("helpMessage references *.spec.ts", () => {
     const help = helpMessage();
     expect(help).toContain("*.spec.ts");
-    expect(help).not.toContain("flow.yaml");
-    expect(help).not.toContain(".yaml");
   });
 });

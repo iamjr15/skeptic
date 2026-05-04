@@ -20,8 +20,8 @@ function makeSummary(failed = 0): RunSummary {
   const tests = [];
   for (let i = 0; i < 1; i++) {
     tests.push({
-      name: `Pass Flow ${i + 1}`,
-      file: `tests/pass-${i + 1}.yaml`,
+      name: `Pass Test ${i + 1}`,
+      file: `tests/pass-${i + 1}.spec.ts`,
       status: "passed" as const,
       duration_ms: 100,
       steps: [],
@@ -30,8 +30,8 @@ function makeSummary(failed = 0): RunSummary {
   }
   for (let i = 0; i < failed; i++) {
     tests.push({
-      name: `Fail Flow ${i + 1}`,
-      file: `tests/fail-${i + 1}.yaml`,
+      name: `Fail Test ${i + 1}`,
+      file: `tests/fail-${i + 1}.spec.ts`,
       status: "failed" as const,
       duration_ms: 200,
       steps: [{ command: "click", args: {}, status: "failed" as const, duration_ms: 50, error: `Element ${i + 1} missing` }],
@@ -83,7 +83,7 @@ describe("WebhookReporter gating", () => {
 });
 
 describe("buildWebhookPayload contract", () => {
-  it("flat shape with status/total/passed/failed/duration_ms/runUrl/flows", () => {
+  it("flat shape with status/total/passed/failed/duration_ms/runUrl/tests", () => {
     const payload = buildWebhookPayload(makeSummary(2), "https://ci.example/run/42");
     expect(payload).toMatchObject({
       status: "failed",
@@ -101,12 +101,12 @@ describe("buildWebhookPayload contract", () => {
     expect(buildWebhookPayload(makeSummary(1)).status).toBe("failed");
   });
 
-  it("flows[].error captures first failed step's error or null", () => {
+  it("tests[].error captures first failed step's error or null", () => {
     const payload = buildWebhookPayload(makeSummary(1));
-    const failedFlow = payload.tests.find((f) => f.status === "failed");
-    expect(failedFlow?.error).toBe("Element 1 missing");
-    const passedFlow = payload.tests.find((f) => f.status === "passed");
-    expect(passedFlow?.error).toBeNull();
+    const failedTest = payload.tests.find((f) => f.status === "failed");
+    expect(failedTest?.error).toBe("Element 1 missing");
+    const passedTest = payload.tests.find((f) => f.status === "passed");
+    expect(passedTest?.error).toBeNull();
   });
 
   it("runUrl defaults to null when undefined", () => {
@@ -114,7 +114,7 @@ describe("buildWebhookPayload contract", () => {
     expect(payload.runUrl).toBeNull();
   });
 
-  it("appends shard suffix to flows[].name + populates shardId field under sharding", () => {
+  it("appends shard suffix to tests[].name + populates shardId field under sharding", () => {
     const summary: RunSummary = {
       total: 2,
       passed: 1,
@@ -122,16 +122,16 @@ describe("buildWebhookPayload contract", () => {
       duration_ms: 5000,
       tests: [
         {
-          name: "Login Flow",
-          file: "tests/login.yaml",
+          name: "Login Test",
+          file: "tests/login.spec.ts",
           status: "passed",
           duration_ms: 1000,
           steps: [{ command: "navigate", args: "/", status: "passed", duration_ms: 100 }],
           shardId: 0,
         },
         {
-          name: "Login Flow",
-          file: "tests/login.yaml",
+          name: "Login Test",
+          file: "tests/login.spec.ts",
           status: "failed",
           duration_ms: 1100,
           steps: [{ command: "click", args: "Submit", status: "failed", duration_ms: 200, error: "boom" }],
@@ -140,13 +140,13 @@ describe("buildWebhookPayload contract", () => {
       ],
     };
     const payload = buildWebhookPayload(summary);
-    expect(payload.tests[0]!.name).toBe("Login Flow [shard 1]");
+    expect(payload.tests[0]!.name).toBe("Login Test [shard 1]");
     expect(payload.tests[0]!.shardId).toBe(0);
-    expect(payload.tests[1]!.name).toBe("Login Flow [shard 2]");
+    expect(payload.tests[1]!.name).toBe("Login Test [shard 2]");
     expect(payload.tests[1]!.shardId).toBe(1);
   });
 
-  it("omits shardId field when not in a sharded run (back-compat)", () => {
+  it("omits shardId field when not in a sharded run", () => {
     const payload = buildWebhookPayload(makeSummary(0));
     for (const f of payload.tests) {
       expect(f.shardId).toBeUndefined();

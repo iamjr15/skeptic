@@ -131,6 +131,7 @@ export const runSpecs = async (options: RunnerOptions): Promise<RunnerOutcome> =
     partition,
     manifests: manifestMap,
     bail: options.bail ?? false,
+    concurrency: options.config.parallel ?? 1,
     ...(options.workerEntry !== undefined ? { workerEntry: options.workerEntry } : {}),
     ...(options.killGraceMs !== undefined ? { killGraceMs: options.killGraceMs } : {}),
   };

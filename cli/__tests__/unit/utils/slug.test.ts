@@ -7,7 +7,7 @@ import { slugify, uniqueSlug } from "../../../src/utils/slug.js";
 describe("slug utilities", () => {
   describe("slugify", () => {
     it("lowercases and replaces non-alphanumeric with dashes", () => {
-      expect(slugify("Login Flow")).toBe("login-flow");
+      expect(slugify("Login Test")).toBe("login-test");
     });
 
     it("collapses multiple separators", () => {
@@ -19,16 +19,16 @@ describe("slug utilities", () => {
       expect(slugify("/etc/passwd")).toBe("etc-passwd");
     });
 
-    it("falls back to 'flow' for punctuation-only input", () => {
-      expect(slugify("!!!")).toBe("flow");
+    it("falls back to 'test' for punctuation-only input", () => {
+      expect(slugify("!!!")).toBe("test");
     });
 
-    it("falls back to 'flow' for non-ASCII input", () => {
-      expect(slugify("🚀")).toBe("flow");
+    it("falls back to 'test' for non-ASCII input", () => {
+      expect(slugify("🚀")).toBe("test");
     });
 
-    it("falls back to 'flow' for empty string", () => {
-      expect(slugify("")).toBe("flow");
+    it("falls back to 'test' for empty string", () => {
+      expect(slugify("")).toBe("test");
     });
 
     it("trims leading and trailing dashes", () => {
@@ -53,24 +53,24 @@ describe("slug utilities", () => {
     });
 
     it("appends -2 when base file exists", () => {
-      fs.writeFileSync(path.join(tmpDir, "login.yaml"), "", "utf-8");
+      fs.writeFileSync(path.join(tmpDir, "login.spec.ts"), "", "utf-8");
       expect(uniqueSlug("login", tmpDir)).toBe("login-2");
     });
 
     it("appends -3 when both base and -2 exist", () => {
-      fs.writeFileSync(path.join(tmpDir, "login.yaml"), "", "utf-8");
-      fs.writeFileSync(path.join(tmpDir, "login-2.yaml"), "", "utf-8");
+      fs.writeFileSync(path.join(tmpDir, "login.spec.ts"), "", "utf-8");
+      fs.writeFileSync(path.join(tmpDir, "login-2.spec.ts"), "", "utf-8");
       expect(uniqueSlug("login", tmpDir)).toBe("login-3");
     });
 
     it("handles fallback slug collisions", () => {
-      fs.writeFileSync(path.join(tmpDir, "flow.yaml"), "", "utf-8");
-      expect(uniqueSlug("!!!", tmpDir)).toBe("flow-2");
+      fs.writeFileSync(path.join(tmpDir, "test.spec.ts"), "", "utf-8");
+      expect(uniqueSlug("!!!", tmpDir)).toBe("test-2");
     });
 
     it("slugifies input before checking collisions", () => {
-      fs.writeFileSync(path.join(tmpDir, "login-flow.yaml"), "", "utf-8");
-      expect(uniqueSlug("Login Flow", tmpDir)).toBe("login-flow-2");
+      fs.writeFileSync(path.join(tmpDir, "login-test.spec.ts"), "", "utf-8");
+      expect(uniqueSlug("Login Test", tmpDir)).toBe("login-test-2");
     });
   });
 });

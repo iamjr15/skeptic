@@ -24,7 +24,3 @@ export interface AIExtractionResult {
   confidence: number;
   retryCount?: number;
 }
-
-export interface AIFlowGenerationResult {
-  flows: string[];
-}

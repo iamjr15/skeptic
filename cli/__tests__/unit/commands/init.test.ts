@@ -21,7 +21,7 @@ describe("runInit", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("creates tests/ directory, config file, tsconfig, and example test", async () => {
+  it("creates tests/ directory, config file, tsconfig, example test, and ignored cache directory", async () => {
     const { runInit } = await import("../../../src/commands/init.js");
     await runInit(tmpDir);
 
@@ -29,6 +29,9 @@ describe("runInit", () => {
     expect(fs.existsSync(path.join(tmpDir, "tsconfig.json"))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, "skeptic.config.yaml"))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, "tests/example.spec.ts"))).toBe(true);
+    expect(fs.readFileSync(path.join(tmpDir, ".skeptic/.gitignore"), "utf-8")).toBe("*\n!.gitignore\n");
+    expect(fs.readFileSync(path.join(tmpDir, ".gitignore"), "utf-8")).toContain(".skeptic/");
+    expect(fs.readFileSync(path.join(tmpDir, ".gitignore"), "utf-8")).toContain("skeptic-output/");
   });
 
   it("does not overwrite existing config file", async () => {
@@ -42,17 +45,17 @@ describe("runInit", () => {
     expect(content).toBe("existing: true\n");
   });
 
-  it("does not overwrite existing example flow", async () => {
+  it("does not overwrite existing example test", async () => {
     const testsDir = path.join(tmpDir, "tests");
     fs.mkdirSync(testsDir, { recursive: true });
-    const examplePath = path.join(testsDir, "example.flow.yaml");
-    fs.writeFileSync(examplePath, "my-flow: true\n", "utf-8");
+    const examplePath = path.join(testsDir, "example.spec.ts");
+    fs.writeFileSync(examplePath, "export const untouched = true;\n", "utf-8");
 
     const { runInit } = await import("../../../src/commands/init.js");
     await runInit(tmpDir);
 
     const content = fs.readFileSync(examplePath, "utf-8");
-    expect(content).toBe("my-flow: true\n");
+    expect(content).toBe("export const untouched = true;\n");
   });
 
   it("creates tests/ directory even if it already exists", async () => {
@@ -62,5 +65,27 @@ describe("runInit", () => {
     await runInit(tmpDir);
 
     expect(fs.existsSync(path.join(tmpDir, "tests"))).toBe(true);
+  });
+
+  it("preserves existing .gitignore content and only appends missing skeptic entries", async () => {
+    fs.writeFileSync(path.join(tmpDir, ".gitignore"), "node_modules/\n.skeptic\n", "utf-8");
+
+    const { runInit } = await import("../../../src/commands/init.js");
+    await runInit(tmpDir);
+
+    const content = fs.readFileSync(path.join(tmpDir, ".gitignore"), "utf-8");
+    expect(content).toContain("node_modules/\n");
+    expect(content.match(/\.skeptic\/?/g)).toHaveLength(1);
+    expect(content).toContain("skeptic-output/");
+  });
+
+  it("does not overwrite an existing .skeptic/.gitignore", async () => {
+    fs.mkdirSync(path.join(tmpDir, ".skeptic"), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, ".skeptic/.gitignore"), "custom\n", "utf-8");
+
+    const { runInit } = await import("../../../src/commands/init.js");
+    await runInit(tmpDir);
+
+    expect(fs.readFileSync(path.join(tmpDir, ".skeptic/.gitignore"), "utf-8")).toBe("custom\n");
   });
 });

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { Box, Text, useInput } from "ink";
 import { Header } from "../components/header.js";
-import { FlowProgress } from "../components/flow-progress.js";
+import { TestProgress } from "../components/test-progress.js";
 import { SummaryBar } from "../components/summary-bar.js";
 import { HintBar } from "../components/hint-bar.js";
 import { colors } from "../theme.js";
@@ -15,13 +15,13 @@ interface ResultsScreenProps {
 }
 
 export const ResultsScreen = ({ state, onRerun, onRerunFailed, onQuit }: ResultsScreenProps) => {
-  const failedFlows = useMemo(
-    () => state.flows.filter((f) => f.phase === "failed" || f.phase === "error"),
-    [state.flows],
+  const failedTests = useMemo(
+    () => state.tests.filter((f) => f.phase === "failed" || f.phase === "error"),
+    [state.tests],
   );
 
-  const [expandedFlowIndex, setExpandedFlowIndex] = useState<number | null>(
-    () => failedFlows.length > 0 ? failedFlows[0]!.flowIndex : null,
+  const [expandedTestIndex, setExpandedTestIndex] = useState<number | null>(
+    () => failedTests.length > 0 ? failedTests[0]!.testIndex : null,
   );
   const [focusedIndex, setFocusedIndex] = useState(0);
 
@@ -33,16 +33,16 @@ export const ResultsScreen = ({ state, onRerun, onRerunFailed, onQuit }: Results
     } else if (input === "q") {
       onQuit();
     } else if (key.return) {
-      const flow = state.flows[focusedIndex];
-      if (flow) {
-        setExpandedFlowIndex((prev) =>
-          prev === flow.flowIndex ? null : flow.flowIndex,
+      const test = state.tests[focusedIndex];
+      if (test) {
+        setExpandedTestIndex((prev) =>
+          prev === test.testIndex ? null : test.testIndex,
         );
       }
     } else if (key.upArrow) {
       setFocusedIndex((prev) => Math.max(0, prev - 1));
     } else if (key.downArrow) {
-      setFocusedIndex((prev) => Math.min(state.flows.length - 1, prev + 1));
+      setFocusedIndex((prev) => Math.min(state.tests.length - 1, prev + 1));
     }
   });
 
@@ -50,12 +50,12 @@ export const ResultsScreen = ({ state, onRerun, onRerunFailed, onQuit }: Results
     <Box flexDirection="column">
       <Header label="Results" />
       <Box flexDirection="column" flexGrow={1} paddingX={2}>
-        {state.flows.map((flow, i) => (
-          <FlowProgress
-            key={flow.flowIndex}
-            flow={flow}
+        {state.tests.map((test, i) => (
+          <TestProgress
+            key={test.testIndex}
+            test={test}
             compact={false}
-            expanded={expandedFlowIndex === flow.flowIndex}
+            expanded={expandedTestIndex === test.testIndex}
             focused={i === focusedIndex}
             verbose={true}
           />

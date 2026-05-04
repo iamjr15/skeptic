@@ -60,11 +60,11 @@ export function buildCommentBody(
 
   if (results.failed > 0) {
     lines.push("### Failed Tests");
-    for (const flow of results.tests) {
-      if (flow.status === "passed") continue;
-      const failedStep = flow.steps.find((s) => s.status !== "passed");
+    for (const test of results.tests) {
+      if (test.status === "passed") continue;
+      const failedStep = test.steps.find((s) => s.status !== "passed");
       const errMsg = failedStep?.error ?? "unknown error";
-      lines.push(`- **${escapePipe(flow.name)}** (${escapePipe(flow.file)}): ${escapePipe(errMsg)}`);
+      lines.push(`- **${escapePipe(test.name)}** (${escapePipe(test.file)}): ${escapePipe(errMsg)}`);
     }
     lines.push("");
   }

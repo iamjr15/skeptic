@@ -14,7 +14,7 @@
  *     skeptic-grammar resolver: `testid=…` / `role=…` / `css=…` / raw text).
  *
  * `selectorHint` is the **stable, cross-process artifact** an agent copies into a
- * `*.spec.ts` file. `@eN` refs are volatile — only valid inside one flow run after a
+ * `*.spec.ts` file. `@eN` refs are volatile — only valid inside one test run after a
  * `snapshot(page)` call.
  *
  * `matchCountAtSnapshot` records the size of the (role, name) candidate group at
@@ -39,3 +39,58 @@ export interface AriaRefEntry {
    *  to surface silent insertion-retargeting via a `[aria-ref] eN silently retargeted` log. */
   matchCountAtSnapshot: number;
 }
+
+const ACTIONABLE_ROLES = new Set([
+  "button",
+  "checkbox",
+  "combobox",
+  "link",
+  "listbox",
+  "menuitem",
+  "menuitemcheckbox",
+  "menuitemradio",
+  "option",
+  "radio",
+  "searchbox",
+  "slider",
+  "spinbutton",
+  "switch",
+  "tab",
+  "textbox",
+  "treeitem",
+]);
+
+const STRUCTURAL_ROLES = new Set([
+  "complementary",
+  "contentinfo",
+  "group",
+  "heading",
+  "main",
+  "navigation",
+  "region",
+  "tabpanel",
+]);
+
+/**
+ * Output-facing filter for snapshot rendering. Playwright's raw AI snapshot can
+ * mint refs for structural implementation details (`generic`, `listitem`,
+ * wrapper `list`s). Those refs are still kept in the registry for byRef()
+ * parity, but compact/interactive output should surface the roles agents can
+ * actually act on or reason about.
+ */
+export const isHighSignalRefEntry = (entry: AriaRefEntry): boolean => {
+  if (entry.kind === "cursor-interactive") return true;
+  if (ACTIONABLE_ROLES.has(entry.role)) return true;
+  if (STRUCTURAL_ROLES.has(entry.role)) {
+    return entry.role === "main" || entry.name.length > 0;
+  }
+  return false;
+};
+
+export const isInteractiveRefEntry = (entry: AriaRefEntry): boolean =>
+  entry.kind === "cursor-interactive" || ACTIONABLE_ROLES.has(entry.role);
+
+/** Refs worth labeling in annotated screenshots. Keep this action-oriented so
+ * badges do not cover the page with labels for layout-only nodes. */
+export const isAnnotatableRefEntry = (entry: AriaRefEntry): boolean =>
+  isInteractiveRefEntry(entry);

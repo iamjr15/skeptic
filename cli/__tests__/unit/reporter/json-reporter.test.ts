@@ -25,8 +25,8 @@ describe("JsonReporter", () => {
       duration_ms: 3000,
       tests: [
         {
-          name: "Login Flow",
-          file: "flows/login.yaml",
+          name: "Login Test",
+          file: "tests/login.spec.ts",
           status: "passed",
           duration_ms: 1500,
           steps: [
@@ -34,8 +34,8 @@ describe("JsonReporter", () => {
           ],
         },
         {
-          name: "Dashboard Flow",
-          file: "flows/dashboard.yaml",
+          name: "Dashboard Test",
+          file: "tests/dashboard.spec.ts",
           status: "failed",
           duration_ms: 1500,
           steps: [
@@ -69,7 +69,7 @@ describe("JsonReporter", () => {
     expect(data["tests"]).toHaveLength(2);
   });
 
-  it("includes flow steps in output", () => {
+  it("includes test steps in output", () => {
     const reporter = new JsonReporter(tmpDir);
     reporter.onRunComplete(makeSummary());
 

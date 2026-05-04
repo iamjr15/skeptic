@@ -150,7 +150,7 @@ describe.skipIf(!browser)("auto a11y audit (Bundle 2 §5.6)", () => {
       const result = await engine.runTest(input);
       // The fixture has real WCAG violations, so the explicit step is expected to fail —
       // that's the user's chosen contract. We're testing that the auto-audit doesn't
-      // overwrite the explicit step's snapshot, not that the flow passes.
+      // overwrite the explicit step's snapshot, not that the test passes.
       const a11y = result.metrics?.["accessibility"] as AccessibilitySnapshot | undefined;
       expect(a11y).toBeDefined();
       // The explicit step ran with WCAG2A, so the snapshot should reflect that — auto-audit

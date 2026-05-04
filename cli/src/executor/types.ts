@@ -76,6 +76,8 @@ export interface TestArtifacts {
    * the path when present.
    */
   accessibilityAudit?: string;
+  /** Per-test full Accessibility JSON sidecar. Written whenever an a11y snapshot exists. */
+  accessibilityJson?: string;
 }
 
 export interface TestResult {
@@ -99,9 +101,7 @@ export interface TestResult {
   artifacts: TestArtifacts;
 }
 
-/** Engine input for a single test. The TS-pivot replaces YAML-step lists with a
- *  `runFn` that the engine awaits inside the runAction boundary; everything else
- *  is metadata the engine reads to set up viewport, env, and collector wiring. */
+/** Engine input for a single test. */
 export interface TestInput {
   url: string;
   name: string;
@@ -124,10 +124,8 @@ export interface CookiesOption {
 }
 
 /**
- * Per-flow runtime config for the screenshot/settle/blank-frame pipeline. Resolved by the
- * engine once per flow from `EngineOptions` plus per-flow viewport, then frozen onto
- * `ExecutionContext.artifactConfig` so step handlers can read defaults without changing
- * the `(page, ctx, args)` handler signature.
+ * Per-test runtime config for the screenshot, settle, and blank-frame pipeline.
+ * The engine resolves it once and freezes it onto `ExecutionContext.artifactConfig`.
  */
 export interface ArtifactRuntimeConfig {
   fullPageScreenshots: boolean;
@@ -157,7 +155,7 @@ export interface EngineOptions {
   aiProvider?: AIProvider;
   trace?: boolean;
   observability?: ObservabilityRuntimeConfig;
-  /** Resolved by the engine; flows into `ExecutionContext.artifactConfig`. */
+  /** Resolved by the engine and assigned to `ExecutionContext.artifactConfig`. */
   artifactConfig?: ArtifactRuntimeConfig;
   /** Zero-based shard index when running under sharding. Surfaced into TestResult.shardId
    *  for reporter disambiguation; the engine itself uses it only as passthrough metadata. */

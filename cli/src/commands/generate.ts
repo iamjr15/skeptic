@@ -23,7 +23,7 @@ import {
   generateFromDescription,
   generateFromDiff,
   type GeneratedTest,
-} from "../ai/flow-generator.js";
+} from "../ai/test-generator.js";
 import { logger } from "../utils/logger.js";
 
 export interface GenerateCommandOptions {
@@ -41,9 +41,9 @@ export interface GenerateCommandOptions {
 }
 
 const collectDiff = (target: GenerateCommandOptions["target"], baseBranch: string): string => {
-  // Mirrors the YAML-era diff scopes — `changes` = staged, `unstaged` =
-  // working tree, `branch` = vs. baseBranch. `git diff` exit code is non-
-  // zero when there's nothing to show; we treat empty output as "no diff".
+  // `changes` = staged, `unstaged` = working tree, `branch` = vs. baseBranch.
+  // `git diff` can exit non-zero when there's nothing to show; empty output is
+  // a valid "no diff" result for generation.
   const args =
     target === "unstaged"
       ? ["diff"]

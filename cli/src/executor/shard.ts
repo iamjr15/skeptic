@@ -1,9 +1,4 @@
-/**
- * Shard helpers for the runner. The TS-pivot moves sharding from per-flow to
- * per-test (see plan §4.0.1) — the runner partitions stable test ids
- * (`${file}#${ordinal}`) modulo N. This module retains a generic helper for any
- * caller that needs to round-robin partition a homogeneous list.
- */
+/** Shard helpers for stable test lists. */
 export type ShardMode = "split" | "all";
 
 export const partitionTests = <T>(items: T[], shardCount: number, mode: ShardMode): T[][] => {
@@ -19,6 +14,3 @@ export const partitionTests = <T>(items: T[], shardCount: number, mode: ShardMod
   }
   return slices;
 };
-
-/** @deprecated — use {@link partitionTests} (kept temporarily for migrating callers). */
-export const partitionFlows = partitionTests;

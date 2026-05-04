@@ -16,22 +16,23 @@ E2E catches the SEO regressions that static linting won't: post-hydration DOM sh
 - [ ] Open Graph + Twitter Card tags present on public pages: `og:title`, `og:image`, `og:url`, `twitter:card`.
 - [ ] Structured data validates — presence of at least the expected `@type` for the page category (Product / Article / Organization).
 
-## Flow patterns
+## Test patterns
 
 Assert metadata after navigation:
 
-```yaml
-- navigate: /products/abc
-- evalScript: |
-    const canonical = document.querySelector('link[rel=canonical]')?.href;
-    const title = document.title;
-    const ogTitle = document.querySelector('meta[property="og:title"]')?.content;
-    return { canonical, title, ogTitle };
-- assertWithAI:
-    assertion: "The page metadata (title, canonical, og:title) refers to a specific product — not a generic catch-all."
+```ts
+await page.goto("/products/abc");
+const metadata = await page.evaluate(() => ({
+  canonical: document.querySelector<HTMLLinkElement>('link[rel=canonical]')?.href,
+  title: document.title,
+  ogTitle: document.querySelector<HTMLMetaElement>('meta[property="og:title"]')?.content,
+}));
+expect(metadata.title).toMatch(/abc/i);
+expect(metadata.canonical).toContain("/products/abc");
+await ai.assert("The page metadata refers to a specific product, not a generic catch-all.");
 ```
 
-For SSR vs hydrated rendering parity, flag any element that exists at initial HTML but gets replaced on hydration — a pre-hydrate snapshot via `runScript` + comparison to post-hydrate DOM catches this.
+For SSR vs hydrated rendering parity, flag any element that exists at initial HTML but gets replaced on hydration. Capture initial page content before interaction, then compare against the hydrated DOM.
 
 ## Red flags — file a bug
 

@@ -12,15 +12,15 @@ export class JUnitReporter implements Reporter {
     this.outputDir = outputDir;
   }
 
-  onTestStart(_flow: TestIdentifier): void {
+  onTestStart(_test: TestIdentifier): void {
     // no-op
   }
 
-  onStepComplete(_step: StepResult, _index: number, _total: number, _flow: TestIdentifier): void {
+  onStepComplete(_step: StepResult, _index: number, _total: number, _test: TestIdentifier): void {
     // no-op
   }
 
-  onTestComplete(_result: TestResult, _flow: TestIdentifier): void {
+  onTestComplete(_result: TestResult, _test: TestIdentifier): void {
     // no-op
   }
 
@@ -30,7 +30,7 @@ export class JUnitReporter implements Reporter {
 
     const totalTime = (summary.duration_ms / 1000).toFixed(3);
     const testsuites = summary.tests
-      .map((flow) => buildTestSuite(flow, summary.tests))
+      .map((test) => buildTestSuite(test, summary.tests))
       .join("\n");
 
     const xml = [
@@ -45,14 +45,14 @@ export class JUnitReporter implements Reporter {
   }
 }
 
-function buildTestSuite(flow: TestResult, siblings: TestResult[]): string {
-  const failures = flow.steps.filter(
+function buildTestSuite(test: TestResult, siblings: TestResult[]): string {
+  const failures = test.steps.filter(
     (s) => s.status === "failed" || s.status === "error",
   ).length;
-  const time = (flow.duration_ms / 1000).toFixed(3);
-  const displayName = formatTestDisplayName(flow, siblings);
+  const time = (test.duration_ms / 1000).toFixed(3);
+  const displayName = formatTestDisplayName(test, siblings);
 
-  const testcases = flow.steps
+  const testcases = test.steps
     .map((step) => {
       const stepTime = (step.duration_ms / 1000).toFixed(3);
       if (step.status === "passed") {
@@ -63,7 +63,7 @@ function buildTestSuite(flow: TestResult, siblings: TestResult[]): string {
     })
     .join("\n");
 
-  return `  <testsuite name="${esc(displayName)}" tests="${flow.steps.length}" failures="${failures}" time="${time}">\n${testcases}\n  </testsuite>`;
+  return `  <testsuite name="${esc(displayName)}" tests="${test.steps.length}" failures="${failures}" time="${time}">\n${testcases}\n  </testsuite>`;
 }
 
 function esc(s: string): string {

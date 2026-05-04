@@ -11,11 +11,11 @@ describe("loadConfig", () => {
     vi.unstubAllEnvs();
   });
 
-  it("loads config from a minimal YAML file", () => {
+  it("loads config from a minimal config file", () => {
     const config = loadConfig({ configPath: path.join(FIXTURES, "minimal.yaml") });
 
     expect(config.url).toBe("http://localhost:3000");
-    expect(config.tests).toBe("tests/**/*.yaml");
+    expect(config.tests).toBe("tests/**/*.spec.ts");
   });
 
   it("applies schema defaults for missing fields", () => {
@@ -84,7 +84,7 @@ describe("loadConfig", () => {
 
     const tmpDir = os.tmpdir();
     const tmpFile = path.join(tmpDir, `skeptic-test-config-${Date.now()}.yaml`);
-    fs.writeFileSync(tmpFile, 'url: ${TEST_BASE_URL}\ntests: "**/*.yaml"\n', "utf-8");
+    fs.writeFileSync(tmpFile, 'url: ${TEST_BASE_URL}\ntests: "**/*.spec.ts"\n', "utf-8");
 
     try {
       const config = loadConfig({ configPath: tmpFile });

@@ -134,7 +134,7 @@ export const checkPing = (
 
 /**
  * Dispatch one RPC request. The control plane has four methods:
- *   - daemon.ping       : compatibility handshake (engine + headed + versions + token)
+ *   - daemon.ping       : daemon handshake (engine + headed + versions + token)
  *   - daemon.status     : uptime + connected-client count
  *   - daemon.shutdown   : graceful close, signaled to lifecycle via `requestShutdown`
  *   - browser.getEndpoint : returns BrowserServer.wsEndpoint() for `pw[engine].connect()`

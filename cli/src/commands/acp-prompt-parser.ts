@@ -1,12 +1,6 @@
 /**
- * Heuristic regex dispatcher for ACP prompts. The B1.5 TS-pivot rewrites the
- * tool surface from YAML to TypeScript spec files: `*.yaml` → `*.spec.ts`,
- * `run_flow` → `run_test`, `validate_flow` → `validate_tests`, etc. The regex
- * shapes are otherwise unchanged so existing editor integrations keep working.
- *
- * Realpath sandboxing (lessons.md #20) lives in `acp.ts:boundResolveFlows` and
- * is invoked by the dispatcher in `acp.ts` *after* the parser returns — the
- * parser never touches the filesystem itself.
+ * Heuristic regex dispatcher for ACP prompts. The parser recognizes the current
+ * TypeScript spec tool surface and leaves filesystem checks to `acp.ts`.
  */
 export interface ToolDispatch {
   tool:
@@ -49,7 +43,7 @@ export function parsePromptToToolCall(prompt: string): ToolDispatch | null {
     const arg = m[1];
     // A literal `.spec.ts` path that contains glob metachars (`*`, `?`) is a
     // pattern, not a single spec file. Reroute through the pattern arm so the
-    // dispatcher expands the glob via boundResolveFlows.
+    // dispatcher expands the glob via boundResolveSpecs.
     if (/[*?]/.test(arg)) {
       return { tool: "run_test", args: { pattern: arg }, title: `Run tests matching ${arg}` };
     }

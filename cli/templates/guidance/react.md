@@ -10,42 +10,36 @@ E2E sees React as a black box, but a handful of pathologies show up as user-visi
 
 ## Things worth asserting
 
-- [ ] No hydration mismatches: after `navigate`, the first pass should not visibly flicker between two DOMs. Use `assertScreenshot` with a tight `threshold` on the hero area before any interaction.
-- [ ] Keys in lists are stable across re-renders — add a flow that triggers a filter change and assert items retain their expected state (checked checkbox, focused input).
+- [ ] No hydration mismatches: after `page.goto`, the first pass should not visibly flicker between two DOMs. Use targeted screenshots around the hero area before any interaction.
+- [ ] Keys in lists are stable across re-renders — add a test that triggers a filter change and assert items retain their expected state (checked checkbox, focused input).
 - [ ] Suspense fallbacks disappear once data arrives, AND don't flash when navigating between already-cached routes.
 - [ ] Errors caught by an error boundary render a specific fallback UI, not a blank screen.
 
-## Flow patterns
+## Test patterns
 
 Check that state survives a re-render:
 
-```yaml
-- type:
-    selector: "[data-testid=search]"
-    value: "foo"
-- click: "[data-testid=filter-active]"  # triggers re-render
-- assertText:
-    selector: "[data-testid=search]"
-    text: "foo"
+```ts
+await page.getByTestId("search").fill("foo");
+await page.getByTestId("filter-active").click();
+await expect(page.getByTestId("search")).toHaveValue("foo");
 ```
 
 Verify an error boundary:
 
-```yaml
-- click: "[data-testid=trigger-error]"
-- assertVisible: "[data-testid=error-boundary-fallback]"
-- assertNotVisible: "[data-testid=raw-error-screen]"
+```ts
+await page.getByTestId("trigger-error").click();
+await expect(page.getByTestId("error-boundary-fallback")).toBeVisible();
+await expect(page.getByTestId("raw-error-screen")).toBeHidden();
 ```
 
 For route-transition bugs (stale effects persisting), navigate away and back, then assert no duplicate elements:
 
-```yaml
-- navigate: /profile
-- navigate: /home
-- navigate: /profile
-- evalScript: |
-    return document.querySelectorAll('[data-testid=profile-header]').length;
-# Assert the result is 1, not 2 or more.
+```ts
+await page.goto("/profile");
+await page.goto("/home");
+await page.goto("/profile");
+await expect(page.getByTestId("profile-header")).toHaveCount(1);
 ```
 
 ## Red flags — file a bug

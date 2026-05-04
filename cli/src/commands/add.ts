@@ -1,6 +1,8 @@
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { execSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import chalk from "chalk";
 import { PRODUCT_NAME, CLI_NAME } from "../constants.js";
 import { loadConfig } from "../config/loader.js";
@@ -28,7 +30,7 @@ export async function runAddGitHubAction(opts: AddGitHubActionOptions): Promise<
   }
 
   // Resolve provider via loadConfig overrides so zod validates the enum, catches
-  // unreadable config paths, and reports malformed YAML — all in one try/catch.
+  // unreadable config paths, and reports malformed config files in one try/catch.
   let provider: AIProvider = "gemini";
   if (useAI) {
     try {
@@ -135,95 +137,192 @@ jobs:
 
 export interface AddSkillOptions {
   agent?: string;
+  scope?: string;
 }
 
-export async function runAddSkill(opts: AddSkillOptions): Promise<void> {
-  const agent = opts.agent ?? detectAgent();
+type SkillAgent = "claude" | "codex" | "cursor" | "opencode";
+type SkillScope = "project" | "user";
+type SkillInstallStatus = "installed" | "updated" | "already-installed" | "skipped";
 
-  if (!agent) {
+interface SkillInstallResult {
+  agent: SkillAgent;
+  scope: SkillScope;
+  targetDir: string;
+  status: SkillInstallStatus;
+  reason?: string;
+}
+
+const SKILL_NAME = "skeptic";
+const MANAGED_SKILL_MARKER = "skeptic-agent-skill: managed by skeptic-cli";
+const SUPPORTED_SKILL_AGENTS = ["claude", "codex", "cursor", "opencode"] as const;
+const RECOVERABLE_SKILL_DIR_ENTRIES = new Set([".DS_Store", "Thumbs.db"]);
+
+const EMBEDDED_SKILL_MD = `---
+name: skeptic
+description: Use Skeptic for CLI-first browser QA and TypeScript E2E tests. Use when asked to inspect pages, write or run skeptic-cli specs, validate UI changes, capture observability evidence, or use Skeptic MCP tools. Not for unit-only logic with no browser behavior.
+---
+
+<!-- skeptic-agent-skill: managed by skeptic-cli -->
+
+# Skeptic
+
+Use Skeptic when a coding agent needs browser evidence: page inspection, TypeScript E2E specs, one-off QA captures, AI-backed checks, or MCP browser validation. Do not claim a UI/browser change works until you have run a relevant Skeptic command or MCP tool and checked the evidence.
+
+## Choose The Surface
+
+- One-off QA or bug hunt: run \`skeptic observe <url> --full-page\`.
+- Persistent regression coverage: run \`skeptic inspect <url> --interactive --compact --with-playwright-hints\`, write a \`tests/*.spec.ts\`, then run \`skeptic run\`.
+- Changed-code verification: run \`skeptic run --diff\` when the project has specs, or use \`skeptic generate --diff\` to create one.
+- Agent-integrated browser work: if Skeptic MCP tools are available, use \`browser_open\`, \`browser_snapshot\`, \`browser_playwright\`, \`browser_screenshot\`, \`browser_console_logs\`, \`browser_network_requests\`, \`browser_performance_metrics\`, \`browser_accessibility_audit\`, and \`browser_close\`.
+
+If the \`skeptic\` binary is not on PATH, try \`npx skeptic-cli\` or \`npx --yes skeptic-cli@latest\`.
+
+## Fast Loop
+
+\`\`\`bash
+skeptic doctor --quick
+skeptic inspect <url> --interactive --compact --with-playwright-hints
+skeptic run tests/<scenario>.spec.ts --observability --video --trace
+\`\`\`
+
+For a page with no existing spec:
+
+\`\`\`bash
+skeptic observe <url> --full-page --video --trace
+\`\`\`
+
+Use the generated \`results.json\`, \`report.html\`, screenshots, videos, traces, \`network.json\`, \`console.json\`, \`accessibility.json\`, and \`perf-trace.md\` as the evidence source. Reference artifact paths from \`results.json\` instead of guessing filenames.
+
+## Writing Specs
+
+Skeptic specs import from \`skeptic-cli\`.
+
+\`\`\`ts
+import { test, expect } from "skeptic-cli";
+
+test("homepage smoke", async ({ page, snapshot, screenshot, observability }) => {
+  await page.goto("https://example.com");
+  await expect(page).toHaveTitle(/Example Domain/);
+
+  const tree = await snapshot(page, { interactive: true, compact: true });
+  await tree.byRole("link", { name: "More information..." }).click();
+
+  await screenshot("homepage", { fullPage: true });
+  await observability.expectNoConsoleErrors();
+});
+\`\`\`
+
+Rules:
+
+- Put browser side effects inside \`test(...)\`, hooks, or helper functions called from tests.
+- Prefer role, label, text, and test-id locators over CSS.
+- Use \`snapshot(page)\` before interacting through refs or snapshot helpers.
+- Re-snapshot after navigation, route changes, modal open/close, or major DOM mutation.
+- Do not paste CLI \`@eN\` refs directly into specs. Use \`selectorHint\` from \`inspect\`, or use \`tree.byRef("eN")\` only for refs returned by the same in-test \`snapshot(page)\` call.
+- Add \`screenshot("name")\` for states that would help debug a failure.
+
+## Observability Checks
+
+Use \`--observability\` for real QA evidence. In specs, assert the signals that match the risk:
+
+\`\`\`ts
+await observability.expectNoConsoleErrors();
+await observability.expectNoNetworkErrors({ allow: [/analytics/] });
+await observability.expectPerformance({ lcp: "<2500ms", cls: "<0.1" });
+await observability.expectAccessible({ standard: "WCAG21AA" });
+\`\`\`
+
+If an observability artifact reports a failure, fix the product or the test and re-run the same flow immediately.
+
+## MCP Workflow
+
+When Skeptic is exposed through MCP:
+
+1. \`browser_open\` the target URL.
+2. \`browser_snapshot\` or \`browser_screenshot\` with snapshot mode to get refs.
+3. Use one \`browser_playwright\` call for actions that share the same DOM state. Use the \`ref\` helper for snapshot refs and \`return\` structured evidence.
+4. After DOM-changing actions, request a fresh snapshot.
+5. Check \`browser_console_logs\`, \`browser_network_requests\`, \`browser_accessibility_audit\`, and \`browser_performance_metrics\`.
+6. \`browser_close\` when done so video and trace artifacts flush.
+
+Batch fills, clicks, and data collection when the DOM is stable. Do not take a new snapshot between plain text fills unless the page structure changed.
+
+## Verification Standard
+
+Before reporting completion for browser-facing work:
+
+- Run the smallest Skeptic command or MCP workflow that actually exercises the changed behavior.
+- Test at least one adjacent or negative path when forms, routing, validation, auth, persistence, or shared components changed.
+- Read the full command/tool output. Passing navigation alone is not enough.
+- If there are console errors, network failures, serious accessibility issues, poor Web Vitals, or visible regressions, fix and re-run.
+- State the exact command/tool run and the main artifact path in the final report.
+`;
+
+const EMBEDDED_OPENAI_YAML = `interface:
+  display_name: "Skeptic"
+  short_description: "Use Skeptic to inspect pages, write TypeScript E2E tests, run browser QA, and collect observability evidence."
+  default_prompt: "Use Skeptic to verify this UI or browser behavior with real evidence and report the relevant artifacts."
+`;
+
+export async function runAddSkill(opts: AddSkillOptions): Promise<void> {
+  const scope = normalizeSkillScope(opts.scope);
+  if (!scope) {
+    logger.error("Unknown skill scope. Use --scope project or --scope user.");
+    process.exitCode = 1;
+    return;
+  }
+
+  const agents = resolveSkillAgents(opts.agent);
+  if (agents.length === 0) {
     logger.error(
-      "No AI agent detected. Specify one with --agent (claude, codex, cursor)",
+      "No AI agent detected. Specify one with --agent (claude, codex, cursor, opencode, all)",
     );
     process.exitCode = 1;
     return;
   }
 
-  const skillContent = `# ${PRODUCT_NAME} E2E Testing
-
-${PRODUCT_NAME} is a TypeScript test runner for AI agents — built on Playwright with AI assertions, observability, and snapshot-based discovery.
-
-## Quick Commands
-
-- \`${CLI_NAME} run\` — run all tests in tests/**/*.spec.ts
-- \`${CLI_NAME} run tests/login.spec.ts\` — run a specific test file
-- \`${CLI_NAME} run --observability\` — full observability bundle (perf+net+a11y+console)
-- \`${CLI_NAME} inspect <url>\` — discover ARIA refs + selectorHints for a page
-- \`${CLI_NAME} generate --diff\` — generate tests from code changes
-- \`${CLI_NAME} generate --message "test the login form"\` — generate from description
-
-## After Code Changes
-
-\`\`\`bash
-${CLI_NAME} run --diff
-\`\`\`
-
-If tests fail, examine the output (stderr + results.json) and fix the code or update the test.
-
-## Test Format
-
-Tests are TypeScript files in \`tests/\` using the skeptic API:
-
-\`\`\`ts
-import { test, expect } from "skeptic-cli";
-
-test("login", async ({ page, snapshot, ai, screenshot }) => {
-  await page.goto("/login");
-  await page.fill("[data-testid=email]", "user@test.com");
-  await page.click("button:has-text('Sign In')");
-  await expect(page).toHaveURL(/dashboard/);
-  await ai.assert("the dashboard greets the user by name");
-  await screenshot("dashboard");
-});
-\`\`\`
-
-Fixture members: page, snapshot, screenshot, settle, observability, ai, ctx.
-`;
-
-  let skillPath: string;
-
-  switch (agent) {
-    case "claude": {
-      const dir = path.resolve(process.cwd(), ".claude/skills");
-      fs.mkdirSync(dir, { recursive: true });
-      skillPath = path.join(dir, "skeptic.md");
-      break;
+  const results = agents.map((agent) => installSkillForAgent(agent, scope));
+  for (const result of results) {
+    const label = `${result.agent} ${result.scope}`;
+    if (result.status === "skipped") {
+      logger.warn(`${label}: skipped ${chalk.dim(result.targetDir)} (${result.reason ?? "unknown reason"})`);
+      continue;
     }
-    case "codex": {
-      const dir = path.resolve(process.cwd(), ".agents/skills/skeptic");
-      fs.mkdirSync(dir, { recursive: true });
-      skillPath = path.join(dir, "SKILL.md");
-      break;
-    }
-    case "cursor": {
-      const dir = path.resolve(process.cwd(), ".cursor/skills");
-      fs.mkdirSync(dir, { recursive: true });
-      skillPath = path.join(dir, "skeptic.md");
-      break;
-    }
-    default: {
-      logger.error(`Unknown agent: ${agent}`);
-      process.exitCode = 1;
-      return;
-    }
+    const verb =
+      result.status === "already-installed"
+        ? "already installed"
+        : result.status === "updated"
+          ? "updated"
+          : "installed";
+    logger.success(`${PRODUCT_NAME} skill ${verb} for ${chalk.cyan(label)} at ${chalk.dim(result.targetDir)}`);
   }
 
-  fs.writeFileSync(skillPath, skillContent, "utf-8");
-  logger.success(`Installed ${PRODUCT_NAME} skill for ${chalk.cyan(agent)} at ${chalk.dim(skillPath)}`);
+  if (results.every((result) => result.status === "skipped")) {
+    process.exitCode = 1;
+  }
 }
 
-function detectAgent(): string | null {
-  const agents = ["claude", "codex", "cursor"];
-  for (const agent of agents) {
+function normalizeSkillScope(scope: string | undefined): SkillScope | null {
+  if (scope === undefined || scope === "project") return "project";
+  if (scope === "user") return "user";
+  return null;
+}
+
+function resolveSkillAgents(agent: string | undefined): SkillAgent[] {
+  if (agent === "all") return [...SUPPORTED_SKILL_AGENTS];
+  if (agent !== undefined) {
+    return isSkillAgent(agent) ? [agent] : [];
+  }
+  const detected = detectAgent();
+  return detected ? [detected] : [];
+}
+
+function isSkillAgent(agent: string): agent is SkillAgent {
+  return SUPPORTED_SKILL_AGENTS.includes(agent as SkillAgent);
+}
+
+function detectAgent(): SkillAgent | null {
+  for (const agent of SUPPORTED_SKILL_AGENTS) {
     try {
       execSync(`which ${agent}`, { stdio: "ignore" });
       return agent;
@@ -232,4 +331,164 @@ function detectAgent(): string | null {
     }
   }
   return null;
+}
+
+function installSkillForAgent(agent: SkillAgent, scope: SkillScope): SkillInstallResult {
+  const targetDir = getSkillTargetDir(agent, scope);
+  return installSkillDirectory(targetDir, agent, scope);
+}
+
+function getSkillTargetDir(agent: SkillAgent, scope: SkillScope): string {
+  if (scope === "project") {
+    const baseByAgent: Record<SkillAgent, string> = {
+      claude: ".claude/skills",
+      codex: ".agents/skills",
+      cursor: ".cursor/skills",
+      opencode: ".opencode/skills",
+    };
+    return path.resolve(process.cwd(), baseByAgent[agent], SKILL_NAME);
+  }
+
+  const home = process.env.HOME || os.homedir();
+  if (agent === "codex") {
+    return path.join(process.env.CODEX_HOME || path.join(home, ".codex"), "skills", SKILL_NAME);
+  }
+
+  const baseByAgent: Record<Exclude<SkillAgent, "codex">, string> = {
+    claude: ".claude/skills",
+    cursor: ".cursor/skills",
+    opencode: ".opencode/skills",
+  };
+  return path.join(home, baseByAgent[agent], SKILL_NAME);
+}
+
+function installSkillDirectory(
+  targetDir: string,
+  agent: SkillAgent,
+  scope: SkillScope,
+): SkillInstallResult {
+  const existing = getPathStats(targetDir);
+  const sourceDir = findBundledSkillDir();
+  const targetSkillPath = path.join(targetDir, "SKILL.md");
+  const sourceMatchesTarget = sourceDir
+    ? pathMatchesContents(sourceDir, targetDir)
+    : fs.existsSync(targetSkillPath) && fs.readFileSync(targetSkillPath, "utf-8") === EMBEDDED_SKILL_MD;
+
+  if (sourceMatchesTarget) {
+    return { agent, scope, targetDir, status: "already-installed" };
+  }
+
+  if (existing) {
+    if (existing.isSymbolicLink()) {
+      return { agent, scope, targetDir, status: "skipped", reason: "target is a symlink" };
+    }
+
+    if (existing.isDirectory()) {
+      if (!fs.existsSync(targetSkillPath)) {
+        if (isRecoverableSkillDirectory(targetDir)) {
+          fs.rmSync(targetDir, { recursive: true, force: true });
+        } else {
+          return {
+            agent,
+            scope,
+            targetDir,
+            status: "skipped",
+            reason: "existing directory is not a Skeptic skill",
+          };
+        }
+      } else if (!isSkepticManagedSkill(targetSkillPath)) {
+        return {
+          agent,
+          scope,
+          targetDir,
+          status: "skipped",
+          reason: "existing skill was not created by skeptic-cli",
+        };
+      } else {
+        fs.rmSync(targetDir, { recursive: true, force: true });
+      }
+    } else if (existing.isFile()) {
+      if (!isSkepticManagedSkill(targetDir)) {
+        return {
+          agent,
+          scope,
+          targetDir,
+          status: "skipped",
+          reason: "existing file was not created by skeptic-cli",
+        };
+      }
+      fs.unlinkSync(targetDir);
+    } else {
+      return { agent, scope, targetDir, status: "skipped", reason: "unsupported existing path" };
+    }
+  }
+
+  fs.mkdirSync(path.dirname(targetDir), { recursive: true });
+  if (sourceDir) {
+    fs.cpSync(sourceDir, targetDir, { recursive: true });
+  } else {
+    writeEmbeddedSkill(targetDir);
+  }
+
+  return { agent, scope, targetDir, status: existing ? "updated" : "installed" };
+}
+
+function findBundledSkillDir(): string | null {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    path.resolve(here, "../../agent-skills", SKILL_NAME),
+    path.resolve(here, "../../../agent-skills", SKILL_NAME),
+  ];
+  return candidates.find((candidate) => fs.existsSync(path.join(candidate, "SKILL.md"))) ?? null;
+}
+
+function writeEmbeddedSkill(targetDir: string): void {
+  fs.mkdirSync(path.join(targetDir, "agents"), { recursive: true });
+  fs.writeFileSync(path.join(targetDir, "SKILL.md"), EMBEDDED_SKILL_MD, "utf-8");
+  fs.writeFileSync(path.join(targetDir, "agents", "openai.yaml"), EMBEDDED_OPENAI_YAML, "utf-8");
+}
+
+function getPathStats(targetPath: string): fs.Stats | null {
+  try {
+    return fs.lstatSync(targetPath);
+  } catch (err) {
+    if (err instanceof Error && "code" in err && err.code === "ENOENT") return null;
+    throw err;
+  }
+}
+
+function isRecoverableSkillDirectory(targetDir: string): boolean {
+  return fs.readdirSync(targetDir).every((entry) => RECOVERABLE_SKILL_DIR_ENTRIES.has(entry));
+}
+
+function isSkepticManagedSkill(skillPath: string): boolean {
+  const content = fs.readFileSync(skillPath, "utf-8");
+  return (
+    content.includes(MANAGED_SKILL_MARKER) ||
+    content.includes(`# ${PRODUCT_NAME} E2E Testing`) ||
+    content.includes(`${PRODUCT_NAME} is a TypeScript test runner for AI agents`)
+  );
+}
+
+function pathMatchesContents(sourcePath: string, targetPath: string): boolean {
+  const sourceStats = getPathStats(sourcePath);
+  const targetStats = getPathStats(targetPath);
+  if (!sourceStats || !targetStats) return false;
+  if (sourceStats.isSymbolicLink() || targetStats.isSymbolicLink()) return false;
+
+  if (sourceStats.isDirectory() && targetStats.isDirectory()) {
+    const sourceEntries = fs.readdirSync(sourcePath).sort();
+    const targetEntries = fs.readdirSync(targetPath).sort();
+    if (sourceEntries.length !== targetEntries.length) return false;
+    return sourceEntries.every((entry, index) => {
+      if (entry !== targetEntries[index]) return false;
+      return pathMatchesContents(path.join(sourcePath, entry), path.join(targetPath, entry));
+    });
+  }
+
+  if (sourceStats.isFile() && targetStats.isFile()) {
+    return fs.readFileSync(sourcePath).equals(fs.readFileSync(targetPath));
+  }
+
+  return false;
 }

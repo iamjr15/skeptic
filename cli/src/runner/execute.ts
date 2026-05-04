@@ -18,6 +18,8 @@ export interface RunnerExecuteOptions {
   /** Map from file → manifest (used for skip/only short-circuiting in the main process). */
   manifests: Map<string, FileManifest>;
   bail: boolean;
+  /** Maximum number of spec-file workers to run at once. */
+  concurrency?: number;
   /** Resolves the worker entry URL — abstracted so tests can pass in a fake. */
   workerEntry?: URL;
   /** Hard-kill grace after Promise.race ceiling — gives afterEach a chance to run. */
@@ -62,9 +64,16 @@ interface FileRunResult {
   remaining: ManifestEntry[];
   /** True when the worker terminated (timeout, crash) and tests didn't finish. */
   workerTerminated: boolean;
+  /** Effective hard-timeout that triggered the worker kill, when known. */
+  killTimeoutMs?: number;
   /** Set when the runner already requeued the unfinished tests. */
   requeueAttempted: boolean;
 }
+
+const effectiveHardTimeoutForEntry = (
+  entry: ManifestEntry | undefined,
+  fallback: number,
+): number => entry?.use.hardTimeout ?? (entry?.use.timeout !== undefined ? entry.use.timeout : fallback);
 
 const runWorkerForFile = async (
   file: string,
@@ -83,16 +92,18 @@ const runWorkerForFile = async (
   const finishedIds = new Set<string>();
   const killGrace = options.killGraceMs ?? DEFAULT_KILL_GRACE_MS;
   let workerTerminated = false;
+  let killTimeoutMs: number | undefined;
   let killTimer: NodeJS.Timeout | undefined;
 
-  const armKillTimer = (): void => {
+  const armKillTimer = (hardTimeoutMs: number = options.config.hardTimeout): void => {
     if (killTimer) clearTimeout(killTimer);
     killTimer = setTimeout(() => {
       workerTerminated = true;
+      killTimeoutMs = hardTimeoutMs;
       worker.terminate().catch(() => {
         process.stderr.write(`[skeptic] worker.terminate() rejected for ${file}\n`);
       });
-    }, options.config.hardTimeout + killGrace);
+    }, hardTimeoutMs + killGrace);
   };
 
   return new Promise<FileRunResult>((resolve) => {
@@ -110,6 +121,7 @@ const runWorkerForFile = async (
           return;
         }
         case "test:start": {
+          const entry = entries.find((e) => e.id === msg.testId);
           const ident: TestIdentifier = {
             name: msg.name,
             file: msg.file,
@@ -118,7 +130,7 @@ const runWorkerForFile = async (
           for (const r of options.reporters) {
             safeEmit("onTestStart", () => r.onTestStart(ident));
           }
-          armKillTimer();
+          armKillTimer(effectiveHardTimeoutForEntry(entry, options.config.hardTimeout));
           return;
         }
         case "test:complete": {
@@ -192,6 +204,7 @@ const runWorkerForFile = async (
         results,
         remaining,
         workerTerminated,
+        ...(killTimeoutMs !== undefined ? { killTimeoutMs } : {}),
         requeueAttempted: false,
       });
     });
@@ -227,6 +240,94 @@ const buildSkippedResult = (file: string, entry: ManifestEntry, reason: string):
   artifacts: {},
 });
 
+const runFilePartition = async (
+  file: string,
+  entries: ManifestEntry[],
+  options: RunnerExecuteOptions,
+): Promise<TestResult[]> => {
+  if (entries.length === 0) return [];
+
+  const initial = await runWorkerForFile(file, entries, options);
+  const fileResults = [...initial.results];
+
+  const retryBudget = options.config.retries;
+  if (retryBudget > 0 && !initial.workerTerminated) {
+    const failedEntries = entries.filter((entry) => {
+      const r = fileResults.find((x) => x.file === entry.file && x.name === entry.name);
+      return r && r.status !== "passed";
+    });
+    for (const entry of failedEntries) {
+      for (let attempt = 1; attempt <= retryBudget; attempt++) {
+        const retryRun = await runWorkerForFile(entry.file, [entry], options);
+        const retried = retryRun.results.find(
+          (r) => r.file === entry.file && r.name === entry.name,
+        );
+        if (!retried) break;
+        if (retried.steps[0]) {
+          retried.steps[0].warnings ??= [];
+          retried.steps[0].warnings.push(`retry attempt ${attempt}/${retryBudget}`);
+        }
+        const idx = fileResults.findIndex(
+          (r) => r.file === entry.file && r.name === entry.name,
+        );
+        if (idx >= 0) fileResults[idx] = retried;
+        if (retried.status === "passed") break;
+      }
+    }
+  }
+
+  if (initial.workerTerminated && initial.remaining.length > 0) {
+    const first = initial.remaining[0]!;
+    fileResults.push(
+      buildSkippedResult(
+        file,
+        first,
+        `test killed worker (${initial.killTimeoutMs ?? options.config.hardTimeout}ms hard ceiling)`,
+      ),
+    );
+    const requeueRemaining = initial.remaining.slice(1);
+    if (requeueRemaining.length > 0) {
+      const requeue = await requeueOnce(file, requeueRemaining, options);
+      fileResults.push(...requeue.results);
+      if (requeue.workerTerminated && requeue.remaining.length > 0) {
+        const offender = requeue.remaining[0]!;
+        fileResults.push(buildSkippedResult(file, offender, "test killed worker twice"));
+        for (const e of requeue.remaining.slice(1)) {
+          fileResults.push(
+            buildSkippedResult(file, e, "skipped due to upstream worker kill"),
+          );
+        }
+      }
+    }
+  }
+
+  return fileResults;
+};
+
+const runPartitionsInParallel = async (
+  partitions: Array<[string, ManifestEntry[]]>,
+  options: RunnerExecuteOptions,
+  concurrency: number,
+): Promise<TestResult[]> => {
+  const resultsByPartition = new Array<TestResult[]>(partitions.length);
+  let nextIndex = 0;
+
+  const worker = async (): Promise<void> => {
+    while (true) {
+      const index = nextIndex;
+      nextIndex += 1;
+      const item = partitions[index];
+      if (!item) return;
+      const [file, entries] = item;
+      resultsByPartition[index] = await runFilePartition(file, entries, options);
+    }
+  };
+
+  const workerCount = Math.min(Math.max(1, concurrency), partitions.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return resultsByPartition.flat();
+};
+
 export const executeRun = async (
   options: RunnerExecuteOptions,
 ): Promise<RunnerExecuteOutcome> => {
@@ -245,76 +346,16 @@ export const executeRun = async (
     safeEmit("onRunStart", () => r.onRunStart?.(onRunStartManifest));
   }
 
-  // Run files sequentially in the MVP. Per-file parallelism (worker pool) lands
-  // when concurrent execution lands in a future bundle.
-  outer: for (const [file, entries] of options.partition) {
-    if (entries.length === 0) continue;
-    const initial = await runWorkerForFile(file, entries, options);
-    const fileResults = [...initial.results];
+  const partitions = [...options.partition.entries()].filter(([, entries]) => entries.length > 0);
+  const concurrency = options.bail ? 1 : Math.max(1, options.concurrency ?? 1);
 
-    // Per-test retries: every failing test that wasn't killed by the worker gets
-    // re-spawned in a fresh worker against an allowlist of just that test, up to
-    // `config.retries` times. We replace the originally-failing entry's result
-    // with the last attempt and stamp the retry count on the StepResult so
-    // reporters can surface it without changing their wire shape.
-    const retryBudget = options.config.retries;
-    if (retryBudget > 0 && !initial.workerTerminated) {
-      const failedEntries = entries.filter((entry) => {
-        const r = fileResults.find((x) => x.file === entry.file && x.name === entry.name);
-        return r && r.status !== "passed";
-      });
-      for (const entry of failedEntries) {
-        for (let attempt = 1; attempt <= retryBudget; attempt++) {
-          const retryRun = await runWorkerForFile(entry.file, [entry], options);
-          const retried = retryRun.results.find(
-            (r) => r.file === entry.file && r.name === entry.name,
-          );
-          if (!retried) break;
-          if (retried.steps[0]) {
-            retried.steps[0].warnings ??= [];
-            retried.steps[0].warnings.push(`retry attempt ${attempt}/${retryBudget}`);
-          }
-          const idx = fileResults.findIndex(
-            (r) => r.file === entry.file && r.name === entry.name,
-          );
-          if (idx >= 0) fileResults[idx] = retried;
-          if (retried.status === "passed") break;
-        }
-      }
-    }
-    allResults.push(...fileResults);
-
-    if (initial.workerTerminated && initial.remaining.length > 0) {
-      // Plan §4.0: mark the offending test as the killed-once entry, requeue the
-      // remaining allowlist in a fresh worker once. If the second worker also
-      // dies on the next test, that test is `test killed worker twice` and
-      // everything after it is `skipped due to upstream worker kill`.
-      const first = initial.remaining[0]!;
-      allResults.push(
-        buildSkippedResult(
-          file,
-          first,
-          `test killed worker (${options.config.hardTimeout}ms hard ceiling)`,
-        ),
-      );
-      const requeueRemaining = initial.remaining.slice(1);
-      if (requeueRemaining.length > 0) {
-        const requeue = await requeueOnce(file, requeueRemaining, options);
-        allResults.push(...requeue.results);
-        if (requeue.workerTerminated && requeue.remaining.length > 0) {
-          const offender = requeue.remaining[0]!;
-          allResults.push(buildSkippedResult(file, offender, "test killed worker twice"));
-          for (const e of requeue.remaining.slice(1)) {
-            allResults.push(
-              buildSkippedResult(file, e, "skipped due to upstream worker kill"),
-            );
-          }
-        }
-      }
-    }
-
-    if (options.bail && allResults.some((r) => r.status !== "passed")) {
-      break outer;
+  if (concurrency > 1 && partitions.length > 1) {
+    allResults.push(...await runPartitionsInParallel(partitions, options, concurrency));
+  } else {
+    for (const [file, entries] of partitions) {
+      const fileResults = await runFilePartition(file, entries, options);
+      allResults.push(...fileResults);
+      if (options.bail && allResults.some((r) => r.status !== "passed")) break;
     }
   }
 

@@ -188,6 +188,27 @@ describe("takeScreenshot — annotate path", () => {
     expect(entries.map((e) => e.label)).toEqual([1, 2]);
   });
 
+  it("skips layout-only ARIA refs so annotated screenshots stay action-oriented", async () => {
+    captureMock.mockResolvedValue({
+      yaml: "",
+      entries: [
+        { ref: "e1", kind: "aria", role: "generic", name: "", nth: 0, scopeSelector: "body", matchCountAtSnapshot: 1 },
+        { ref: "e2", kind: "aria", role: "listitem", name: "", nth: 0, scopeSelector: "body", matchCountAtSnapshot: 1 },
+        { ref: "e3", kind: "aria", role: "link", name: "Store", nth: 0, scopeSelector: "body", matchCountAtSnapshot: 1 },
+      ],
+      truncated: false,
+    });
+    const { page } = buildPage({
+      e1: { boundingBox: { x: 1, y: 2, width: 3, height: 4 } },
+      e2: { boundingBox: { x: 5, y: 6, width: 7, height: 8 } },
+      e3: { boundingBox: { x: 9, y: 10, width: 11, height: 12 } },
+    });
+
+    const result = await takeScreenshot(page, ctx, "shot", { annotate: true });
+
+    expect(result.annotations?.map((e) => e.ref)).toEqual(["e3"]);
+  });
+
   it("projects bbox.y by scrollY when fullPage is true", async () => {
     captureMock.mockResolvedValue({
       yaml: "",
@@ -219,7 +240,7 @@ describe("takeScreenshot — annotate path", () => {
     expect(captureMock).not.toHaveBeenCalled();
     expect(injectMock).not.toHaveBeenCalled();
     expect(removeMock).not.toHaveBeenCalled();
-    // Output file is in ctx.flowDir; verify it lives under our tmp dir.
+    // Output file is in ctx.testDir; verify it lives under our tmp dir.
     expect(result.path.startsWith(tmp)).toBe(true);
   });
 

@@ -2,7 +2,7 @@ import React from "react";
 import { render } from "ink";
 import { GenerateReviewScreen } from "./generate-review-screen.js";
 
-export const renderGenerateReview = (flows: string[]): Promise<{ approved: string[] }> =>
+export const renderGenerateReview = (tests: string[]): Promise<{ approved: string[] }> =>
   new Promise((resolve) => {
     let resolved = false;
     let instance: ReturnType<typeof render> | null = null;
@@ -17,13 +17,13 @@ export const renderGenerateReview = (flows: string[]): Promise<{ approved: strin
     const onApprove = (indices: number[]) =>
       finish(
         indices
-          .map((i) => flows[i])
+          .map((i) => tests[i])
           .filter((y): y is string => typeof y === "string"),
       );
     const onSkip = () => finish([]);
 
     instance = render(
-      <GenerateReviewScreen flows={flows} onApprove={onApprove} onSkip={onSkip} />,
+      <GenerateReviewScreen tests={tests} onApprove={onApprove} onSkip={onSkip} />,
       {
         exitOnCtrlC: false,
         alternateScreen: true,

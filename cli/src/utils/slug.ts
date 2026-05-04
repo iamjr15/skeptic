@@ -8,14 +8,14 @@ export function slugify(name: string): string {
     .replace(/(^-|-$)/g, "");
   // Fallback for punctuation-only or non-ASCII inputs. Also neutralizes path
   // separators — safe to use as a filename.
-  return base || "flow";
+  return base || "test";
 }
 
 export function uniqueSlug(name: string, dir: string): string {
   const base = slugify(name);
-  if (!fs.existsSync(path.join(dir, `${base}.yaml`))) return base;
+  if (!fs.existsSync(path.join(dir, `${base}.spec.ts`))) return base;
 
   let n = 2;
-  while (fs.existsSync(path.join(dir, `${base}-${n}.yaml`))) n++;
+  while (fs.existsSync(path.join(dir, `${base}-${n}.spec.ts`))) n++;
   return `${base}-${n}`;
 }

@@ -12,7 +12,7 @@ export interface ObservabilityRuntimeConfig {
   accessibilityHtmlSnippetLimit: number;
   consoleCaptureLimit?: number;
   consoleRedaction?: boolean;
-  /** When set, the engine fires AccessibilityCollector.audit() once per flow before onTestComplete. */
+  /** When set, the engine fires AccessibilityCollector.audit() once per test before onTestComplete. */
   autoAccessibilityAudit?: boolean;
   accessibilityStandard?: "WCAG2A" | "WCAG2AA" | "WCAG21A" | "WCAG21AA" | "WCAG22AA";
   accessibilityImpacts?: Array<"critical" | "serious" | "moderate" | "minor">;
@@ -21,7 +21,7 @@ export interface ObservabilityRuntimeConfig {
    * bucket holds more than this many rules, the markdown shows `cap` plus a
    * "...and N more — see audit.md" footer. The full set is always written to
    * the per-test `audit.md` sidecar (no rule-level truncation there).
-   * Default = 100 (B9 — covers common pages without truncation).
+   * Default = 100.
    */
   accessibilityMaxRulesPerImpact?: number;
 }

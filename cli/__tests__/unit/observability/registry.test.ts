@@ -65,7 +65,3 @@ describe("buildCollectors", () => {
     expect(collectors[0]).toBeInstanceOf(AccessibilityCollector);
   });
 });
-
-// inferRequiredCollectors was deleted in B1 — YAML step-scanning has no analogue
-// in the TS-pivot. Collectors are now resolved up front from `--observability` and
-// per-test `test.use({ collectors: [...] })`. See plan §4.0.1.

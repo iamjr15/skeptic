@@ -13,7 +13,7 @@ import { formatPerfTraceMarkdown } from "../reporter/perf-trace-md.js";
 import { logger } from "../utils/logger.js";
 
 export interface SidecarWriteInput {
-  flowDir: string;
+  testDir: string;
   metrics: Record<string, unknown>;
   artifacts: TestArtifacts;
   /**
@@ -26,15 +26,15 @@ export interface SidecarWriteInput {
 }
 
 /**
- * Writes the four observability sidecars (`perf-trace.md`, `console.json`,
- * `network.json`, and — when a11y violations are present — `audit.md`) into
- * the test's flowDir and populates `artifacts` with their paths. Each write
+ * Writes the observability sidecars (`perf-trace.md`, `console.json`,
+ * `network.json`, `accessibility.json`, and — when a11y violations are present — `audit.md`) into
+ * the test's artifact directory and populates `artifacts` with their paths. Each write
  * is wrapped in its own try/catch — sidecar failures must never mask the
  * test result. Shared between the engine and the runner worker so both code
  * paths emit byte-identical sidecars.
  */
 export const writeSidecars = async (input: SidecarWriteInput): Promise<void> => {
-  const { flowDir, metrics, artifacts, observabilityConfig } = input;
+  const { testDir, metrics, artifacts, observabilityConfig } = input;
   const perf = metrics["performance"] as PerformanceSnapshot | undefined;
   const net = metrics["network"] as NetworkSnapshot | undefined;
   const con = metrics["console"] as ConsoleSnapshot | undefined;
@@ -52,7 +52,7 @@ export const writeSidecars = async (input: SidecarWriteInput): Promise<void> => 
         ? { accessibilityMaxRulesPerImpact: observabilityConfig.accessibilityMaxRulesPerImpact }
         : {},
     );
-    const perfTracePath = join(flowDir, "perf-trace.md");
+    const perfTracePath = join(testDir, "perf-trace.md");
     await writeFile(perfTracePath, md, "utf-8");
     artifacts.perfTrace = perfTracePath;
   } catch (err) {
@@ -61,7 +61,7 @@ export const writeSidecars = async (input: SidecarWriteInput): Promise<void> => 
 
   if (con) {
     try {
-      const consolePath = join(flowDir, "console.json");
+      const consolePath = join(testDir, "console.json");
       await writeFile(consolePath, JSON.stringify(con, null, 2), "utf-8");
       artifacts.consoleSnapshot = consolePath;
     } catch (err) {
@@ -71,7 +71,7 @@ export const writeSidecars = async (input: SidecarWriteInput): Promise<void> => 
 
   if (net) {
     try {
-      const networkPath = join(flowDir, "network.json");
+      const networkPath = join(testDir, "network.json");
       await writeFile(networkPath, JSON.stringify(net, null, 2), "utf-8");
       artifacts.networkSnapshot = networkPath;
     } catch (err) {
@@ -79,9 +79,19 @@ export const writeSidecars = async (input: SidecarWriteInput): Promise<void> => 
     }
   }
 
+  if (a11y) {
+    try {
+      const accessibilityJsonPath = join(testDir, "accessibility.json");
+      await writeFile(accessibilityJsonPath, JSON.stringify(a11y, null, 2), "utf-8");
+      artifacts.accessibilityJson = accessibilityJsonPath;
+    } catch (err) {
+      logger.warn(`accessibility.json write failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   if (a11y && a11y.violations.length > 0) {
     try {
-      const auditPath = join(flowDir, "audit.md");
+      const auditPath = join(testDir, "audit.md");
       await writeFile(auditPath, formatAuditMarkdown(a11y), "utf-8");
       artifacts.accessibilityAudit = auditPath;
     } catch (err) {
@@ -162,6 +172,14 @@ export const formatAuditMarkdown = (a11y: AccessibilitySnapshot): string => {
         for (const node of shownNodes) {
           const target = node.target.join(" ") || "(no selector)";
           parts.push(`- \`${target}\``);
+          if (node.html) {
+            parts.push("  HTML:");
+            parts.push("  ```html");
+            for (const line of node.html.split("\n")) {
+              parts.push(`  ${line}`);
+            }
+            parts.push("  ```");
+          }
           if (node.failureSummary) {
             // Indent the failure summary so it's grouped under the node bullet.
             const lines = node.failureSummary.split("\n");

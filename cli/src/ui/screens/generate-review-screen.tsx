@@ -3,11 +3,7 @@ import { Box, Text, useInput, useStdout } from "ink";
 import { Header } from "../components/header.js";
 import { colors, icons } from "../theme.js";
 
-// B1 stub: parseFlowString was YAML-grammar-coupled. B5.5 rewires the screen to
-// preview generated `*.spec.ts` snippets. Until then, the screen displays each
-// generated chunk with a name extracted via best-effort regex.
-
-interface ParsedFlow {
+interface ParsedGeneratedTest {
   index: number;
   name: string;
   stepCount: number;
@@ -16,23 +12,23 @@ interface ParsedFlow {
 }
 
 interface GenerateReviewScreenProps {
-  flows: string[];
+  tests: string[];
   onApprove: (indices: number[]) => void;
   onSkip: () => void;
 }
 
-const parseFlow = (raw: string, index: number): ParsedFlow => {
+const parseGeneratedTest = (raw: string, index: number): ParsedGeneratedTest => {
   const nameMatch = raw.match(/test\(\s*["'`]([^"'`]+)["'`]/) ?? raw.match(/^name:\s*(.+)$/m);
   return {
     index,
-    name: nameMatch?.[1]?.trim() ?? `flow-${index + 1}`,
+    name: nameMatch?.[1]?.trim() ?? `test-${index + 1}`,
     stepCount: 0,
     tags: [],
   };
 };
 
-export const GenerateReviewScreen = ({ flows, onApprove, onSkip }: GenerateReviewScreenProps) => {
-  const parsed = useMemo(() => flows.map(parseFlow), [flows]);
+export const GenerateReviewScreen = ({ tests, onApprove, onSkip }: GenerateReviewScreenProps) => {
+  const parsed = useMemo(() => tests.map(parseGeneratedTest), [tests]);
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [selected, setSelected] = useState<Set<number>>(
     () => new Set(parsed.map((_, i) => i)),
@@ -43,8 +39,8 @@ export const GenerateReviewScreen = ({ flows, onApprove, onSkip }: GenerateRevie
   const overhead = 10;
   const listRows = parsed.length + 2;
   const previewMaxLines = Math.max(6, rows - listRows - overhead);
-  const focusedYaml = flows[focusedIndex] ?? "";
-  const previewLines = focusedYaml.split("\n");
+  const focusedSource = tests[focusedIndex] ?? "";
+  const previewLines = focusedSource.split("\n");
   const previewText = previewLines.slice(0, previewMaxLines).join("\n");
   const truncated = previewLines.length > previewMaxLines;
   const focused = parsed[focusedIndex];
@@ -76,30 +72,30 @@ export const GenerateReviewScreen = ({ flows, onApprove, onSkip }: GenerateRevie
 
   return (
     <Box flexDirection="column">
-      <Header label="Review generated flows" />
+      <Header label="Review generated tests" />
       <Box paddingX={2} marginTop={1}>
         <Text color={colors.dim}>
-          {parsed.length} flow(s) generated. Select which to save.
+          {parsed.length} test file(s) generated. Select which to save.
         </Text>
       </Box>
       <Box flexDirection="column" paddingX={2} marginTop={1}>
-        {parsed.map((flow, i) => {
-          const isSelected = selected.has(flow.index);
+        {parsed.map((test, i) => {
+          const isSelected = selected.has(test.index);
           const isFocused = focusedIndex === i;
           const pointer = isFocused ? icons.running : " ";
           const checkbox = isSelected ? "[x]" : "[ ]";
           const lineColor = isFocused ? colors.active : isSelected ? colors.text : colors.dim;
-          const tagsSuffix = flow.tags.length > 0 ? `, tags: ${flow.tags.join(", ")}` : "";
-          const stepsLabel = `${flow.stepCount} step${flow.stepCount === 1 ? "" : "s"}`;
+          const tagsSuffix = test.tags.length > 0 ? `, tags: ${test.tags.join(", ")}` : "";
+          const stepsLabel = `${test.stepCount} step${test.stepCount === 1 ? "" : "s"}`;
           return (
-            <Box key={flow.index}>
+            <Box key={test.index}>
               <Text color={lineColor}>
-                {pointer} {checkbox} {flow.name}{" "}
+                {pointer} {checkbox} {test.name}{" "}
                 <Text color={colors.dim}>
                   ({stepsLabel}
                   {tagsSuffix})
                 </Text>
-                {flow.parseError ? <Text color={colors.fail}> ⚠ parse error</Text> : null}
+                {test.parseError ? <Text color={colors.fail}> ⚠ parse error</Text> : null}
               </Text>
             </Box>
           );

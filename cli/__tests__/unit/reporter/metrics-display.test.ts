@@ -12,9 +12,9 @@ import type {
   PerformanceSnapshot,
 } from "../../../src/observability/types.js";
 
-const fullFlow = (metrics?: Record<string, unknown>): TestResult => ({
-  name: "test-flow",
-  file: "/tmp/test.yaml",
+const fullTest = (metrics?: Record<string, unknown>): TestResult => ({
+  name: "test-case",
+  file: "/tmp/test.spec.ts",
   status: "passed",
   duration_ms: 1234,
   steps: [],
@@ -70,14 +70,14 @@ describe("ConsoleReporter metrics line", () => {
 
   it("emits metrics line with all five Web Vitals + net + a11y", () => {
     const reporter = new ConsoleReporter();
-    reporter.onTestStart({ name: "t", file: "/t.yaml", testIndex: 0 });
+    reporter.onTestStart({ name: "t", file: "/t.spec.ts", testIndex: 0 });
     reporter.onTestComplete(
-      fullFlow({
+      fullTest({
         performance: fullPerf,
         network: fullNet,
         accessibility: fullA11y,
       }),
-      { name: "t", file: "/t.yaml", testIndex: 0 },
+      { name: "t", file: "/t.spec.ts", testIndex: 0 },
     );
     const output = logSpy.mock.calls.map((c) => c.join(" ")).join("\n");
     expect(output).toMatch(/FCP 800ms/);
@@ -92,8 +92,8 @@ describe("ConsoleReporter metrics line", () => {
 
   it("omits metrics line entirely when metrics is undefined", () => {
     const reporter = new ConsoleReporter();
-    reporter.onTestStart({ name: "t", file: "/t.yaml", testIndex: 0 });
-    reporter.onTestComplete(fullFlow(), { name: "t", file: "/t.yaml", testIndex: 0 });
+    reporter.onTestStart({ name: "t", file: "/t.spec.ts", testIndex: 0 });
+    reporter.onTestComplete(fullTest(), { name: "t", file: "/t.spec.ts", testIndex: 0 });
     const output = logSpy.mock.calls.map((c) => c.join(" ")).join("\n");
     expect(output).not.toMatch(/Metrics:/);
   });
@@ -108,10 +108,10 @@ describe("ConsoleReporter metrics line", () => {
       ttfb: null,
       longAnimationFrames: [],
     };
-    reporter.onTestStart({ name: "t", file: "/t.yaml", testIndex: 0 });
-    reporter.onTestComplete(fullFlow({ performance: perf }), {
+    reporter.onTestStart({ name: "t", file: "/t.spec.ts", testIndex: 0 });
+    reporter.onTestComplete(fullTest({ performance: perf }), {
       name: "t",
-      file: "/t.yaml",
+      file: "/t.spec.ts",
       testIndex: 0,
     });
     const output = logSpy.mock.calls.map((c) => c.join(" ")).join("\n");
@@ -133,10 +133,10 @@ describe("ConsoleReporter metrics line", () => {
         corsErrors: [{ url: "e", method: "GET", reason: "CORS" }],
       },
     };
-    reporter.onTestStart({ name: "t", file: "/t.yaml", testIndex: 0 });
-    reporter.onTestComplete(fullFlow({ network: net }), {
+    reporter.onTestStart({ name: "t", file: "/t.spec.ts", testIndex: 0 });
+    reporter.onTestComplete(fullTest({ network: net }), {
       name: "t",
-      file: "/t.yaml",
+      file: "/t.spec.ts",
       testIndex: 0,
     });
     const output = logSpy.mock.calls.map((c) => c.join(" ")).join("\n");
@@ -155,7 +155,7 @@ describe("HtmlReporter metrics section", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("renders flow-metrics section with metric cards when metrics present", () => {
+  it("renders test-metrics section with metric cards when metrics present", () => {
     const reporter = new HtmlReporter(tmpDir);
     const summary: RunSummary = {
       total: 1,
@@ -163,7 +163,7 @@ describe("HtmlReporter metrics section", () => {
       failed: 0,
       duration_ms: 1234,
       tests: [
-        fullFlow({
+        fullTest({
           performance: fullPerf,
           network: fullNet,
           accessibility: fullA11y,
@@ -172,7 +172,7 @@ describe("HtmlReporter metrics section", () => {
     };
     reporter.onRunComplete(summary);
     const html = fs.readFileSync(path.join(tmpDir, "report.html"), "utf-8");
-    expect(html).toMatch(/<details class="flow-metrics" open>/);
+    expect(html).toMatch(/<details class="test-metrics" open>/);
     expect(html).toMatch(/Core Web Vitals/);
     expect(html).toMatch(/Network/);
     expect(html).toMatch(/Accessibility/);
@@ -181,19 +181,19 @@ describe("HtmlReporter metrics section", () => {
     expect(html).toMatch(/WCAG2AA/);
   });
 
-  it("does NOT render flow-metrics <details> when metrics absent", () => {
+  it("does NOT render test-metrics <details> when metrics absent", () => {
     const reporter = new HtmlReporter(tmpDir);
     const summary: RunSummary = {
       total: 1,
       passed: 1,
       failed: 0,
       duration_ms: 1234,
-      tests: [fullFlow()],
+      tests: [fullTest()],
     };
     reporter.onRunComplete(summary);
     const html = fs.readFileSync(path.join(tmpDir, "report.html"), "utf-8");
     // CSS class rules are always in the stylesheet; what we check is the actual <details> element
-    expect(html).not.toMatch(/<details class="flow-metrics"/);
+    expect(html).not.toMatch(/<details class="test-metrics"/);
   });
 });
 
@@ -208,7 +208,7 @@ describe("JsonReporter metrics pass-through", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("serializes metrics at flows[i].metrics (top-level flows, not summary.tests)", () => {
+  it("serializes metrics at tests[i].metrics (top-level tests)", () => {
     const reporter = new JsonReporter(tmpDir);
     const summary: RunSummary = {
       total: 1,
@@ -216,7 +216,7 @@ describe("JsonReporter metrics pass-through", () => {
       failed: 0,
       duration_ms: 1234,
       tests: [
-        fullFlow({
+        fullTest({
           performance: fullPerf,
           accessibility: fullA11y,
         }),

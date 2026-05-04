@@ -57,7 +57,7 @@ ${webVitalsSource}
   if (typeof webVitals === 'undefined') return;
   const { onFCP, onLCP, onCLS, onINP, onTTFB } = webVitals;
   // reportAllChanges: true makes onLCP/onCLS/onINP fire continuously on every update
-  // rather than only on page-hidden. Without this, snapshot() taken mid-flow reads
+  // rather than only on page-hidden. Without this, snapshot() taken mid-test reads
   // null for these metrics. FCP/TTFB fire on first paint regardless and don't need it.
   const opts = { reportAllChanges: true };
   onFCP((v) => window.__skepticMetrics.fcp = v.value);

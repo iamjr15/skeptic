@@ -338,7 +338,7 @@ export class AccessibilityCollector implements Collector {
         } else if (kind === "PASS") {
           passes++;
         }
-        // Other kinds silently ignored for forward compatibility.
+        // Ignore result kinds that are not actionable findings.
       }
       return { violations, passes, incomplete };
     } catch (err) {

@@ -12,20 +12,20 @@ function makePassingResults() {
     failed: 0,
     duration_ms: 4200,
     tests: [
-      { name: "Login Flow", file: "tests/login.yaml", status: "passed", steps: [] },
-      { name: "Dashboard Flow", file: "tests/dashboard.yaml", status: "passed", steps: [] },
+      { name: "Login Test", file: "tests/login.spec.ts", status: "passed", steps: [] },
+      { name: "Dashboard Test", file: "tests/dashboard.spec.ts", status: "passed", steps: [] },
     ],
   };
 }
 
 function makeFailingResults(failures = 1) {
   const tests = [
-    { name: "Login Flow", file: "tests/login.yaml", status: "passed", steps: [] },
+    { name: "Login Test", file: "tests/login.spec.ts", status: "passed", steps: [] },
   ];
   for (let i = 0; i < failures; i++) {
     tests.push({
-      name: `Failing Flow ${i + 1}`,
-      file: `tests/fail-${i + 1}.yaml`,
+      name: `Failing Test ${i + 1}`,
+      file: `tests/fail-${i + 1}.spec.ts`,
       status: "failed",
       steps: [
         { command: "click", status: "failed", error: `Element not found: #button-${i}` } as unknown as { status: string; error: string },
@@ -48,16 +48,16 @@ describe("buildCommentBody", () => {
     expect(body.split("\n")[0]).toBe(DEFAULT_MARKER);
     expect(body).toContain("✅");
     expect(body).toContain("| 2 | 2 | 0 | 4.2s |");
-    expect(body).not.toContain("Failed Flows");
+    expect(body).not.toContain("Failed Tests");
   });
 
-  it("renders failing summary with bullet list of failed flows", async () => {
+  it("renders failing summary with bullet list of failed tests", async () => {
     const { buildCommentBody } = await import("../../../src/commands/comment.js");
     const body = buildCommentBody(makeFailingResults(2), null);
     expect(body).toContain("❌");
     expect(body).toContain("### Failed Tests");
-    expect(body).toContain("**Failing Flow 1** (tests/fail-1.yaml): Element not found: #button-0");
-    expect(body).toContain("**Failing Flow 2** (tests/fail-2.yaml): Element not found: #button-1");
+    expect(body).toContain("**Failing Test 1** (tests/fail-1.spec.ts): Element not found: #button-0");
+    expect(body).toContain("**Failing Test 2** (tests/fail-2.spec.ts): Element not found: #button-1");
   });
 
   it("omits the run-URL line when runUrl is null", async () => {
@@ -72,20 +72,20 @@ describe("buildCommentBody", () => {
     expect(body).toContain("[Download full report](https://example.com/run/42)");
   });
 
-  it("escapes pipe characters in flow names", async () => {
+  it("escapes pipe characters in test names", async () => {
     const { buildCommentBody } = await import("../../../src/commands/comment.js");
     const r = makeFailingResults(0);
     r.tests.push({
-      name: "Flow | with pipe",
-      file: "tests/pipe.yaml",
+      name: "Test | with pipe",
+      file: "tests/pipe.spec.ts",
       status: "failed",
       steps: [{ command: "click", status: "failed", error: "boom" } as unknown as { status: string; error: string }],
     });
     r.failed = 1;
     r.total = 2;
     const body = buildCommentBody(r, null);
-    expect(body).toContain("Flow \\| with pipe");
-    expect(body).not.toContain("Flow | with pipe");
+    expect(body).toContain("Test \\| with pipe");
+    expect(body).not.toContain("Test | with pipe");
   });
 
   it("uses a custom marker when provided", async () => {
@@ -116,7 +116,7 @@ describe("isValidResults", () => {
   });
 });
 
-describe("runComment posting flow", () => {
+describe("runComment posting test", () => {
   let tmpDir: string;
   let resultsPath: string;
   let stdoutSpy: ReturnType<typeof vi.spyOn>;

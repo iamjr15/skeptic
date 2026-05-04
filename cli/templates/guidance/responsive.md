@@ -6,7 +6,7 @@ version: 1.0.0
 
 # Responsive Testing Guidance
 
-skeptic's `device:` metadata lets you emulate specific viewports. Use that plus cropped screenshot assertions for responsive-layout claims — don't try to test every breakpoint in one flow.
+Skeptic device profiles let you emulate specific viewports. Use `test.use({ device })` or CLI `--device` plus targeted screenshots for responsive-layout claims; don't try to test every breakpoint in one test.
 
 ## Things worth asserting
 
@@ -16,27 +16,26 @@ skeptic's `device:` metadata lets you emulate specific viewports. Use that plus 
 - [ ] Images use `srcset` / `<picture>` and the correct variant loads for the emulated DPR.
 - [ ] Sticky headers respect `safe-area-inset-top` on notched devices (assert via `evalScript` reading the computed style).
 
-## Flow patterns
+## Test patterns
 
-One flow per critical breakpoint using `device:`:
+One test per critical breakpoint:
 
-```yaml
-name: Nav on mobile
-device: iphone_16
----
-- navigate: /
-- assertVisible: "[data-testid=hamburger]"
-- assertNotVisible: "[data-testid=desktop-nav]"
-- click: "[data-testid=hamburger]"
-- assertVisible: "[data-testid=mobile-drawer]"
+```ts
+test("nav on mobile", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByTestId("hamburger")).toBeVisible();
+  await expect(page.getByTestId("desktop-nav")).toBeHidden();
+  await page.getByTestId("hamburger").click();
+  await expect(page.getByTestId("mobile-drawer")).toBeVisible();
+}, { device: "iphone_16" });
 ```
 
-Orientation change via `travel:` — don't rely on DOM assertions alone, screenshot the before/after:
+Orientation changes should assert layout before and after:
 
-```yaml
-- assertScreenshot: orientation-portrait.png
-- travel: "landscape"
-- assertScreenshot: orientation-landscape.png
+```ts
+await screenshot("orientation-portrait", { fullPage: true });
+await page.setViewportSize({ width: 844, height: 390 });
+await screenshot("orientation-landscape", { fullPage: true });
 ```
 
 ## Red flags — file a bug

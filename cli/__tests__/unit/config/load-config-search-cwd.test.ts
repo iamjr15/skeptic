@@ -12,11 +12,11 @@ beforeEach(() => {
   tmpB = fs.mkdtempSync(path.join(os.tmpdir(), "skeptic-cfg-b-"));
   fs.writeFileSync(
     path.join(tmpA, "skeptic.config.yaml"),
-    "url: http://a.example\ntests: tests/**/*.yaml\n",
+    "url: http://a.example\ntests: tests/**/*.spec.ts\n",
   );
   fs.writeFileSync(
     path.join(tmpB, "skeptic.config.yaml"),
-    "url: http://b.example\ntests: tests/**/*.yaml\n",
+    "url: http://b.example\ntests: tests/**/*.spec.ts\n",
   );
 });
 

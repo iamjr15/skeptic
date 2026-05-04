@@ -24,8 +24,8 @@ describe("JUnitReporter", () => {
       duration_ms: 1234,
       tests: [
         {
-          name: "Login Flow",
-          file: "flows/login.yaml",
+          name: "Login Test",
+          file: "tests/login.spec.ts",
           status: "passed",
           duration_ms: 1000,
           steps: [
@@ -64,8 +64,8 @@ describe("JUnitReporter", () => {
       failed: 1,
       tests: [
         {
-          name: "Failing Flow",
-          file: "flows/fail.yaml",
+          name: "Failing Test",
+          file: "tests/fail.spec.ts",
           status: "failed",
           duration_ms: 500,
           steps: [
@@ -97,8 +97,8 @@ describe("JUnitReporter", () => {
       failed: 1,
       tests: [
         {
-          name: 'Flow with "quotes" & <angle>',
-          file: "flows/special.yaml",
+          name: 'Test with "quotes" & <angle>',
+          file: "tests/special.spec.ts",
           status: "failed",
           duration_ms: 100,
           steps: [
@@ -143,8 +143,8 @@ describe("JUnitReporter", () => {
     const summary = makeSummary({
       tests: [
         {
-          name: "Login Flow",
-          file: "flows/login.yaml",
+          name: "Login Test",
+          file: "tests/login.spec.ts",
           status: "passed",
           duration_ms: 1000,
           steps: [
@@ -153,8 +153,8 @@ describe("JUnitReporter", () => {
           shardId: 0,
         },
         {
-          name: "Login Flow",
-          file: "flows/login.yaml",
+          name: "Login Test",
+          file: "tests/login.spec.ts",
           status: "passed",
           duration_ms: 1100,
           steps: [
@@ -171,10 +171,10 @@ describe("JUnitReporter", () => {
     reporter.onRunComplete(summary);
 
     const xml = fs.readFileSync(path.join(tmpDir, "junit.xml"), "utf-8");
-    expect(xml).toContain('name="Login Flow [shard 1]"');
-    expect(xml).toContain('name="Login Flow [shard 2]"');
-    expect(xml).toContain('classname="Login Flow [shard 1]"');
-    expect(xml).toContain('classname="Login Flow [shard 2]"');
+    expect(xml).toContain('name="Login Test [shard 1]"');
+    expect(xml).toContain('name="Login Test [shard 2]"');
+    expect(xml).toContain('classname="Login Test [shard 1]"');
+    expect(xml).toContain('classname="Login Test [shard 2]"');
   });
 
   it("does NOT add shard suffix when shardId is undefined", () => {
@@ -183,6 +183,6 @@ describe("JUnitReporter", () => {
 
     const xml = fs.readFileSync(path.join(tmpDir, "junit.xml"), "utf-8");
     expect(xml).not.toContain("[shard ");
-    expect(xml).toContain('name="Login Flow"');
+    expect(xml).toContain('name="Login Test"');
   });
 });

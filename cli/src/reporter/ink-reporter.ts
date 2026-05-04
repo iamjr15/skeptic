@@ -20,26 +20,23 @@ export class InkReporter implements Reporter {
   };
 
   onRunStart(manifest: { tests: Array<{ name: string; file: string; stepCount: number }>; totalTests: number }): void {
-    // The TUI's internal dispatch keeps `flows` as the in-progress test-state array name;
-    // it's a UI rendering concept, not the RunSummary key. Renaming the dispatch action's
-    // payload key would touch the TUI reducer; out of B0.5 scope.
-    this.dispatch({ type: "run:manifest", flows: manifest.tests });
+    this.dispatch({ type: "run:manifest", tests: manifest.tests });
   }
 
-  onTestStart(flow: TestIdentifier): void {
-    this.dispatch({ type: "flow:start", flowIndex: flow.testIndex, flow: { name: flow.name, file: flow.file } });
+  onTestStart(test: TestIdentifier): void {
+    this.dispatch({ type: "test:start", testIndex: test.testIndex, test: { name: test.name, file: test.file } });
   }
 
-  onStepStart(step: { command: string; args: unknown }, index: number, total: number, flow: TestIdentifier): void {
-    this.dispatch({ type: "step:start", flowIndex: flow.testIndex, stepIndex: index, total, command: step.command, args: step.args });
+  onStepStart(step: { command: string; args: unknown }, index: number, total: number, test: TestIdentifier): void {
+    this.dispatch({ type: "step:start", testIndex: test.testIndex, stepIndex: index, total, command: step.command, args: step.args });
   }
 
-  onStepComplete(step: StepResult, index: number, total: number, flow: TestIdentifier): void {
-    this.dispatch({ type: "step:complete", flowIndex: flow.testIndex, step, index, total });
+  onStepComplete(step: StepResult, index: number, total: number, test: TestIdentifier): void {
+    this.dispatch({ type: "step:complete", testIndex: test.testIndex, step, index, total });
   }
 
-  onTestComplete(result: TestResult, flow: TestIdentifier): void {
-    this.dispatch({ type: "flow:complete", flowIndex: flow.testIndex, result });
+  onTestComplete(result: TestResult, test: TestIdentifier): void {
+    this.dispatch({ type: "test:complete", testIndex: test.testIndex, result });
   }
 
   onRunComplete(summary: RunSummary): void {

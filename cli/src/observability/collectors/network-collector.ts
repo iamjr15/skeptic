@@ -84,9 +84,12 @@ export class NetworkCollector implements Collector {
   }
 
   async snapshot(): Promise<NetworkSnapshot> {
+    const requests = this.requests.slice();
+    const issues = this.computeIssues();
     return {
-      requests: this.requests.slice(),
-      issues: this.computeIssues(),
+      requests,
+      issues,
+      summary: this.computeSummary(requests, issues),
     };
   }
 
@@ -125,6 +128,47 @@ export class NetworkCollector implements Collector {
       duplicates: this.findDuplicates(),
       mixedContent: this.findMixedContent(),
       corsErrors: this.findCorsErrors(),
+    };
+  }
+
+  private computeSummary(
+    requests: NetworkRequest[],
+    issues: NetworkSnapshot["issues"],
+  ): NonNullable<NetworkSnapshot["summary"]> {
+    const resourceTypes: Record<string, number> = {};
+    const methods: Record<string, number> = {};
+    const statusCodes: Record<string, number> = {};
+    for (const request of requests) {
+      resourceTypes[request.resourceType] = (resourceTypes[request.resourceType] ?? 0) + 1;
+      methods[request.method] = (methods[request.method] ?? 0) + 1;
+      if (request.status !== undefined) {
+        const key = String(request.status);
+        statusCodes[key] = (statusCodes[key] ?? 0) + 1;
+      }
+    }
+    const failedRequestCount = issues.failedRequests.length;
+    const networkFailureCount = issues.networkFailures.length;
+    const duplicateGroupCount = issues.duplicates.length;
+    const mixedContentCount = issues.mixedContent.length;
+    const corsErrorCount = issues.corsErrors.length;
+    return {
+      requestCount: requests.length,
+      failedRequestCount,
+      networkFailureCount,
+      duplicateGroupCount,
+      mixedContentCount,
+      corsErrorCount,
+      issueCount:
+        failedRequestCount +
+        networkFailureCount +
+        duplicateGroupCount +
+        mixedContentCount +
+        corsErrorCount,
+      captureLimit: this.options.captureLimit,
+      truncated: this.options.captureLimit > 0 && requests.length >= this.options.captureLimit,
+      resourceTypes,
+      methods,
+      statusCodes,
     };
   }
 

@@ -52,15 +52,15 @@ export class JsonReporter implements Reporter {
     this.outputDir = outputDir;
   }
 
-  onTestStart(_flow: TestIdentifier): void {
+  onTestStart(_test: TestIdentifier): void {
     // no-op for JSON reporter
   }
 
-  onStepComplete(_step: StepResult, _index: number, _total: number, _flow: TestIdentifier): void {
+  onStepComplete(_step: StepResult, _index: number, _total: number, _test: TestIdentifier): void {
     // no-op for JSON reporter
   }
 
-  onTestComplete(_result: TestResult, _flow: TestIdentifier): void {
+  onTestComplete(_result: TestResult, _test: TestIdentifier): void {
     // no-op for JSON reporter
   }
 
@@ -76,7 +76,6 @@ export class JsonReporter implements Reporter {
     });
 
     const output = {
-      // 0.3.0 — flows → tests rename (TS-pivot). 0.2.0 added artifacts + diagnostics + metricsSummary.
       version: "0.3.0",
       timestamp: new Date().toISOString(),
       total: summary.total,

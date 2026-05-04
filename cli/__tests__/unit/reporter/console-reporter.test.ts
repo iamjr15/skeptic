@@ -46,11 +46,11 @@ describe("ConsoleReporter", () => {
     expect(output).toContain("Element not found");
   });
 
-  it("shows PASS for passing flows", () => {
+  it("shows PASS for passing tests", () => {
     const reporter = new ConsoleReporter();
     const result: TestResult = {
-      name: "Login Flow",
-      file: "flows/login.yaml",
+      name: "Login Test",
+      file: "tests/login.spec.ts",
       status: "passed",
       duration_ms: 1200,
       steps: [],
@@ -62,11 +62,11 @@ describe("ConsoleReporter", () => {
     expect(output).toContain("PASS");
   });
 
-  it("shows FAIL for failing flows", () => {
+  it("shows FAIL for failing tests", () => {
     const reporter = new ConsoleReporter();
     const result: TestResult = {
-      name: "Login Flow",
-      file: "flows/login.yaml",
+      name: "Login Test",
+      file: "tests/login.spec.ts",
       status: "failed",
       duration_ms: 500,
       steps: [],
@@ -96,19 +96,19 @@ describe("ConsoleReporter", () => {
     expect(output).toContain("3 total");
   });
 
-  it("shows flow name and file on flow start", () => {
+  it("shows test name and file on test start", () => {
     const reporter = new ConsoleReporter();
-    reporter.onTestStart({ name: "Login Flow", file: "flows/login.yaml" });
+    reporter.onTestStart({ name: "Login Test", file: "tests/login.spec.ts" });
 
     const output = consoleSpy.mock.calls.map((c) => c.join(" ")).join("\n");
-    expect(output).toContain("Login Flow");
-    expect(output).toContain("flows/login.yaml");
+    expect(output).toContain("Login Test");
+    expect(output).toContain("tests/login.spec.ts");
   });
 
   describe("sharding support", () => {
     it("prefixes every output line with shardLabel when set", () => {
       const reporter = new ConsoleReporter({ shardLabel: "[shard 1]" });
-      reporter.onTestStart({ name: "Login Flow", file: "flows/login.yaml" });
+      reporter.onTestStart({ name: "Login Test", file: "tests/login.spec.ts" });
 
       const lines = consoleSpy.mock.calls.map((c) => c.join(" "));
       expect(lines.length).toBeGreaterThan(0);
@@ -119,22 +119,22 @@ describe("ConsoleReporter", () => {
 
     it("buffered concurrent flush also carries the shardLabel prefix", () => {
       const reporter = new ConsoleReporter({ shardLabel: "[shard 2]", concurrency: 2 });
-      reporter.onTestStart({ name: "Flow A", file: "a.yaml" });
+      reporter.onTestStart({ name: "Test A", file: "a.spec.ts" });
       const step: StepResult = {
         command: "navigate",
         args: "/",
         status: "passed",
         duration_ms: 50,
       };
-      reporter.onStepComplete(step, 0, 1, { name: "Flow A", file: "a.yaml", testIndex: 0 });
+      reporter.onStepComplete(step, 0, 1, { name: "Test A", file: "a.spec.ts", testIndex: 0 });
       const result: TestResult = {
-        name: "Flow A",
-        file: "a.yaml",
+        name: "Test A",
+        file: "a.spec.ts",
         status: "passed",
         duration_ms: 100,
         steps: [step],
       };
-      reporter.onTestComplete(result, { name: "Flow A", file: "a.yaml", testIndex: 0 });
+      reporter.onTestComplete(result, { name: "Test A", file: "a.spec.ts", testIndex: 0 });
 
       const lines = consoleSpy.mock.calls.map((c) => c.join(" "));
       // Buffered output is flushed on onTestComplete; every flushed line must

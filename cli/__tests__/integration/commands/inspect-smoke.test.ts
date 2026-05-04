@@ -94,11 +94,39 @@ describe("inspect smoke (cursor-interactive heuristic)", () => {
       // header, the div, and the button at minimum).
       const refMarkers = tree.yaml.match(/\[ref=e\d+\]/g) ?? [];
       expect(refMarkers.length).toBeGreaterThanOrEqual(3);
+      expect(tree.stats.lines).toBe(tree.yaml.split("\n").length);
+      expect(tree.stats.characters).toBe(tree.yaml.length);
+      expect(tree.stats.estimatedTokens).toBe(Math.ceil(tree.yaml.length / 4));
+      expect(tree.stats.renderedRefs).toBe(new Set(refMarkers.map((m) => m.slice(5, -1))).size);
+      expect(tree.stats.totalRefs).toBe(tree.refs.size);
+      expect(tree.stats.interactiveRefs).toBeGreaterThanOrEqual(1);
+      expect(tree.stats.renderedInteractiveRefs).toBeGreaterThanOrEqual(1);
 
       // The cursor-pointer div surfaces SOMEWHERE in the YAML (Playwright's
       // ARIA snapshot annotates it with `[cursor=pointer]`); the dedupe pass
       // ensures it doesn't get a second cursor-interactive entry on top.
       expect(tree.yaml).toMatch(/Click me/);
+    } finally {
+      await context.close();
+    }
+  }, 30_000);
+
+  it("uses the first matching selector instead of surfacing a strict-mode stack", async () => {
+    if (!browser) return;
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    try {
+      await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+      const ctx = new ExecutionContext(page, baseUrl);
+      const tree = await snapshot(page, ctx, {
+        selector: "h1, button",
+        viewportAware: false,
+        includeCursorInteractive: false,
+      });
+
+      expect(tree.yaml).toContain("bundle4-cursor");
+      expect(tree.yaml).not.toContain("Real button");
+      expect(tree.stats.totalRefs).toBeGreaterThanOrEqual(1);
     } finally {
       await context.close();
     }
