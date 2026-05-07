@@ -7,6 +7,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  SKEPTIC_RELEASE_BIN_TARGETS: "darwin-arm64 linux-x64 linux-arm64 win32-x64"
 
 permissions:
   contents: write
@@ -33,7 +34,8 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           npm version --no-git-tag-version --allow-same-version "$VERSION"
-          for d in ../cli-bin-*; do
+          for target in $SKEPTIC_RELEASE_BIN_TARGETS; do
+            d="../cli-bin-$target"
             (cd "$d" && npm version --no-git-tag-version --allow-same-version "$VERSION")
           done
 
@@ -83,10 +85,6 @@ jobs:
             runner: macos-14
             os: darwin
             arch: arm64
-          - target: darwin-x64
-            runner: macos-13
-            os: darwin
-            arch: x64
           - target: linux-x64
             runner: ubuntu-22.04
             os: linux
@@ -176,8 +174,6 @@ jobs:
         include:
           - target: darwin-arm64
             runner: macos-14
-          - target: darwin-x64
-            runner: macos-13
           - target: linux-x64
             runner: ubuntu-22.04
           - target: linux-arm64
@@ -241,8 +237,6 @@ jobs:
         include:
           - target: darwin-arm64
             runner: macos-14
-          - target: darwin-x64
-            runner: macos-13
           - target: linux-x64
             runner: ubuntu-22.04
           - target: linux-arm64
@@ -282,9 +276,9 @@ jobs:
             }
             fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n');
           "
-          for d in ../cli-bin-*; do
+          for target in $SKEPTIC_RELEASE_BIN_TARGETS; do
+            d="../cli-bin-$target"
             (cd "$d" && npm version --no-git-tag-version --allow-same-version "$VERSION")
-            target="$(basename "$d" | sed 's/^cli-bin-//')"
             cp -R "../artifacts/skeptic-$target/cli-bin-$target/." "$d/"
           done
           npm ci && npm run build
@@ -329,8 +323,12 @@ jobs:
       - name: Pack + publish all packages locally
         run: |
           ( cd cli && npm pack )
-          for d in cli-bin-*; do (cd "$d" && npm pack); done
-          for tgz in cli/*.tgz cli-bin-*/*.tgz; do
+          tgzs=(cli/*.tgz)
+          for target in $SKEPTIC_RELEASE_BIN_TARGETS; do
+            (cd "cli-bin-$target" && npm pack)
+            tgzs+=("cli-bin-$target"/*.tgz)
+          done
+          for tgz in "${tgzs[@]}"; do
             npm publish "$tgz"
           done
 
@@ -408,7 +406,8 @@ jobs:
             }
             fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n');
           "
-          for d in ../cli-bin-*; do
+          for target in $SKEPTIC_RELEASE_BIN_TARGETS; do
+            d="../cli-bin-$target"
             (cd "$d" && npm version --no-git-tag-version --allow-same-version "$VERSION")
           done
 
@@ -419,8 +418,8 @@ jobs:
 
       - name: Stage bin packages with binaries
         run: |
-          for d in ../cli-bin-*; do
-            target="$(basename "$d" | sed 's/^cli-bin-//')"
+          for target in $SKEPTIC_RELEASE_BIN_TARGETS; do
+            d="../cli-bin-$target"
             cp -R "../artifacts/skeptic-$target/cli-bin-$target/." "$d/"
           done
 
@@ -433,7 +432,8 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          for d in ../cli-bin-*; do
+          for target in $SKEPTIC_RELEASE_BIN_TARGETS; do
+            d="../cli-bin-$target"
             (cd "$d" && npm publish --access public)
           done
 
