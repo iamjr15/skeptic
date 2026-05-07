@@ -8,6 +8,9 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+permissions:
+  contents: write
+
 jobs:
   bundle:
     name: Bundle (ubuntu-22.04, Node 25)
@@ -29,9 +32,9 @@ jobs:
       - name: Bump versions to tag
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          npm version --no-git-tag-version "$VERSION"
+          npm version --no-git-tag-version --allow-same-version "$VERSION"
           for d in ../cli-bin-*; do
-            (cd "$d" && npm version --no-git-tag-version "$VERSION")
+            (cd "$d" && npm version --no-git-tag-version --allow-same-version "$VERSION")
           done
 
       - name: Install dependencies
@@ -270,7 +273,7 @@ jobs:
           # initial version in cli/package.json and must be rewritten to
           # match the tag, otherwise the install resolves an old (or
           # missing) bin package.
-          npm version --no-git-tag-version "$VERSION"
+          npm version --no-git-tag-version --allow-same-version "$VERSION"
           node -e "
             const fs = require('fs');
             const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
@@ -280,7 +283,7 @@ jobs:
             fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n');
           "
           for d in ../cli-bin-*; do
-            (cd "$d" && npm version --no-git-tag-version "$VERSION")
+            (cd "$d" && npm version --no-git-tag-version --allow-same-version "$VERSION")
             target="$(basename "$d" | sed 's/^cli-bin-//')"
             cp -R "../artifacts/skeptic-$target/cli-bin-$target/." "$d/"
           done
@@ -396,7 +399,7 @@ jobs:
           # cli/package.json, so a publish-job omission is invisible to
           # the local Verdaccio install. The rewrite must run in BOTH
           # jobs.
-          npm version --no-git-tag-version "$VERSION"
+          npm version --no-git-tag-version --allow-same-version "$VERSION"
           node -e "
             const fs = require('fs');
             const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
@@ -406,7 +409,7 @@ jobs:
             fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n');
           "
           for d in ../cli-bin-*; do
-            (cd "$d" && npm version --no-git-tag-version "$VERSION")
+            (cd "$d" && npm version --no-git-tag-version --allow-same-version "$VERSION")
           done
 
       - name: Download all binary artifacts
