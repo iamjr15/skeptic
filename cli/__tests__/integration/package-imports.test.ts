@@ -15,7 +15,7 @@ import { pathToFileURL } from "node:url";
 const REPO_ROOT = path.resolve(import.meta.dirname, "../..");
 const DIST = path.resolve(REPO_ROOT, "dist/index.mjs");
 const distAvailable = fs.existsSync(DIST);
-const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+const npmShellOptions = process.platform === "win32" ? { shell: true } : {};
 
 describe.skipIf(!distAvailable)("skeptic-cli public package surface", () => {
   let consumer: string;
@@ -40,14 +40,21 @@ describe.skipIf(!distAvailable)("skeptic-cli public package surface", () => {
     // the test quiet and isolated. The install creates a symlink-or-copy of the
     // workspace, which is enough to verify the exports map.
     const installed = spawnSync(
-      npmCommand,
+      "npm",
       ["install", "--no-package-lock", "--no-audit", "--no-fund", "--silent"],
-      { cwd: consumer, encoding: "utf-8", timeout: 120_000 },
+      { cwd: consumer, encoding: "utf-8", timeout: 120_000, ...npmShellOptions },
     );
-    if (installed.status !== 0) {
-      // eslint-disable-next-line no-console
-      console.warn("[package-imports] npm install failed:", installed.stderr ?? installed.error);
-    }
+    expect(
+      installed.status,
+      [
+        "[package-imports] npm install failed",
+        installed.error ? `error: ${installed.error.message}` : undefined,
+        installed.stdout ? `stdout:\n${installed.stdout}` : undefined,
+        installed.stderr ? `stderr:\n${installed.stderr}` : undefined,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    ).toBe(0);
   });
 
   afterAll(() => {
@@ -64,7 +71,17 @@ describe.skipIf(!distAvailable)("skeptic-cli public package surface", () => {
       ],
       { cwd: consumer, encoding: "utf-8", timeout: 30_000 },
     );
+    expect(
+      probe.status,
+      [
+        "[package-imports] probe import failed",
+        probe.error ? `error: ${probe.error.message}` : undefined,
+        probe.stdout ? `stdout:\n${probe.stdout}` : undefined,
+        probe.stderr ? `stderr:\n${probe.stderr}` : undefined,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    ).toBe(0);
     expect(probe.stdout.trim()).toBe("OK");
-    expect(probe.status).toBe(0);
   }, 60_000);
 });
