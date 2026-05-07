@@ -1,77 +1,70 @@
-import React, { useState, useMemo } from "react";
+import { useState } from "react";
 import { Box, Text, useInput } from "ink";
+import type { RunTuiSnapshot, TestView } from "../model.js";
 import { Header } from "../components/header.js";
-import { TestProgress } from "../components/test-progress.js";
-import { SummaryBar } from "../components/summary-bar.js";
 import { HintBar } from "../components/hint-bar.js";
-import { colors } from "../theme.js";
-import type { TUIState } from "../types.js";
+import { SummaryBar } from "../components/summary-bar.js";
+import { TestRow } from "../components/test-row.js";
+import { colors, icons } from "../theme.js";
 
 interface ResultsScreenProps {
-  state: TUIState;
-  onRerun: () => Promise<void>;
-  onRerunFailed: () => Promise<void>;
-  onQuit: () => Promise<void>;
+  state: RunTuiSnapshot;
+  onQuit: () => void;
 }
 
-export const ResultsScreen = ({ state, onRerun, onRerunFailed, onQuit }: ResultsScreenProps) => {
-  const failedTests = useMemo(
-    () => state.tests.filter((f) => f.phase === "failed" || f.phase === "error"),
-    [state.tests],
-  );
+const failedTest = (test: TestView): boolean =>
+  test.phase === "failed" || test.phase === "error";
 
-  const [expandedTestIndex, setExpandedTestIndex] = useState<number | null>(
-    () => failedTests.length > 0 ? failedTests[0]!.testIndex : null,
-  );
-  const [focusedIndex, setFocusedIndex] = useState(0);
+export const ResultsScreen = ({ state, onQuit }: ResultsScreenProps) => {
+  const [verbose, setVerbose] = useState(false);
+  const [showArtifacts, setShowArtifacts] = useState(true);
+  const failures = state.tests.filter(failedTest);
+  const passed = state.tests.filter((test) => test.phase === "passed").length;
 
   useInput((input, key) => {
-    if (input === "r") {
-      onRerun();
-    } else if (input === "f") {
-      onRerunFailed();
-    } else if (input === "q") {
-      onQuit();
-    } else if (key.return) {
-      const test = state.tests[focusedIndex];
-      if (test) {
-        setExpandedTestIndex((prev) =>
-          prev === test.testIndex ? null : test.testIndex,
-        );
-      }
-    } else if (key.upArrow) {
-      setFocusedIndex((prev) => Math.max(0, prev - 1));
-    } else if (key.downArrow) {
-      setFocusedIndex((prev) => Math.min(state.tests.length - 1, prev + 1));
-    }
+    if (input === "v") setVerbose((value) => !value);
+    if (input === "a") setShowArtifacts((value) => !value);
+    if (input === "q" || key.escape) onQuit();
   });
 
   return (
-    <Box flexDirection="column">
-      <Header label="Results" />
-      <Box flexDirection="column" flexGrow={1} paddingX={2}>
-        {state.tests.map((test, i) => (
-          <TestProgress
-            key={test.testIndex}
+    <Box flexDirection="column" width="100%">
+      <Header state={state} />
+      <Box flexDirection="column" paddingX={1}>
+        {failures.length === 0 ? (
+          <Text color={colors.pass}>
+            {icons.pass} Passed {passed}/{state.tests.length} tests
+          </Text>
+        ) : (
+          <Text color={colors.fail}>
+            {icons.fail} Failed {failures.length}/{state.tests.length} tests
+          </Text>
+        )}
+      </Box>
+
+      <Box flexDirection="column" flexGrow={1}>
+        {(failures.length > 0 ? failures : state.tests.slice(0, 8)).map((test) => (
+          <TestRow
+            key={test.key}
             test={test}
-            compact={false}
-            expanded={expandedTestIndex === test.testIndex}
-            focused={i === focusedIndex}
-            verbose={true}
+            expanded={failedTest(test) || verbose}
+            verbose={verbose}
+            showArtifacts={showArtifacts}
           />
         ))}
+        {failures.length === 0 && state.tests.length > 8 && (
+          <Text color={colors.dim}>  +{state.tests.length - 8} more passed tests</Text>
+        )}
       </Box>
-      <Box paddingX={2} marginTop={1}>
-        <Text color={colors.dim}>{"─".repeat(56)}</Text>
-      </Box>
-      <SummaryBar
-        phase="complete"
-        passed={state.summary?.passed ?? 0}
-        failed={state.summary?.failed ?? 0}
-        total={state.summary?.total ?? 0}
-        duration_ms={state.summary?.duration_ms}
+
+      <SummaryBar state={state} />
+      <HintBar
+        hints={[
+          { keyName: "v", label: verbose ? "compact" : "verbose" },
+          { keyName: "a", label: showArtifacts ? "hide artifacts" : "artifacts" },
+          { keyName: "q", label: "close" },
+        ]}
       />
-      <HintBar context="results" />
     </Box>
   );
 };

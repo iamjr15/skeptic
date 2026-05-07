@@ -34,5 +34,10 @@ if (process.argv.length === 3) {
   }
 }
 
-const { program } = await import("../src/index.js");
-await program.parseAsync(process.argv);
+void (async () => {
+  const { program } = await import("../src/index.js");
+  await program.parseAsync(process.argv);
+})().catch((err) => {
+  console.error(err instanceof Error ? err.stack || err.message : String(err));
+  process.exit(1);
+});

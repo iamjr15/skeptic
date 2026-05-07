@@ -18,8 +18,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          # Node 25.5+ is required for ESM SEA. Node 24 only supports CJS
-          # SEA, which is incompatible with our `mainFormat: "module"` bundle.
+          # Node 25.5+ is required for built-in SEA generation.
           node-version: "25.5"
           cache: npm
           cache-dependency-path: cli/package-lock.json
@@ -130,28 +129,21 @@ jobs:
           mkdir -p "../cli-bin-${{ matrix.target }}"
           bash scripts/build-sea.sh --out=../cli-bin-${{ matrix.target }}/${{ steps.binname.outputs.name }}
 
-      - name: Stage sidecar node_modules
-        # The SEA binary cannot resolve filesystem modules — the four
-        # canonical externals (playwright, playwright-core, better-sqlite3,
-        # oxc-resolver) must live in a sibling node_modules/ that
-        # createRequire (in src/utils/sea-require.ts) can find.
-        run: |
-          STAGE_DIR="../cli-bin-${{ matrix.target }}"
-          mkdir -p "$STAGE_DIR/node_modules"
-          # Copy only the four externals from the build cli/node_modules.
-          # Each carries its own transitive deps which must all stay
-          # together for require() to resolve them.
-          for dep in playwright playwright-core better-sqlite3 oxc-resolver; do
-            if [[ -d "node_modules/$dep" ]]; then
-              cp -R "node_modules/$dep" "$STAGE_DIR/node_modules/"
-            fi
-          done
-
       - name: Stamp bin-package version
         run: |
           node scripts/gen-bin-package.mjs \
             --bin-pkg "../cli-bin-${{ matrix.target }}" \
             --version "${GITHUB_REF_NAME#v}"
+
+      - name: Stage sidecar node_modules
+        # The SEA binary cannot resolve filesystem modules — the canonical
+        # externals (@playwright/test, accessibility-checker-engine,
+        # playwright, playwright-core, better-sqlite3) must live in a
+        # sibling node_modules/ that
+        # createRequire (in src/utils/sea-require.ts) can find.
+        run: |
+          STAGE_DIR="../cli-bin-${{ matrix.target }}"
+          node scripts/stage-bin-sidecars.mjs --bin-pkg "$STAGE_DIR"
 
       - name: macOS — sign binary + sidecar .node addons
         if: matrix.os == 'darwin'
@@ -245,25 +237,11 @@ jobs:
       - name: Smoke — browsers install
         run: ./cli-bin-${{ matrix.target }}/${{ steps.binname.outputs.name }} browsers install chromium
 
-      # The crucial functional test: exercise the main `skeptic test` path so
-      # the sidecar `node_modules/playwright` is actually loaded via the
-      # SEA-aware loadPlaywright() and PlaywrightEngine.launch() runs end-to-
-      # end. None of the prior smoke steps cover this — they exercise
-      # version, init, and the registry install but never instantiate a
-      # browser. The flow itself comes from the templates/example.flow.yaml
-      # that `skeptic init` already wrote into /tmp/skeptic-smoke (it navigates
-      # to https://example.com and asserts the well-known body).
-      #
-      # Path note: we cd into /tmp/skeptic-smoke so the test command finds the
-      # flow at tests/example.flow.yaml. The binary path must be ABSOLUTE
-      # because `../cli-bin-${matrix.target}/...` would resolve to /cli-bin-
-      # rather than the workspace root after the cd. $GITHUB_WORKSPACE is
-      # set by the runner to the artifact-download directory and works on
-      # every OS (Git Bash translates Windows paths consistently).
-      - name: Smoke — skeptic test (sidecar Playwright load)
-        run: |
-          cd /tmp/skeptic-smoke
-          "$GITHUB_WORKSPACE/cli-bin-${{ matrix.target }}/${{ steps.binname.outputs.name }}" test
+      # Exercise browser launch from the direct SEA binary. TypeScript spec
+      # execution is covered by install-from-tarball-test, where `skeptic-cli`
+      # exists as a project dependency for spec imports.
+      - name: Smoke — inspect (sidecar Playwright load)
+        run: ./cli-bin-${{ matrix.target }}/${{ steps.binname.outputs.name }} inspect https://example.com --interactive --compact --wait 250 --no-daemon
 
       # macOS-only: verify signed `.node` loads under Hardened Runtime by
       # exercising --cookies (which loads better-sqlite3.node).
@@ -416,8 +394,8 @@ jobs:
   publish:
     name: Publish to npm + GitHub Releases
     # Both gates must pass: smoke-test covers the binary's runtime
-    # (`--version`, `init`, `browsers install`, the macOS signed-`.node`
-    # load via `cookies list`, plus the new `skeptic test` end-to-end), and
+    # (`--version`, `init`, `browsers install`, `inspect`, and the macOS
+    # signed-`.node` load via `cookies list`), and
     # install-from-tarball-test covers the npm install path
     # (optionalDependencies resolution, launcher routing). Removing
     # smoke-test from this list would silently lose the macOS Hardened

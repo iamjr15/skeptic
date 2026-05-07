@@ -4,7 +4,8 @@ import { dirname, join } from "node:path";
 /**
  * In SEA mode, the injected main script's `import`/`require` resolves only
  * built-in Node modules; filesystem modules throw. To load externals
- * (`playwright`, `playwright-core`, `better-sqlite3`, `oxc-resolver`) at
+ * (`@playwright/test`, `accessibility-checker-engine`, `playwright`,
+ * `playwright-core`, `better-sqlite3`) at
  * runtime, we create a `require()` bound to a known sibling `node_modules/`
  * directory next to the binary. The build pipeline stages those modules in
  * `dist/node_modules/` for SEA, and Phase 7 also stages them in the npm bin

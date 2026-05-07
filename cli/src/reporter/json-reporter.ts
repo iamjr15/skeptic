@@ -47,9 +47,11 @@ const computeMetricsSummary = (metrics: Record<string, unknown> | undefined): Me
 
 export class JsonReporter implements Reporter {
   private readonly outputDir: string;
+  private readonly silent: boolean;
 
-  constructor(outputDir: string) {
+  constructor(outputDir: string, opts: { silent?: boolean } = {}) {
     this.outputDir = outputDir;
+    this.silent = opts.silent ?? false;
   }
 
   onTestStart(_test: TestIdentifier): void {
@@ -87,6 +89,6 @@ export class JsonReporter implements Reporter {
 
     const pretty = process.env["SKEPTIC_JSON_PRETTY"] === "true";
     fs.writeFileSync(outPath, JSON.stringify(output, null, pretty ? 2 : 0), "utf-8");
-    logger.info(`JSON report written to ${outPath}`);
+    if (!this.silent) logger.info(`JSON report written to ${outPath}`);
   }
 }

@@ -1,22 +1,23 @@
 {
   "name": "skeptic-cli-bin-linux-x64",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Platform-specific skeptic CLI binary for linux-x64",
   "license": "MIT",
   "os": ["linux"],
   "cpu": ["x64"],
-  "bin": { "skeptic-bin": "./skeptic" },
   "files": ["skeptic", "node_modules"],
   "dependencies": {
+    "@playwright/test": "0.0.0-LOCKFILE",
+    "accessibility-checker-engine": "0.0.0-LOCKFILE",
     "playwright": "0.0.0-LOCKFILE",
     "playwright-core": "0.0.0-LOCKFILE",
-    "better-sqlite3": "0.0.0-LOCKFILE",
-    "oxc-resolver": "0.0.0-LOCKFILE"
+    "better-sqlite3": "0.0.0-LOCKFILE"
   },
   "bundleDependencies": [
+    "@playwright/test",
+    "accessibility-checker-engine",
     "playwright",
     "playwright-core",
-    "better-sqlite3",
-    "oxc-resolver"
+    "better-sqlite3"
   ]
 }

@@ -8,6 +8,7 @@ import type {
   NetworkSnapshot,
   PerformanceSnapshot,
 } from "../observability/types.js";
+import { checkThreshold, parseThreshold } from "../observability/assert-parser.js";
 
 export interface PerfThresholds {
   /** Largest Contentful Paint, e.g. "<2500ms". */
@@ -61,25 +62,6 @@ export interface ObservabilityFixtureInput {
   };
 }
 
-const COMPARATOR_RE = /^([<>]=?)\s*([0-9.]+)\s*(ms)?$/i;
-
-const parseThreshold = (raw: string): { op: "<" | "<=" | ">" | ">="; value: number } => {
-  const match = COMPARATOR_RE.exec(raw.trim());
-  if (!match) {
-    throw new Error(`[skeptic] threshold "${raw}" must look like "<2500ms" or "<0.1"`);
-  }
-  return { op: match[1] as "<" | "<=" | ">" | ">=", value: Number(match[2]) };
-};
-
-const compare = (actual: number, op: "<" | "<=" | ">" | ">=", expected: number): boolean => {
-  switch (op) {
-    case "<": return actual < expected;
-    case "<=": return actual <= expected;
-    case ">": return actual > expected;
-    case ">=": return actual >= expected;
-  }
-};
-
 const ensureCollector = <T>(collector: T | undefined, name: string): T => {
   if (!collector) {
     throw new Error(
@@ -118,14 +100,14 @@ export const buildObservabilityFixture = (
         for (const { key, metric } of checks) {
           const raw = thresholds[key];
           if (raw === undefined) continue;
-          const { op, value } = parseThreshold(raw);
+          const threshold = parseThreshold(raw, key === "cls" ? "unitless" : "ms");
           const actual = snap[metric];
           if (typeof actual !== "number") {
             failures.push(`${key}: not measured (collector returned ${actual === null ? "null" : typeof actual})`);
             continue;
           }
-          if (!compare(actual, op, value)) {
-            failures.push(`${key}: ${actual} ${op} ${value} failed`);
+          if (!checkThreshold(actual, threshold)) {
+            failures.push(`${key}: ${actual} ${threshold.operator} ${threshold.value} failed`);
           }
         }
         if (failures.length > 0) {

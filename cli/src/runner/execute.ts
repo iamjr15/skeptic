@@ -2,7 +2,7 @@ import { Worker } from "node:worker_threads";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Reporter, RunSummary, TestIdentifier } from "../reporter/types.js";
-import type { TestResult } from "../executor/types.js";
+import type { StepResult, TestResult } from "../executor/types.js";
 import type { FileManifest, ManifestEntry } from "./discover.js";
 import type {
   WorkerStartConfig,
@@ -44,6 +44,17 @@ const safeEmit = (label: string, fn: () => void): void => {
   }
 };
 
+const safeEmitAsync = async (label: string, fn: () => void | Promise<void>): Promise<void> => {
+  try {
+    await fn();
+  } catch (err) {
+    // Reporters never abort the run.
+    process.stderr.write(
+      `[skeptic] reporter ${label} threw: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
+  }
+};
+
 /** Probe `worker.mjs` (production dist) before falling back to `worker.ts` (vitest dev). */
 const resolveDefaultWorkerEntry = (): URL => {
   const mjs = new URL("./worker.mjs", import.meta.url);
@@ -57,6 +68,12 @@ const resolveDefaultWorkerEntry = (): URL => {
 
 const partitionToAllowlist = (entries: ManifestEntry[]): string[] =>
   entries.map((e) => e.id);
+
+const identifierForEntry = (entry: ManifestEntry): TestIdentifier => ({
+  name: entry.name,
+  file: entry.file,
+  testIndex: entry.ordinal,
+});
 
 interface FileRunResult {
   file: string;
@@ -90,6 +107,8 @@ const runWorkerForFile = async (
 
   const results: TestResult[] = [];
   const finishedIds = new Set<string>();
+  const entriesById = new Map(entries.map((entry) => [entry.id, entry]));
+  const actionCountsByTestId = new Map<string, number>();
   const killGrace = options.killGraceMs ?? DEFAULT_KILL_GRACE_MS;
   let workerTerminated = false;
   let killTimeoutMs: number | undefined;
@@ -133,6 +152,38 @@ const runWorkerForFile = async (
           armKillTimer(effectiveHardTimeoutForEntry(entry, options.config.hardTimeout));
           return;
         }
+        case "test:action": {
+          const entry = entriesById.get(msg.testId);
+          if (!entry) return;
+          const ident = identifierForEntry(entry);
+          const currentCount = actionCountsByTestId.get(msg.testId) ?? 0;
+          if (msg.status === "started") {
+            const index = currentCount;
+            const total = index + 1;
+            actionCountsByTestId.set(msg.testId, total);
+            for (const r of options.reporters) {
+              safeEmit("onStepStart", () =>
+                r.onStepStart?.({ command: msg.label, args: {} }, index, total, ident),
+              );
+            }
+            return;
+          }
+
+          const index = currentCount > 0 ? currentCount - 1 : 0;
+          const total = Math.max(currentCount, index + 1);
+          actionCountsByTestId.set(msg.testId, total);
+          const step: StepResult = {
+            command: msg.label,
+            args: {},
+            status: msg.status === "completed" ? "passed" : "failed",
+            duration_ms: msg.durationMs ?? 0,
+            ...(msg.error !== undefined ? { error: msg.error } : {}),
+          };
+          for (const r of options.reporters) {
+            safeEmit("onStepComplete", () => r.onStepComplete(step, index, total, ident));
+          }
+          return;
+        }
         case "test:complete": {
           finishedIds.add(msg.testId);
           results.push(msg.result);
@@ -151,11 +202,14 @@ const runWorkerForFile = async (
           return;
         }
         case "step:complete": {
-          const ident: TestIdentifier = {
-            name: "(step)",
-            file,
-            testIndex: 0,
-          };
+          const entry = entriesById.get(msg.testId);
+          const ident: TestIdentifier = entry
+            ? identifierForEntry(entry)
+            : {
+                name: "(step)",
+                file,
+                testIndex: 0,
+              };
           for (const r of options.reporters) {
             safeEmit("onStepComplete", () =>
               r.onStepComplete(msg.step, msg.index, msg.total, ident),
@@ -163,7 +217,6 @@ const runWorkerForFile = async (
           }
           return;
         }
-        case "test:action":
         case "log":
           // Action markers + log lines are forwarded for B3+ instrumentation; the
           // console reporter doesn't render them today but a future addition can.
@@ -339,7 +392,12 @@ export const executeRun = async (
   // gives us, which mirrors the serial execution order.
   const allEntries = [...options.partition.values()].flat();
   const onRunStartManifest = {
-    tests: allEntries.map((e) => ({ name: e.name, file: e.file, stepCount: 0 })),
+    tests: allEntries.map((e) => ({
+      name: e.name,
+      file: e.file,
+      stepCount: 0,
+      testIndex: e.ordinal,
+    })),
     totalTests: allEntries.length,
   };
   for (const r of options.reporters) {
@@ -366,11 +424,11 @@ export const executeRun = async (
     duration_ms: Math.round(performance.now() - start),
     tests: allResults,
   };
-  for (const r of options.reporters) {
-    safeEmit("onRunComplete", () => {
-      void Promise.resolve(r.onRunComplete(summary)).catch(() => {});
-    });
-  }
+  await Promise.all(
+    options.reporters.map((r) =>
+      safeEmitAsync("onRunComplete", () => r.onRunComplete(summary)),
+    ),
+  );
 
   return { results: allResults, summary };
 };

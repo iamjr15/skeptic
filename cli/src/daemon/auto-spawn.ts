@@ -11,8 +11,8 @@ import { logger } from "../utils/logger.js";
 /**
  * Single source of truth for whether a given argv invokes a Commander command
  * that needs a browser. Used by the auto-spawn discipline (plan §B10 invariant
- * 8) — only `run` (without `--list`) and `inspect` should auto-launch the
- * daemon. Every other command (init/audit/comment/cookies/browsers
+ * 8) — only `run` / `tui` (without `--list`) and `inspect` should auto-launch
+ * the daemon. Every other command (init/audit/comment/cookies/browsers
  * install/run --list/mcp/acp/add/generate/help) returns false.
  *
  * Also returns false when `--no-daemon` is present — that flag is the
@@ -43,7 +43,7 @@ export const commandUsesBrowser = (argv: readonly string[]): boolean => {
     // daemon path, so we honor `--no-daemon` here.
     return !argv.includes("--no-daemon");
   }
-  if (cmd === "run") {
+  if (cmd === "run" || cmd === "tui") {
     if (argv.includes("--list")) return false;
     if (argv.includes("--no-daemon")) return false;
     return true;

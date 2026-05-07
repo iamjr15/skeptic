@@ -3,11 +3,14 @@ import * as path from "node:path";
 import chalk from "chalk";
 import { OUTPUT_DIR_DEFAULT, PRODUCT_NAME } from "../constants.js";
 import { loadConfig } from "../config/loader.js";
+import type { skepticConfig } from "../config/schema.js";
 import { getDeviceProfile } from "../config/device-profiles.js";
 import { detectCI } from "../utils/ci-detect.js";
 import { logger, setLogLevel } from "../utils/logger.js";
 import type { Reporter, RunSummary } from "../reporter/types.js";
 import { ConsoleReporter } from "../reporter/console-reporter.js";
+import type { InkReporter } from "../reporter/ink-reporter.js";
+import type { RunTuiHandle } from "../ui/render.js";
 import { runSpecs, listSpecs, type WorkerStartConfig } from "../runner/index.js";
 import { prewarmDaemonIfNeeded } from "../daemon/auto-spawn.js";
 
@@ -50,6 +53,11 @@ export interface RunCommandOptions {
   env?: string[];
   /** Best-effort post-run AI failure analysis. */
   analyze?: boolean;
+  /**
+   * Internal flag used by `skeptic tui`: prefer Ink and inject the console
+   * reporter even when config or CLI reporter flags only request file outputs.
+   */
+  forceTui?: boolean;
   /**
    * Commander surfaces `--no-daemon` as `daemon: false`. When false,
    * the worker bypasses the persistent BrowserServer daemon and launches a
@@ -118,10 +126,9 @@ const buildWorkerConfig = (
       networkCaptureLimit: defaults.observability.networkCaptureLimit,
       duplicateWindowMs: defaults.observability.duplicateWindowMs,
       consoleCaptureLimit: defaults.observability.consoleCaptureLimit ?? 200,
-      // --observability assembles the richest profile we can run; on the npm install path
-      // the `accessibility-checker-engine` optional peer is present and the collector
-      // dual-runs axe + IBM. On slim binaries the peer can't be loaded — the collector
-      // emits a single info line and falls back to axe-only.
+      // --observability assembles the richest profile available. When the
+      // optional IBM engine is not installed, the collector emits one info
+      // line and falls back to axe-only.
       accessibilityDualEngine:
         observabilityFlag || defaults.observability.accessibilityDualEngine,
       accessibilityHtmlSnippetLimit: defaults.observability.accessibilityHtmlSnippetLimit,
@@ -189,35 +196,48 @@ const buildEnvOverrides = (
 const createReporters = async (
   formats: string[],
   outputDir: string,
-  opts: { verbose?: boolean; concurrency?: number },
-): Promise<Reporter[]> => {
+  opts: {
+    verbose?: boolean;
+    concurrency?: number;
+    notifications?: skepticConfig["notifications"];
+    runUrl?: string;
+    useInkTui?: boolean;
+  },
+): Promise<{ reporters: Reporter[]; inkReporter?: InkReporter }> => {
   const reporters: Reporter[] = [];
+  let inkReporter: InkReporter | undefined;
   const seen = new Set<string>();
   for (const fmt of formats) {
     if (seen.has(fmt)) continue;
     seen.add(fmt);
     switch (fmt) {
       case "console":
-        reporters.push(
-          new ConsoleReporter({
-            verbose: opts.verbose ?? false,
-            concurrency: opts.concurrency ?? 1,
-          }),
-        );
+        if (opts.useInkTui) {
+          const mod = await import("../reporter/ink-reporter.js");
+          inkReporter = new mod.InkReporter();
+          reporters.push(inkReporter);
+        } else {
+          reporters.push(
+            new ConsoleReporter({
+              verbose: opts.verbose ?? false,
+              concurrency: opts.concurrency ?? 1,
+            }),
+          );
+        }
         break;
       case "json": {
         const { JsonReporter } = await import("../reporter/json-reporter.js");
-        reporters.push(new JsonReporter(outputDir));
+        reporters.push(new JsonReporter(outputDir, { silent: opts.useInkTui }));
         break;
       }
       case "junit": {
         const { JUnitReporter } = await import("../reporter/junit-reporter.js");
-        reporters.push(new JUnitReporter(outputDir));
+        reporters.push(new JUnitReporter(outputDir, { silent: opts.useInkTui }));
         break;
       }
       case "html": {
         const { HtmlReporter } = await import("../reporter/html-reporter.js");
-        reporters.push(new HtmlReporter(outputDir));
+        reporters.push(new HtmlReporter(outputDir, { silent: opts.useInkTui }));
         break;
       }
       default:
@@ -225,9 +245,32 @@ const createReporters = async (
     }
   }
   if (reporters.length === 0) {
-    reporters.push(new ConsoleReporter({ verbose: opts.verbose ?? false }));
+    if (opts.useInkTui) {
+      const mod = await import("../reporter/ink-reporter.js");
+      inkReporter = new mod.InkReporter();
+      reporters.push(inkReporter);
+    } else {
+      reporters.push(new ConsoleReporter({ verbose: opts.verbose ?? false }));
+    }
   }
-  return reporters;
+  if (opts.notifications?.slack) {
+    const { SlackReporter } = await import("../reporter/slack-reporter.js");
+    reporters.push(new SlackReporter(opts.notifications.slack, opts.runUrl));
+  }
+  if (opts.notifications?.webhook) {
+    const { WebhookReporter } = await import("../reporter/webhook-reporter.js");
+    reporters.push(new WebhookReporter(opts.notifications.webhook, opts.runUrl));
+  }
+  return inkReporter ? { reporters, inkReporter } : { reporters };
+};
+
+const resolveRunUrl = (): string | undefined => {
+  if (process.env["SKEPTIC_RUN_URL"]) return process.env["SKEPTIC_RUN_URL"];
+  const server = process.env["GITHUB_SERVER_URL"];
+  const repo = process.env["GITHUB_REPOSITORY"];
+  const runId = process.env["GITHUB_RUN_ID"];
+  if (server && repo && runId) return `${server}/${repo}/actions/runs/${runId}`;
+  return undefined;
 };
 
 const printArtifactPaths = (summary: RunSummary, outputDir: string): void => {
@@ -254,6 +297,39 @@ const printArtifactPaths = (summary: RunSummary, outputDir: string): void => {
     }
   }
 };
+
+const printRunSummary = (summary: RunSummary): void => {
+  logger.raw("");
+  logger.raw(chalk.bold(`  ${PRODUCT_NAME} Results`));
+  logger.raw(chalk.dim("  " + "-".repeat(40)));
+  const parts: string[] = [];
+  if (summary.passed > 0) parts.push(chalk.green(`${summary.passed} passed`));
+  if (summary.failed > 0) parts.push(chalk.red(`${summary.failed} failed`));
+  parts.push(`${summary.total} total`);
+  logger.raw(`  ${parts.join(chalk.dim(", "))}`);
+  logger.raw(`  ${chalk.dim(`Duration: ${formatDuration(summary.duration_ms)}`)}`);
+};
+
+const formatDuration = (ms: number): string => {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(2)}s`;
+};
+
+const shouldUseInkTui = (
+  formats: string[],
+  opts: RunCommandOptions,
+  isCI: boolean,
+): boolean => {
+  if (opts.noTui || opts.watch || opts.ci) return false;
+  if (!opts.forceTui && isCI) return false;
+  if (process.env["SKEPTIC_DISABLE_INK_TUI"] === "1") return false;
+  if (process.env["TERM"] === "dumb") return false;
+  if (!process.stdout.isTTY || !process.stdin.isTTY) return false;
+  return formats.includes("console");
+};
+
+const ensureConsoleReporter = (formats: string[]): string[] =>
+  formats.includes("console") ? formats : ["console", ...formats];
 
 export const runRun = async (
   patterns: string[] | undefined,
@@ -294,10 +370,17 @@ export const runRun = async (
     process.exit(2);
   }
 
-  const reporterFormats = opts.reporter ?? config.output.reporters;
-  const reporters = await createReporters(reporterFormats, outputDir, {
+  const configuredReporterFormats = opts.reporter ?? config.output.reporters;
+  const reporterFormats = opts.forceTui
+    ? ensureConsoleReporter(configuredReporterFormats)
+    : configuredReporterFormats;
+  const useInkTui = shouldUseInkTui(reporterFormats, opts, isCI);
+  const { reporters, inkReporter } = await createReporters(reporterFormats, outputDir, {
     verbose: opts.verbose ?? config.output.verbose,
     concurrency: opts.parallel ?? config.execution.parallel ?? 1,
+    notifications: config.notifications,
+    runUrl: resolveRunUrl(),
+    useInkTui,
   });
 
   const workerConfig = buildWorkerConfig(opts, config, envOverrides);
@@ -350,8 +433,29 @@ export const runRun = async (
       : {}),
   };
 
-  logger.info(`${PRODUCT_NAME} — running ${chalk.cyan(Array.isArray(effectivePatterns) ? effectivePatterns.join(", ") : effectivePatterns)}`);
+  let tui: RunTuiHandle | undefined;
+  if (inkReporter) {
+    const { renderRunTui } = await import("../ui/render.js");
+    tui = renderRunTui(inkReporter, {
+      onAbort: () => {
+        tui?.unmount();
+        process.exit(130);
+      },
+      onQuit: () => {
+        tui?.unmount();
+      },
+      alternateScreen: process.env["SKEPTIC_TUI_ALT_SCREEN"] !== "0",
+    });
+  } else {
+    logger.info(`${PRODUCT_NAME} — running ${chalk.cyan(Array.isArray(effectivePatterns) ? effectivePatterns.join(", ") : effectivePatterns)}`);
+  }
+
   const outcome = await runSpecs(runOptions);
+  if (tui) {
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    tui.unmount();
+    printRunSummary(outcome.summary);
+  }
 
   if (!opts.noTui) {
     printArtifactPaths(outcome.summary, outputDir);

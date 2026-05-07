@@ -12,12 +12,19 @@ import {
   GENERATE_FROM_DESCRIPTION_PROMPT,
   GENERATE_FROM_DIFF_PROMPT,
 } from "./prompts.js";
+import { buildCoverageReport } from "./coverage/coverage-builder.js";
+import {
+  extractDiffPaths,
+  formatCoverageSection,
+  isUIFile,
+} from "./coverage/coverage-prompt.js";
 import {
   beginRegistration,
   endRegistration,
   type FileRegistry,
 } from "../api/test.js";
 import { typecheckSpecs } from "../commands/spec-validation.js";
+import { slugify } from "../utils/slug.js";
 
 /** Caller-tunable knobs for coverage-aware diff generation. */
 export interface CoverageGenerationOptions {
@@ -29,6 +36,7 @@ export interface CoverageGenerationOptions {
 export interface GenerateFromDiffOptions {
   coverage?: CoverageGenerationOptions;
   baseUrl?: string;
+  guidance?: string;
 }
 
 /**
@@ -55,13 +63,6 @@ const stripCodeFences = (raw: string): string => {
   }
   return trimmed;
 };
-
-const slugify = (s: string): string =>
-  s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60) || "generated";
 
 interface ValidateOptions {
   /**
@@ -188,12 +189,16 @@ export const generateFromDescription = async (
   description: string,
   baseUrl?: string,
   cwd: string = process.cwd(),
+  guidance?: string,
 ): Promise<GeneratedTest[]> => {
   const url = baseUrl ?? "https://example.com";
-  const prompt = GENERATE_FROM_DESCRIPTION_PROMPT.replace(
+  let prompt = GENERATE_FROM_DESCRIPTION_PROMPT.replace(
     /\{baseUrl\}/g,
     url,
   ).replace(/\{description\}/g, description);
+  if (guidance?.trim()) {
+    prompt += `\n\n## Project Guidance\n\n${guidance.trim()}`;
+  }
   const result = await buildAndValidate(client, prompt, description, cwd);
   return [result];
 };
@@ -205,10 +210,28 @@ export const generateFromDiff = async (
   cwd: string = process.cwd(),
 ): Promise<GeneratedTest[]> => {
   const url = options.baseUrl ?? "https://example.com";
-  const prompt = GENERATE_FROM_DIFF_PROMPT.replace(/\{baseUrl\}/g, url).replace(
+  let promptDiff = diff;
+  if (options.coverage) {
+    const changedFiles = extractDiffPaths(diff, options.coverage.projectRoot).filter(isUIFile);
+    if (changedFiles.length > 0) {
+      const report = await buildCoverageReport({
+        projectRoot: options.coverage.projectRoot,
+        flowGlob: options.coverage.testGlob,
+        ...(options.coverage.configDir !== undefined
+          ? { configDir: options.coverage.configDir }
+          : {}),
+        baseUrl: url,
+      });
+      promptDiff += `\n\n${formatCoverageSection(report, changedFiles, cwd)}`;
+    }
+  }
+  let prompt = GENERATE_FROM_DIFF_PROMPT.replace(/\{baseUrl\}/g, url).replace(
     /\{diff\}/g,
-    diff,
+    promptDiff,
   );
+  if (options.guidance?.trim()) {
+    prompt += `\n\n## Project Guidance\n\n${options.guidance.trim()}`;
+  }
   const result = await buildAndValidate(client, prompt, "diff-driven", cwd);
   return [result];
 };

@@ -171,19 +171,38 @@ describe("ACP server (B1.5) — in-process", () => {
     expect(failureText).toMatch(/escapes session root|relative to session root/i);
   });
 
-  it("dispatches `generate a test that …` to generate_test stub", async () => {
+  it("dispatches `generate a test that …` and reports missing AI config cleanly", async () => {
+    const prevKeys = {
+      gemini: process.env["GEMINI_API_KEY"],
+      openai: process.env["OPENAI_API_KEY"],
+      anthropic: process.env["ANTHROPIC_API_KEY"],
+    };
+    delete process.env["GEMINI_API_KEY"];
+    delete process.env["OPENAI_API_KEY"];
+    delete process.env["ANTHROPIC_API_KEY"];
     testClient.updates.length = 0;
-    const response = await client.prompt({
-      sessionId,
-      prompt: [{ type: "text", text: "generate a test that smokes the homepage" }],
-    } as acp.PromptRequest);
-    expect(response.stopReason).toBe("end_turn");
+    try {
+      const response = await client.prompt({
+        sessionId,
+        prompt: [{ type: "text", text: "generate a test that smokes the homepage" }],
+      } as acp.PromptRequest);
+      expect(response.stopReason).toBe("end_turn");
 
-    const update = findCompletedToolUpdate(testClient);
-    expect(update?.status).toBe("completed");
-    const text = update?.content?.[0]?.content?.text ?? "";
-    expect(text).toContain("B1.5 stub");
-    expect(text).toContain('import { test, expect } from "skeptic-cli"');
+      const failed = testClient.updates.find(
+        (u): u is ToolCallUpdate =>
+          u.type === "tool_call_update" && u.status === "failed",
+      );
+      expect(failed).toBeDefined();
+      const text = failed?.content?.[0]?.content?.text ?? "";
+      expect(text).toMatch(/api key/i);
+    } finally {
+      if (prevKeys.gemini === undefined) delete process.env["GEMINI_API_KEY"];
+      else process.env["GEMINI_API_KEY"] = prevKeys.gemini;
+      if (prevKeys.openai === undefined) delete process.env["OPENAI_API_KEY"];
+      else process.env["OPENAI_API_KEY"] = prevKeys.openai;
+      if (prevKeys.anthropic === undefined) delete process.env["ANTHROPIC_API_KEY"];
+      else process.env["ANTHROPIC_API_KEY"] = prevKeys.anthropic;
+    }
   });
 });
 

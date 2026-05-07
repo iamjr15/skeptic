@@ -15,7 +15,7 @@ export interface TestIdentifier {
 }
 
 export interface Reporter {
-  onRunStart?(manifest: { tests: Array<{ name: string; file: string; stepCount: number }>; totalTests: number }): void;
+  onRunStart?(manifest: { tests: Array<{ name: string; file: string; stepCount: number; testIndex?: number }>; totalTests: number }): void;
   onStepStart?(step: { command: string; args: unknown }, index: number, total: number, test: TestIdentifier): void;
   onTestStart(test: TestIdentifier): void;
   onStepComplete(step: StepResult, index: number, total: number, test: TestIdentifier): void;

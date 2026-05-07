@@ -1,26 +1,39 @@
-import React from "react";
 import { render } from "ink";
-import { App } from "./app.js";
 import type { InkReporter } from "../reporter/ink-reporter.js";
+import { App } from "./app.js";
 
-export interface TUIOptions {
-  watch: boolean;
-  onRerun: () => Promise<void>;
-  onRerunFailed: () => Promise<void>;
-  onAbort: () => Promise<void>;
-  onQuit: () => Promise<void>;
+export interface RunTuiHandle {
+  clear: () => void;
+  unmount: () => void;
+  waitUntilExit: () => Promise<void>;
 }
 
-export const renderTUI = async (reporter: InkReporter, opts: TUIOptions) => {
-  const instance = render(<App reporter={reporter} {...opts} />, {
-    exitOnCtrlC: false,
-    alternateScreen: true,
-    patchConsole: true,
-    incrementalRendering: true,
-  });
+export interface RunTuiRenderOptions {
+  onAbort: () => void;
+  onQuit: () => void;
+  alternateScreen?: boolean;
+}
+
+export const renderRunTui = (
+  reporter: InkReporter,
+  options: RunTuiRenderOptions,
+): RunTuiHandle => {
+  const instance = render(
+    <App reporter={reporter} onAbort={options.onAbort} onQuit={options.onQuit} />,
+    {
+      exitOnCtrlC: false,
+      patchConsole: true,
+      incrementalRendering: true,
+      maxFps: 30,
+      alternateScreen: options.alternateScreen ?? true,
+    },
+  );
 
   return {
-    waitUntilExit: async (): Promise<void> => { await instance.waitUntilExit(); },
+    clear: () => instance.clear(),
     unmount: () => instance.unmount(),
+    waitUntilExit: async () => {
+      await instance.waitUntilExit();
+    },
   };
 };

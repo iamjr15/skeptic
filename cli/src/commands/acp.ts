@@ -42,6 +42,9 @@ import type { TestResult, StepResult } from "../executor/types.js";
 import { DEVICE_PROFILES } from "../config/device-profiles.js";
 import { parsePromptToToolCall, helpMessage, type ToolDispatch } from "./acp-prompt-parser.js";
 import { typecheckSpecs, mergeImportErrors } from "./spec-validation.js";
+import { createAIClient, AIFeatureNotBuiltError } from "../ai/client-factory.js";
+import { generateFromDescription } from "../ai/test-generator.js";
+import { missingClientMessage } from "../ai/security.js";
 
 interface SessionState {
   cwd: string;
@@ -307,7 +310,7 @@ class SkepticAgent implements Agent {
           await this.runRunTest(sessionId, session, dispatch, toolCallId, signal);
           break;
         case "generate_test":
-          await this.runGenerateTest(sessionId, dispatch, toolCallId);
+          await this.runGenerateTest(sessionId, session, dispatch, toolCallId);
           break;
         case "list_devices":
           await this.runListDevices(sessionId, toolCallId);
@@ -557,36 +560,58 @@ class SkepticAgent implements Agent {
 
   private async runGenerateTest(
     sessionId: SessionId,
+    session: SessionState,
     dispatch: ToolDispatch,
     toolCallId: string,
   ): Promise<void> {
     const description = (dispatch.args["description"] as string | undefined) ?? "generated test";
-    // B5.5: AI-driven generation lands here. TODO. For B1.5 we emit a
-    // hand-rolled template so callers see the call shape without waiting on
-    // the AI side.
-    const safeName = description.replace(/[^a-zA-Z0-9 _-]/g, "").trim() || "generated test";
-    const filename = `${safeName.replace(/\s+/g, "-").toLowerCase()}.spec.ts`;
-    const source = [
-      `// B5.5: AI-driven generation lands here. TODO.`,
-      `// Description: ${description}`,
-      `import { test, expect } from "skeptic-cli";`,
-      ``,
-      `test(${JSON.stringify(safeName)}, async ({ page, screenshot }) => {`,
-      `  await page.goto("https://example.com");`,
-      `  await expect(page).toHaveURL(/.*/);`,
-      `  await screenshot(${JSON.stringify(safeName)});`,
-      `});`,
-      ``,
-    ].join("\n");
+    const cfg = loadConfig({ searchCwd: session.cwd });
+    let client;
+    try {
+      client = await createAIClient({
+        provider: cfg.ai.provider,
+        ...(cfg.ai.apiKey !== undefined ? { apiKey: cfg.ai.apiKey } : {}),
+        ...(cfg.ai.model !== undefined ? { model: cfg.ai.model } : {}),
+      });
+    } catch (err) {
+      if (err instanceof AIFeatureNotBuiltError) {
+        await this.connection.sessionUpdate({
+          sessionId,
+          update: {
+            sessionUpdate: "tool_call_update",
+            toolCallId,
+            status: "failed",
+            content: [textBlock(err.message)],
+          },
+        });
+        return;
+      }
+      throw err;
+    }
+    if (!client) {
+      await this.connection.sessionUpdate({
+        sessionId,
+        update: {
+          sessionUpdate: "tool_call_update",
+          toolCallId,
+          status: "failed",
+          content: [textBlock(missingClientMessage(cfg.ai))],
+        },
+      });
+      return;
+    }
+
+    const [generated] = await generateFromDescription(client, description, cfg.url, session.cwd);
+    if (!generated) {
+      throw new Error("generate_test produced no tests");
+    }
     await this.connection.sessionUpdate({
       sessionId,
       update: {
         sessionUpdate: "tool_call_update",
         toolCallId,
         status: "completed",
-        content: [
-          textBlock(`generate_test is a B1.5 stub — AI-driven generation lands in B5.5.\n\nProposed file: ${filename}\n\n\`\`\`ts\n${source}\`\`\``),
-        ],
+        content: [textBlock(`Proposed file: ${generated.filename}\n\n\`\`\`ts\n${generated.source}\`\`\``)],
       },
     });
   }

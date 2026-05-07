@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -27,20 +27,25 @@ describe("daemon lifecycle", () => {
   });
 
   it("IdleTimer fires after the configured interval and reset() rearms it", async () => {
+    vi.useFakeTimers();
     let fired = 0;
     const timer = new IdleTimer(0.05, () => {
       fired += 1;
     });
-    timer.arm();
-    await new Promise((r) => setTimeout(r, 30));
-    timer.reset();
-    await new Promise((r) => setTimeout(r, 30));
-    timer.reset();
-    await new Promise((r) => setTimeout(r, 30));
-    expect(fired).toBe(0);
-    await new Promise((r) => setTimeout(r, 80));
-    expect(fired).toBe(1);
-    timer.disarm();
+    try {
+      timer.arm();
+      await vi.advanceTimersByTimeAsync(30);
+      timer.reset();
+      await vi.advanceTimersByTimeAsync(30);
+      timer.reset();
+      await vi.advanceTimersByTimeAsync(30);
+      expect(fired).toBe(0);
+      await vi.advanceTimersByTimeAsync(80);
+      expect(fired).toBe(1);
+    } finally {
+      timer.disarm();
+      vi.useRealTimers();
+    }
   });
 
   it("IdleTimer with seconds=0 never fires", async () => {

@@ -39,6 +39,80 @@ function parseShardCount(value: string): number {
 
 export const program = new Command();
 
+const addRunOptions = (
+  command: Command,
+  opts: { includeWatch?: boolean; includeTuiToggle?: boolean } = {},
+): Command => {
+  const withCommonOptions = command
+    .option("-c, --config <path>", "path to config file")
+    .option("--headed", "run browser in headed mode")
+    .option("--verbose", "verbose output")
+    .option("--ci", "force CI mode (headless, no prompts)")
+    .option("--bail", "stop on first failure")
+    .option("--retries <n>", "retry failed tests N times", parseInt)
+    .option("--timeout <ms>", "soft per-action default timeout in ms", parseInt)
+    .option("--hard-timeout <ms>", "hard per-test ceiling in ms", parseInt)
+    .option("--device <id>", "device profile for viewport emulation")
+    .option("--reporter <format...>", "reporter format(s): console, json, junit, html")
+    .option("--output <dir>", "output directory for reports")
+    .option("--cookies", "enable browser cookie extraction (opt-in)")
+    .option("--cookies-from <browser>", "extract cookies from specific browser only")
+    .option("--video", "record video of test execution (WebM)")
+    .option(
+      "--video-size <WxH>",
+      "video recording resolution (e.g., 1920x1080); overrides viewport size for video only",
+    );
+
+  if (opts.includeWatch) {
+    withCommonOptions.option("-w, --watch", "watch for file changes and re-run");
+  }
+
+  withCommonOptions
+    .option("-u, --url <url>", "base URL (overrides config)")
+    .option("--parallel <n>", "run N test files concurrently", parsePositiveInt)
+    .option("--shard-split <n>", "split tests across N runs (each runs disjoint subset)", parseShardCount)
+    .option("--shard-all <n>", "run all tests on each of N runs", parseShardCount)
+    .option(
+      "--shard-index <n>",
+      "1-based shard index for --shard-split / --shard-all (also via SKEPTIC_SHARD_INDEX)",
+      parsePositiveInt,
+    );
+
+  if (opts.includeTuiToggle) {
+    withCommonOptions.option(
+      "--no-tui",
+      "disable the interactive TUI and suppress the post-run artifact summary",
+    );
+  }
+
+  return withCommonOptions
+    .option("--trace", "record Playwright trace for each test")
+    .option(
+      "--observability",
+      "enable the full observability bundle: settle + fullPage + perf+net+console+a11y(auto) + sidecar md",
+    )
+    .option("--full-page-screenshot", "force fullPage=true on all screenshot calls")
+    .option("--no-full-page-screenshot", "force fullPage=false (overrides config)")
+    .option("--visual-settle", "enable the visual-settle helper before screenshots")
+    .option("--no-visual-settle", "disable the visual-settle helper")
+    .option("--blank-frame-detection <mode>", "off | warn | fail")
+    .option(
+      "--observability-write-sidecars",
+      "write per-test perf-trace.md + console.json + network.json",
+    )
+    .option("--list", "discover tests without running them")
+    .option("--tag <tag...>", "filter tests by tag (declared via test.use({ tags }))")
+    .option("--connect <url>", "connect to a running browser via CDP (B2)")
+    .option("--env <KEY=VALUE...>", "set environment variables")
+    .option("--analyze", "use AI to analyze test failures (best-effort post-run)")
+    .option("--no-daemon", "bypass the persistent BrowserServer daemon")
+    .option(
+      "--daemon-idle-timeout <seconds>",
+      "auto-stop the daemon after N seconds idle (default 300; 0 disables)",
+      parseInt,
+    );
+};
+
 program
   .name(CLI_NAME)
   .description(`${PRODUCT_NAME} — CLI-first E2E testing with TypeScript test specs`)
@@ -63,57 +137,35 @@ program
     await runInit(dir);
   });
 
-program
-  .command("run")
-  .description("Run TypeScript test specs")
-  .argument("[specs...]", "spec file globs (default: tests/**/*.spec.ts)")
-  .option("-c, --config <path>", "path to config file")
-  .option("--headed", "run browser in headed mode")
-  .option("--verbose", "verbose output")
-  .option("--ci", "force CI mode (headless, no prompts)")
-  .option("--bail", "stop on first failure")
-  .option("--retries <n>", "retry failed tests N times", parseInt)
-  .option("--timeout <ms>", "soft per-action default timeout in ms", parseInt)
-  .option("--hard-timeout <ms>", "hard per-test ceiling in ms", parseInt)
-  .option("--device <id>", "device profile for viewport emulation")
-  .option("--reporter <format...>", "reporter format(s): console, json, junit, html")
-  .option("--output <dir>", "output directory for reports")
-  .option("--cookies", "enable browser cookie extraction (opt-in)")
-  .option("--cookies-from <browser>", "extract cookies from specific browser only")
-  .option("--video", "record video of test execution (WebM)")
-  .option(
-    "--video-size <WxH>",
-    "video recording resolution (e.g., 1920x1080); overrides viewport size for video only",
-  )
-  .option("-w, --watch", "watch for file changes and re-run")
-  .option("-u, --url <url>", "base URL (overrides config)")
-  .option("--parallel <n>", "run N test files concurrently", parsePositiveInt)
-  .option("--shard-split <n>", "split tests across N runs (each runs disjoint subset)", parseShardCount)
-  .option("--shard-all <n>", "run all tests on each of N runs", parseShardCount)
-  .option("--shard-index <n>", "1-based shard index for --shard-split / --shard-all (also via SKEPTIC_SHARD_INDEX)", parsePositiveInt)
-  .option("--no-tui", "disable interactive TUI, use plain text output")
-  .option("--trace", "record Playwright trace for each test")
-  .option("--observability", "enable the full observability bundle: settle + fullPage + perf+net+console+a11y(auto) + sidecar md")
-  .option("--full-page-screenshot", "force fullPage=true on all screenshot calls")
-  .option("--no-full-page-screenshot", "force fullPage=false (overrides config)")
-  .option("--visual-settle", "enable the visual-settle helper before screenshots")
-  .option("--no-visual-settle", "disable the visual-settle helper")
-  .option("--blank-frame-detection <mode>", "off | warn | fail")
-  .option("--observability-write-sidecars", "write per-test perf-trace.md + console.json + network.json")
-  .option("--list", "discover tests without running them")
-  .option("--tag <tag...>", "filter tests by tag (declared via test.use({ tags }))")
-  .option("--connect <url>", "connect to a running browser via CDP (B2)")
-  .option("--env <KEY=VALUE...>", "set environment variables")
-  .option("--analyze", "use AI to analyze test failures (best-effort post-run)")
-  .option("--no-daemon", "bypass the persistent BrowserServer daemon")
-  .option(
-    "--daemon-idle-timeout <seconds>",
-    "auto-stop the daemon after N seconds idle (default 300; 0 disables)",
-    parseInt,
-  )
+addRunOptions(
+  program
+    .command("run")
+    .description("Run TypeScript test specs")
+    .argument("[specs...]", "spec file globs (default: tests/**/*.spec.ts)"),
+  { includeWatch: true, includeTuiToggle: true },
+)
   .action(async (specs: string[], cmdOpts: RunCommandOptions) => {
     const { runRun } = await import("./commands/run.js");
     await runRun(specs.length > 0 ? specs : undefined, cmdOpts);
+  });
+
+addRunOptions(
+  program
+    .command("tui")
+    .description("Open the interactive test runner TUI")
+    .argument("[specs...]", "spec file globs (default: tests/**/*.spec.ts)"),
+)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  $ skeptic tui
+  $ skeptic tui tests/login.spec.ts
+  $ skeptic tui tests/**/*.spec.ts --reporter json`,
+  )
+  .action(async (specs: string[], cmdOpts: RunCommandOptions) => {
+    const { runRun } = await import("./commands/run.js");
+    await runRun(specs.length > 0 ? specs : undefined, { ...cmdOpts, forceTui: true });
   });
 
 program
@@ -259,7 +311,7 @@ program
   .option("--cookies", "enable browser cookie extraction")
   .option("--cookies-from <browser>", "extract cookies from specific browser only")
   .option("--timeout <ms>", "default timeout in ms", parseInt)
-  .option("--no-tui", "disable interactive console progress")
+  .option("--no-tui", "suppress live console progress")
   .action(async (url: string, cmdOpts: import("./commands/observe.js").ObserveCommandOptions) => {
     const { runObserve } = await import("./commands/observe.js");
     await runObserve(url, cmdOpts);

@@ -21,9 +21,11 @@ interface ScreenshotAsset {
 
 export class HtmlReporter implements Reporter {
   private readonly outputDir: string;
+  private readonly silent: boolean;
 
-  constructor(outputDir: string) {
+  constructor(outputDir: string, opts: { silent?: boolean } = {}) {
     this.outputDir = outputDir;
+    this.silent = opts.silent ?? false;
   }
 
   onTestStart(_test: TestIdentifier): void {}
@@ -155,7 +157,7 @@ document.querySelectorAll('.copy-btn').forEach(btn => {
 </html>`;
 
     fs.writeFileSync(outPath, html, "utf-8");
-    logger.info(`HTML report written to ${outPath}`);
+    if (!this.silent) logger.info(`HTML report written to ${outPath}`);
   }
 }
 

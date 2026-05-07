@@ -24,7 +24,9 @@ import {
   generateFromDiff,
   type GeneratedTest,
 } from "../ai/test-generator.js";
+import { loadGuidance } from "../ai/guidance-loader.js";
 import { logger } from "../utils/logger.js";
+import { uniqueSlug } from "../utils/slug.js";
 
 export interface GenerateCommandOptions {
   diff?: boolean;
@@ -67,12 +69,25 @@ const writeOutput = (
     ? path.join(cwd, ".skeptic", "generated")
     : (opts.output ?? path.join(cwd, "tests"));
   fs.mkdirSync(targetDir, { recursive: true });
+  const baseName = result.filename.replace(/\.spec\.ts$/i, "");
   const stamp = opts.save
     ? `${Date.now()}-${result.filename}`
-    : result.filename;
+    : `${uniqueSlug(baseName, targetDir)}.spec.ts`;
   const outPath = path.join(targetDir, stamp);
   fs.writeFileSync(outPath, result.source, "utf-8");
   return outPath;
+};
+
+const collectGuidance = (domains: string | undefined, cwd: string): string | undefined => {
+  if (!domains) return undefined;
+  const chunks: string[] = [];
+  for (const raw of domains.split(",")) {
+    const domain = raw.trim();
+    if (!domain) continue;
+    const guidance = loadGuidance(domain, { cwd });
+    chunks.push(`# ${domain}\n\n${guidance.content.trim()}`);
+  }
+  return chunks.length > 0 ? chunks.join("\n\n") : undefined;
 };
 
 export const runGenerate = async (opts: GenerateCommandOptions): Promise<void> => {
@@ -111,6 +126,7 @@ export const runGenerate = async (opts: GenerateCommandOptions): Promise<void> =
   }
 
   const baseUrl = opts.url ?? config.url;
+  const guidance = collectGuidance(opts.guidance, cwd);
 
   let results: GeneratedTest[];
   if (opts.diff) {
@@ -121,9 +137,16 @@ export const runGenerate = async (opts: GenerateCommandOptions): Promise<void> =
     }
     const generateOpts: Parameters<typeof generateFromDiff>[2] = {};
     if (baseUrl !== undefined) generateOpts.baseUrl = baseUrl;
+    if (guidance !== undefined) generateOpts.guidance = guidance;
+    if (opts.coverage !== false) {
+      generateOpts.coverage = {
+        projectRoot: cwd,
+        testGlob: config.tests,
+      };
+    }
     results = await generateFromDiff(client, diff, generateOpts, cwd);
   } else if (opts.message) {
-    results = await generateFromDescription(client, opts.message, baseUrl, cwd);
+    results = await generateFromDescription(client, opts.message, baseUrl, cwd, guidance);
   } else {
     logger.error("Provide either --message <description> or --diff to generate a test.");
     process.exitCode = 2;

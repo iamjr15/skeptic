@@ -28,12 +28,21 @@ describe("commandUsesBrowser predicate (auto-spawn discipline)", () => {
     expect(commandUsesBrowser(["run", "tests/foo.spec.ts"])).toBe(true);
   });
 
+  it("returns true for `tui`", () => {
+    expect(commandUsesBrowser(["tui"])).toBe(true);
+    expect(commandUsesBrowser(["tui", "tests/foo.spec.ts"])).toBe(true);
+  });
+
   it("returns true for `inspect`", () => {
     expect(commandUsesBrowser(["inspect", "https://example.com"])).toBe(true);
   });
 
   it("returns false for `run --list`", () => {
     expect(commandUsesBrowser(["run", "--list"])).toBe(false);
+  });
+
+  it("returns false for `tui --list`", () => {
+    expect(commandUsesBrowser(["tui", "--list"])).toBe(false);
   });
 
   it("returns false for `run --no-daemon`", () => {

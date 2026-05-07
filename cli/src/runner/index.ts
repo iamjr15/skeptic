@@ -2,6 +2,7 @@ import { discover, type FileManifest, type ManifestEntry } from "./discover.js";
 import { executeRun, type RunnerExecuteOptions, type RunnerExecuteOutcome } from "./execute.js";
 import type { Reporter } from "../reporter/types.js";
 import type { WorkerStartConfig } from "./ipc.js";
+import { partitionTests } from "../executor/shard.js";
 
 export interface RunnerOptions {
   patterns: string | string[];
@@ -66,7 +67,7 @@ const partitionByShard = (
   if (options.shardSplit) {
     const { count, index } = options.shardSplit;
     if (count <= 1) return entries;
-    return entries.filter((_, i) => i % count === (index - 1));
+    return partitionTests(entries, count, "split")[index - 1] ?? [];
   }
   if (options.shardAll) {
     // every shard runs the full set

@@ -1,46 +1,38 @@
-import React from "react";
-import { useInput } from "ink";
-import { useTestEvents } from "./hooks/use-test-events.js";
+import { Box, Text, useInput } from "ink";
+import type { InkReporter } from "../reporter/ink-reporter.js";
+import { useRunTuiSnapshot } from "./hooks/use-run-tui-snapshot.js";
 import { RunScreen } from "./screens/run-screen.js";
 import { ResultsScreen } from "./screens/results-screen.js";
-import { WatchScreen } from "./screens/watch-screen.js";
-import type { InkReporter } from "../reporter/ink-reporter.js";
-import type { TUIOptions } from "./render.js";
+import { Header } from "./components/header.js";
+import { colors, icons } from "./theme.js";
 
-interface AppProps extends TUIOptions {
+interface AppProps {
   reporter: InkReporter;
+  onAbort: () => void;
+  onQuit: () => void;
 }
 
-export const App = ({ reporter, watch, onRerun, onRerunFailed, onAbort, onQuit }: AppProps) => {
-  const state = useTestEvents(reporter);
+export const App = ({ reporter, onAbort, onQuit }: AppProps) => {
+  const state = useRunTuiSnapshot(reporter);
 
   useInput((input, key) => {
-    if (key.ctrl && input === "c") {
-      onAbort();
-    }
+    if (key.ctrl && input === "c") onAbort();
   });
 
-  if (state.phase === "running") {
-    return <RunScreen state={state} />;
+  if (state.phase === "complete") {
+    return <ResultsScreen state={state} onQuit={onQuit} />;
   }
 
-  if (watch) {
+  if (state.phase === "idle") {
     return (
-      <WatchScreen
-        state={state}
-        onRerun={onRerun}
-        onRerunFailed={onRerunFailed}
-        onQuit={onQuit}
-      />
+      <Box flexDirection="column" width="100%">
+        <Header state={state} />
+        <Box paddingX={1}>
+          <Text color={colors.dim}>{icons.queued} Preparing test manifest...</Text>
+        </Box>
+      </Box>
     );
   }
 
-  return (
-    <ResultsScreen
-      state={state}
-      onRerun={onRerun}
-      onRerunFailed={onRerunFailed}
-      onQuit={onQuit}
-    />
-  );
+  return <RunScreen state={state} />;
 };

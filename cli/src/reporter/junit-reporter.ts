@@ -7,9 +7,11 @@ import { logger } from "../utils/logger.js";
 
 export class JUnitReporter implements Reporter {
   private readonly outputDir: string;
+  private readonly silent: boolean;
 
-  constructor(outputDir: string) {
+  constructor(outputDir: string, opts: { silent?: boolean } = {}) {
     this.outputDir = outputDir;
+    this.silent = opts.silent ?? false;
   }
 
   onTestStart(_test: TestIdentifier): void {
@@ -41,7 +43,7 @@ export class JUnitReporter implements Reporter {
     ].join("\n");
 
     fs.writeFileSync(outPath, xml, "utf-8");
-    logger.info(`JUnit report written to ${outPath}`);
+    if (!this.silent) logger.info(`JUnit report written to ${outPath}`);
   }
 }
 

@@ -48,7 +48,9 @@ skeptic doctor
 
 `skeptic init` creates:
 
+- `package.json` when missing, or adds a `test:e2e` script and `skeptic-cli` dev dependency when present
 - `tests/`
+- `tests/package.json` with `type: "module"` so specs can use ESM without changing your app package mode
 - `tests/example.spec.ts`
 - `skeptic.config.yaml`
 - `tsconfig.json`
@@ -99,7 +101,7 @@ test("homepage smoke", async ({ page, snapshot, screenshot, observability }) => 
   await expect(page).toHaveTitle(/Example Domain/);
 
   const tree = await snapshot(page);
-  await tree.byRole("link", { name: "More information..." }).click();
+  await expect(tree.byRole("heading", { name: "Example Domain" })).toBeVisible();
 
   await screenshot("homepage", { fullPage: true });
   await observability.expectNoConsoleErrors();
@@ -153,6 +155,8 @@ the same test.
 ## Running Tests
 
 ```bash
+skeptic tui
+skeptic tui tests/login.spec.ts
 skeptic run
 skeptic run tests/login.spec.ts
 skeptic run tests/**/*.spec.ts --tag smoke
@@ -160,6 +164,10 @@ skeptic run --parallel 4
 skeptic run --shard-split 4 --shard-index 1
 skeptic run --watch
 ```
+
+`skeptic tui` is the discoverable interactive entrypoint. `skeptic run` opens
+the same TUI automatically in an interactive terminal when the console reporter
+is active; use `skeptic run --no-tui` for plain console output.
 
 Important flags:
 

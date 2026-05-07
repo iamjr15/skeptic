@@ -25,10 +25,11 @@ const lockfilePath = join(cliDir, "package-lock.json");
 const lockfile = JSON.parse(readFileSync(lockfilePath, "utf8"));
 
 const versions = resolveLockfileVersions(lockfile, [
+  "@playwright/test",
+  "accessibility-checker-engine",
   "playwright",
   "playwright-core",
   "better-sqlite3",
-  "oxc-resolver",
 ]);
 
 const binPkgPath = join(binPkgDir, "package.json");
@@ -37,10 +38,11 @@ const binPkg = JSON.parse(readFileSync(binPkgPath, "utf8"));
 if (version) binPkg.version = version;
 
 binPkg.dependencies = {
+  "@playwright/test": versions["@playwright/test"],
+  "accessibility-checker-engine": versions["accessibility-checker-engine"],
   playwright: versions.playwright,
   "playwright-core": versions["playwright-core"],
   "better-sqlite3": versions["better-sqlite3"],
-  "oxc-resolver": versions["oxc-resolver"],
 };
 
 writeFileSync(binPkgPath, JSON.stringify(binPkg, null, 2) + "\n");

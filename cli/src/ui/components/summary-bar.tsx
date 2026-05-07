@@ -1,52 +1,38 @@
-import React from "react";
-import { Box, Text, useStdout } from "ink";
-import prettyMs from "pretty-ms";
+import { Box, Text } from "ink";
 import { colors } from "../theme.js";
+import type { RunTuiSnapshot } from "../model.js";
+import { formatDuration } from "../format.js";
 import { ProgressBar } from "./progress-bar.js";
-import { useElapsed } from "../hooks/use-elapsed.js";
+import { useStdoutDimensions } from "../hooks/use-stdout-dimensions.js";
 
 interface SummaryBarProps {
-  phase: "running" | "complete";
-  passed: number;
-  failed: number;
-  total: number;
-  startTime?: number;
-  duration_ms?: number;
+  state: RunTuiSnapshot;
 }
 
-export const SummaryBar = ({ phase, passed, failed, total, startTime, duration_ms }: SummaryBarProps) => {
-  const { stdout } = useStdout();
-  const width = stdout?.columns ?? 80;
-  const elapsed = useElapsed(startTime ?? Date.now());
-  const displayTime = phase === "complete" && duration_ms != null ? duration_ms : elapsed;
-
-  if (phase === "running") {
-    const completed = passed + failed;
-    const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
-    return (
-      <Box paddingX={2}>
-        <ProgressBar current={completed} total={total} width={Math.min(30, width - 40)} />
-        <Text color={colors.dim}>
-          {"  "}{completed}/{total} tests  {pct}%  {"•"}  {prettyMs(displayTime)}
-        </Text>
-      </Box>
-    );
-  }
+export const SummaryBar = ({ state }: SummaryBarProps) => {
+  const [columns] = useStdoutDimensions();
+  const passed = state.tests.filter((test) => test.phase === "passed").length;
+  const failed = state.tests.filter(
+    (test) => test.phase === "failed" || test.phase === "error",
+  ).length;
+  const complete = passed + failed;
+  const total = state.tests.length;
+  const elapsed = state.summary
+    ? state.summary.duration_ms
+    : (state.completedAt ?? Date.now()) - state.startedAt;
+  const barWidth = Math.min(30, Math.max(8, columns - 56));
 
   return (
-    <Box flexDirection="column" paddingX={2}>
-      <Box gap={1}>
-        <Text> Tests:</Text>
-        {passed > 0 && <Text color={colors.pass}>{passed} passed</Text>}
-        {passed > 0 && failed > 0 && <Text color={colors.dim}>{"│"}</Text>}
-        {failed > 0 && <Text color={colors.fail}>{failed} failed</Text>}
-        <Text color={colors.dim}>{"│"}</Text>
-        <Text>{total} total</Text>
-      </Box>
-      <Box gap={1}>
-        <Text> Time:</Text>
-        <Text>{prettyMs(displayTime)}</Text>
-      </Box>
+    <Box paddingX={1}>
+      <ProgressBar current={complete} total={total} width={barWidth} />
+      <Text color={colors.dim}>
+        {"  "}
+        {complete}/{total} tests
+        {"  "}
+      </Text>
+      {passed > 0 && <Text color={colors.pass}>{passed} passed </Text>}
+      {failed > 0 && <Text color={colors.fail}>{failed} failed </Text>}
+      <Text color={colors.dim}>{formatDuration(elapsed)}</Text>
     </Box>
   );
 };

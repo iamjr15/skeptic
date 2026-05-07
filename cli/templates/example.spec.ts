@@ -10,7 +10,7 @@ test("homepage smoke", async ({ page, snapshot, observability, screenshot }) => 
   // Snapshot returns an ARIA-tree primitive with ref-based locator helpers —
   // the same pattern AI agents use to discover element shapes.
   const tree = await snapshot(page);
-  await tree.byRole("link", { name: "More information..." }).click();
+  await expect(tree.byRole("heading", { name: "Example Domain" })).toBeVisible();
 
   // Observability assertions are opt-in via `--observability` or test.use.
   // Uncomment when you have collectors attached:

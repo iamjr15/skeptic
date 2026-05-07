@@ -1,15 +1,22 @@
 {
-  "main": "dist/skeptic.mjs",
+  "main": "dist/skeptic-sea.cjs",
   "output": "dist/skeptic",
-  "mainFormat": "module",
+  "mainFormat": "commonjs",
   "disableExperimentalSEAWarning": true,
   "useSnapshot": false,
   "useCodeCache": false,
   "assets": {
     "templates/skeptic.config.yaml": "dist/templates/skeptic.config.yaml",
-    "templates/example.flow.yaml": "dist/templates/example.flow.yaml",
-    "templates/relational-selectors.flow.yaml": "dist/templates/relational-selectors.flow.yaml",
-    "recorder-script.js": "dist/recorder-script.js",
+    "templates/tsconfig.json": "dist/templates/tsconfig.json",
+    "templates/example.spec.ts": "dist/templates/example.spec.ts",
+    "templates/guidance/accessibility.md": "dist/templates/guidance/accessibility.md",
+    "templates/guidance/animation.md": "dist/templates/guidance/animation.md",
+    "templates/guidance/design.md": "dist/templates/guidance/design.md",
+    "templates/guidance/performance.md": "dist/templates/guidance/performance.md",
+    "templates/guidance/react.md": "dist/templates/guidance/react.md",
+    "templates/guidance/responsive.md": "dist/templates/guidance/responsive.md",
+    "templates/guidance/security.md": "dist/templates/guidance/security.md",
+    "templates/guidance/seo.md": "dist/templates/guidance/seo.md",
     "web-vitals.iife.js": "dist/web-vitals.iife.js"
   }
 }

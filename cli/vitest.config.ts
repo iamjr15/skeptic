@@ -14,7 +14,7 @@ export default defineConfig({
     __SKEPTIC_FEATURE_ACP__: "true",
   },
   test: {
-    include: ["__tests__/**/*.test.ts"],
+    include: ["__tests__/**/*.test.ts", "__tests__/**/*.test.tsx"],
     globals: true,
     testTimeout: 30_000,
   },

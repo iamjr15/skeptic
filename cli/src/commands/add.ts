@@ -205,7 +205,7 @@ test("homepage smoke", async ({ page, snapshot, screenshot, observability }) => 
   await expect(page).toHaveTitle(/Example Domain/);
 
   const tree = await snapshot(page, { interactive: true, compact: true });
-  await tree.byRole("link", { name: "More information..." }).click();
+  await expect(tree.byRole("heading", { name: "Example Domain" })).toBeVisible();
 
   await screenshot("homepage", { fullPage: true });
   await observability.expectNoConsoleErrors();

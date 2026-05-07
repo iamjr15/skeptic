@@ -4,7 +4,7 @@
   "description": "CLI E2E testing for AI agents — TypeScript test runner with AI assertions, observability, and snapshot-based discovery",
   "type": "module",
   "bin": {
-    "skeptic": "./bin/launcher.mjs"
+    "skeptic": "bin/launcher.mjs"
   },
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
@@ -25,7 +25,7 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && tsup --config tsup.sea.config.ts",
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -39,6 +39,8 @@
   "files": [
     "agent-skills",
     "dist",
+    "!dist/sea-config.absolute.json",
+    "!dist/skeptic-sea.cjs",
     "bin/launcher.mjs",
     "scripts/install-agent-skills.mjs",
     "README.md",
@@ -47,7 +49,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/iamjr15/skeptic"
+    "url": "git+https://github.com/iamjr15/skeptic.git"
   },
   "homepage": "https://github.com/iamjr15/skeptic",
   "author": "iamjr15",
@@ -64,21 +66,28 @@
   "license": "MIT",
   "dependencies": {
     "@playwright/test": "^1.59.1",
+    "cli-truncate": "^5.2.0",
     "fast-glob": "^3.3.2",
+    "figures": "^6.1.0",
+    "ink": "^7.0.2",
+    "ink-spinner": "^5.0.0",
     "oxc-resolver": "^11.19.1",
     "playwright": "^1.52.0",
     "playwright-core": "^1.52.0",
+    "pretty-ms": "^9.3.0",
+    "react": "^19.2.6",
+    "string-width": "^8.2.1",
     "tsx": "^4.19.0",
     "typescript": "^5.8.3"
   },
   "optionalDependencies": {
     "accessibility-checker-engine": "^4.0.0",
     "better-sqlite3": "^12.9.0",
-    "skeptic-cli-bin-darwin-arm64": "0.1.0",
-    "skeptic-cli-bin-darwin-x64": "0.1.0",
-    "skeptic-cli-bin-linux-arm64": "0.1.0",
-    "skeptic-cli-bin-linux-x64": "0.1.0",
-    "skeptic-cli-bin-win32-x64": "0.1.0"
+    "skeptic-cli-bin-darwin-arm64": "0.2.0",
+    "skeptic-cli-bin-darwin-x64": "0.2.0",
+    "skeptic-cli-bin-linux-arm64": "0.2.0",
+    "skeptic-cli-bin-linux-x64": "0.2.0",
+    "skeptic-cli-bin-win32-x64": "0.2.0"
   },
   "devDependencies": {
     "@agentclientprotocol/sdk": "^0.20.0",
@@ -89,23 +98,16 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.15.3",
     "@types/pngjs": "^6.0.5",
-    "@types/react": "^19.2.0",
+    "@types/react": "^19.2.14",
     "chalk": "^5.4.1",
     "chokidar": "^5.0.0",
-    "cli-truncate": "^5.0.0",
     "commander": "^13.1.0",
     "fast-xml-parser": "^5.2.3",
-    "figures": "^6.1.0",
     "glob": "^11.0.2",
-    "ink": "^7.0.0",
-    "ink-spinner": "^5.0.0",
     "ink-testing-library": "^4.0.0",
     "minimatch": "^10.0.0",
     "pixelmatch": "^7.1.0",
     "pngjs": "^7.0.0",
-    "pretty-ms": "^9.0.0",
-    "react": "^19.2.0",
-    "string-width": "^8.0.0",
     "tsup": "^8.5.1",
     "vitest": "^3.1.2",
     "web-vitals": "^4.2.4",

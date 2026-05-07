@@ -154,38 +154,45 @@ export const collectDoctorReport = async (
     `${outputDir}: ${outputWritable.detail}`,
   );
 
-  const axeOk = optionalDependencyCheck("@axe-core/playwright");
   push(
     checks,
     "axe-core",
-    axeOk ? "pass" : "fail",
+    "pass",
     "axe-core",
-    axeOk ? "installed" : "missing @axe-core/playwright; accessibility audits cannot run",
+    "bundled into skeptic-cli; accessibility audits can run without a project-level @axe-core/playwright install",
   );
 
   const ibmOk = optionalDependencyCheck(
     "accessibility-checker-engine",
     "accessibility-checker-engine/ace.js",
   );
+  const ibmRequired = cfg?.observability.accessibilityDualEngine === true;
+  const ibmDetail = ibmOk
+    ? "installed"
+    : ibmRequired
+      ? "optional dependency missing; dual-engine accessibility will fall back to axe-core"
+      : "not installed; only required when observability.accessibilityDualEngine is enabled";
   push(
     checks,
     "ibm-equal-access",
-    ibmOk ? "pass" : "warn",
+    ibmOk ? "pass" : ibmRequired ? "warn" : "info",
     "IBM Equal Access",
-    ibmOk
-      ? "installed"
-      : "optional dependency missing; dual-engine accessibility will fall back to axe-core",
+    ibmDetail,
   );
 
   const sqliteOk = optionalDependencyCheck("better-sqlite3");
+  const sqliteRequired = cfg?.auth.cookies === true;
+  const sqliteDetail = sqliteOk
+    ? "installed"
+    : sqliteRequired
+      ? "optional dependency missing; Chromium/Firefox cookie extraction may be limited"
+      : "not installed; only required when auth.cookies is enabled";
   push(
     checks,
     "better-sqlite3",
-    sqliteOk ? "pass" : "warn",
+    sqliteOk ? "pass" : sqliteRequired ? "warn" : "info",
     "Cookie SQLite Reader",
-    sqliteOk
-      ? "installed"
-      : "optional dependency missing; Chromium/Firefox cookie extraction may be limited",
+    sqliteDetail,
   );
 
   try {

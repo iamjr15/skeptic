@@ -27,8 +27,8 @@ Homebrew tap.
      macos-13 (x64), ubuntu-22.04 (x64), ubuntu-22.04-arm (arm64),
      windows-2022 (x64). macOS jobs sign + zip + notarize.
    - **smoke-test** matrix: runs `--version`, `init`, `browsers install`,
-     and (on macOS) `cookies list` to verify the signed `.node` loads under
-     Hardened Runtime.
+     `inspect`, and (on macOS) `cookies list` to verify the signed `.node`
+     loads under Hardened Runtime.
    - **publish**: pushes all `skeptic-cli-bin-*` packages to npm, then the
      main `skeptic-cli` package, then creates the GitHub Release with all 5
      tarballs attached.
@@ -64,12 +64,19 @@ the build loudly rather than silently shipping a stale-version binary.
 ## Bin-package versions
 
 Each `cli-bin-<platform>/package.json` has `0.0.0-LOCKFILE` placeholders
-for `playwright`, `playwright-core`, `better-sqlite3`, and `oxc-resolver`.
+for `@playwright/test`, `accessibility-checker-engine`, `playwright`,
+`playwright-core`, and `better-sqlite3`.
 The CI step `Stamp bin-package version` runs
 `scripts/gen-bin-package.mjs --bin-pkg <dir> --version <tag>`, which reads
 `cli/package-lock.json` and writes the resolved versions into the bin
 package. `0.0.0-LOCKFILE` is invalid semver — npm rejects publish if the
 gen step didn't run, which is the failure mode we want.
+
+The following `Stage sidecar node_modules` step runs
+`scripts/stage-bin-sidecars.mjs --bin-pkg <dir>` to copy the exact dependency
+closure from `cli/node_modules` into each bin package. This avoids partial
+hand-copies and avoids a second `npm install` pass inside every platform
+package.
 
 ## Local dry-run
 

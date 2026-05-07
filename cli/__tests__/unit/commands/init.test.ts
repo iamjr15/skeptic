@@ -21,14 +21,27 @@ describe("runInit", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("creates tests/ directory, config file, tsconfig, example test, and ignored cache directory", async () => {
+  it("creates package metadata, tests/ directory, config file, tsconfig, example test, and ignored cache directory", async () => {
     const { runInit } = await import("../../../src/commands/init.js");
     await runInit(tmpDir);
 
     expect(fs.existsSync(path.join(tmpDir, "tests"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, "package.json"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, "tests/package.json"))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, "tsconfig.json"))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, "skeptic.config.yaml"))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, "tests/example.spec.ts"))).toBe(true);
+    const pkg = JSON.parse(fs.readFileSync(path.join(tmpDir, "package.json"), "utf-8")) as {
+      type?: string;
+      scripts?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    expect(pkg.type).toBe("module");
+    expect(pkg.scripts?.["test:e2e"]).toBe("skeptic run");
+    expect(pkg.devDependencies?.["skeptic-cli"]).toBe("^0.0.0-dev");
+    expect(JSON.parse(fs.readFileSync(path.join(tmpDir, "tests/package.json"), "utf-8"))).toEqual({
+      type: "module",
+    });
     expect(fs.readFileSync(path.join(tmpDir, ".skeptic/.gitignore"), "utf-8")).toBe("*\n!.gitignore\n");
     expect(fs.readFileSync(path.join(tmpDir, ".gitignore"), "utf-8")).toContain(".skeptic/");
     expect(fs.readFileSync(path.join(tmpDir, ".gitignore"), "utf-8")).toContain("skeptic-output/");
@@ -56,6 +69,37 @@ describe("runInit", () => {
 
     const content = fs.readFileSync(examplePath, "utf-8");
     expect(content).toBe("export const untouched = true;\n");
+  });
+
+  it("updates an existing package.json without changing its module type", async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, "package.json"),
+      JSON.stringify({ name: "app", type: "commonjs", scripts: { test: "vitest" } }, null, 2),
+      "utf-8",
+    );
+
+    const { runInit } = await import("../../../src/commands/init.js");
+    await runInit(tmpDir);
+
+    const pkg = JSON.parse(fs.readFileSync(path.join(tmpDir, "package.json"), "utf-8")) as {
+      type?: string;
+      scripts?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    expect(pkg.type).toBe("commonjs");
+    expect(pkg.scripts?.test).toBe("vitest");
+    expect(pkg.scripts?.["test:e2e"]).toBe("skeptic run");
+    expect(pkg.devDependencies?.["skeptic-cli"]).toBe("^0.0.0-dev");
+  });
+
+  it("does not overwrite an existing tests/package.json", async () => {
+    fs.mkdirSync(path.join(tmpDir, "tests"), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, "tests/package.json"), "{\"type\":\"commonjs\"}\n", "utf-8");
+
+    const { runInit } = await import("../../../src/commands/init.js");
+    await runInit(tmpDir);
+
+    expect(fs.readFileSync(path.join(tmpDir, "tests/package.json"), "utf-8")).toBe("{\"type\":\"commonjs\"}\n");
   });
 
   it("creates tests/ directory even if it already exists", async () => {

@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { findSimilar } from "../utils/levenshtein.js";
 import { logger } from "../utils/logger.js";
-import { getTemplatesDir } from "../utils/asset-path.js";
+import { readTemplate } from "../utils/asset-path.js";
 
 export const GUIDANCE_DOMAINS = [
   "animation",
@@ -43,21 +43,6 @@ function findUserGuidance(from: string, domain: string): string | null {
   return null;
 }
 
-/**
- * Locate the bundled guidance directory.
- * Resolves through `getTemplatesDir()` which handles all distribution layouts
- * (tsup-bundled production, dev/vitest, and Phase 6 SEA via getAsset).
- */
-function builtinDir(): string {
-  const dir = path.join(getTemplatesDir(), "guidance");
-  if (fs.existsSync(dir)) return dir;
-
-  throw new Error(
-    `Bundled guidance directory not found. Looked in:\n  ${dir}\n` +
-    "Run 'npm run build' in cli/, or verify cli/templates/guidance/ exists.",
-  );
-}
-
 export interface LoadGuidanceOptions {
   /** Starting dir for user-override walk-up; defaults to process.cwd(). */
   cwd?: string;
@@ -87,11 +72,15 @@ export function loadGuidance(
     return { domain, source: override, content: fs.readFileSync(override, "utf-8") };
   }
 
-  const builtin = path.join(builtinDir(), `${domain}.md`);
-  if (!fs.existsSync(builtin)) {
+  try {
+    return {
+      domain,
+      source: "builtin",
+      content: readTemplate(`guidance/${domain}.md`).toString("utf-8"),
+    };
+  } catch {
     throw new Error(
-      `Bundled guidance missing: ${builtin} — run 'npm run build' in cli/`,
+      `Bundled guidance missing: guidance/${domain}.md — run 'npm run build' in cli/`,
     );
   }
-  return { domain, source: "builtin", content: fs.readFileSync(builtin, "utf-8") };
 }
