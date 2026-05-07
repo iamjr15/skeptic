@@ -448,18 +448,24 @@ class SkepticAgent implements Agent {
     const cfg = loadConfig({ searchCwd: session.cwd });
     const outputDir = path.resolve(session.cwd, cfg.output.dir ?? OUTPUT_DIR_DEFAULT);
     const workerConfig = buildAcpWorkerConfig(cfg, outputDir);
-
-    const reporter: Reporter = {
-      onTestStart: (test: TestIdentifier) => {
-        void this.connection.sessionUpdate({
+    const progressUpdates: Array<Promise<unknown>> = [];
+    const emitProgress = (content: string): void => {
+      progressUpdates.push(
+        this.connection.sessionUpdate({
           sessionId,
           update: {
             sessionUpdate: "tool_call_update",
             toolCallId,
             status: "in_progress",
-            content: [textBlock(`▶ ${test.name}  (${test.file})`)],
+            content: [textBlock(content)],
           },
-        });
+        }),
+      );
+    };
+
+    const reporter: Reporter = {
+      onTestStart: (test: TestIdentifier) => {
+        emitProgress(`▶ ${test.name}  (${test.file})`);
       },
       // onStepStart wires through the (currently optional) runner hook so when
       // the runner adds step:start emission, ACP forwards it without further
@@ -470,17 +476,7 @@ class SkepticAgent implements Agent {
         total: number,
         test: TestIdentifier,
       ): void => {
-        void this.connection.sessionUpdate({
-          sessionId,
-          update: {
-            sessionUpdate: "tool_call_update",
-            toolCallId,
-            status: "in_progress",
-            content: [
-              textBlock(`  ${test.name} step ${index + 1}/${total} ${step.command}: started`),
-            ],
-          },
-        });
+        emitProgress(`  ${test.name} step ${index + 1}/${total} ${step.command}: started`);
       },
       onStepComplete: (
         step: StepResult,
@@ -491,34 +487,14 @@ class SkepticAgent implements Agent {
         // Always surface step results so clients see the streaming pulse;
         // failures get a louder marker so they're easy to spot in the log.
         const marker = step.status === "passed" ? "·" : "✗";
-        void this.connection.sessionUpdate({
-          sessionId,
-          update: {
-            sessionUpdate: "tool_call_update",
-            toolCallId,
-            status: "in_progress",
-            content: [
-              textBlock(
-                `  ${marker} ${test.name} step ${index + 1}/${total} ${step.command}: ${step.status}`,
-              ),
-            ],
-          },
-        });
+        emitProgress(
+          `  ${marker} ${test.name} step ${index + 1}/${total} ${step.command}: ${step.status}`,
+        );
       },
       onTestComplete: (result: TestResult) => {
-        void this.connection.sessionUpdate({
-          sessionId,
-          update: {
-            sessionUpdate: "tool_call_update",
-            toolCallId,
-            status: "in_progress",
-            content: [
-              textBlock(
-                `${result.status === "passed" ? "✓" : "✗"} ${result.name} (${result.duration_ms}ms)`,
-              ),
-            ],
-          },
-        });
+        emitProgress(
+          `${result.status === "passed" ? "✓" : "✗"} ${result.name} (${result.duration_ms}ms)`,
+        );
       },
       onRunComplete: () => {
         /* terminal summary handled below */
@@ -540,6 +516,7 @@ class SkepticAgent implements Agent {
     });
 
     const outcome = await Promise.race([runPromise, cancelPromise]);
+    await Promise.allSettled(progressUpdates);
 
     await this.connection.sessionUpdate({
       sessionId,

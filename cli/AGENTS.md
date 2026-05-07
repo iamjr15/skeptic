@@ -15,6 +15,11 @@ skeptic inspect <url> --interactive --compact
 skeptic run tests/<scenario>.spec.ts --observability --video --trace
 ```
 
+Specs import from the project dependency `skeptic-cli`. A normal `skeptic init`
+writes that dependency to `package.json`; run `npm install` before
+`skeptic run`, or re-run it if specs fail with `Cannot find package
+'skeptic-cli'`.
+
 Use `skeptic observe <url>` when you need a one-off QA capture without writing a
 spec.
 

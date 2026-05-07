@@ -1,6 +1,6 @@
 {
   "name": "skeptic-cli",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "CLI E2E testing for AI agents — TypeScript test runner with AI assertions, observability, and snapshot-based discovery",
   "type": "module",
   "bin": {

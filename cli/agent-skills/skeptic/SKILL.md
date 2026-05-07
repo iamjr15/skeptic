@@ -11,12 +11,18 @@ Use Skeptic when a coding agent needs browser evidence: page inspection, TypeScr
 
 ## Choose The Surface
 
+- Human interactive test run: run `skeptic tui`.
 - One-off QA or bug hunt: run `skeptic observe <url> --full-page`.
 - Persistent regression coverage: run `skeptic inspect <url> --interactive --compact --with-playwright-hints`, write a `tests/*.spec.ts`, then run `skeptic run`.
-- Changed-code verification: run `skeptic run --diff` when the project has specs, or use `skeptic generate --diff` to create one.
+- Changed-code verification: run existing specs with `skeptic run`, or use `skeptic generate --diff` to create one first.
 - Agent-integrated browser work: if Skeptic MCP tools are available, use `browser_open`, `browser_snapshot`, `browser_playwright`, `browser_screenshot`, `browser_console_logs`, `browser_network_requests`, `browser_performance_metrics`, `browser_accessibility_audit`, and `browser_close`.
 
 If the `skeptic` binary is not on PATH, try `npx skeptic-cli` or `npx --yes skeptic-cli@latest`.
+
+Specs import from the project dependency `skeptic-cli`. A normal `skeptic init`
+writes that dependency to `package.json`. If specs fail with `Cannot find
+package 'skeptic-cli'`, run `npm install` in the project before re-running
+Skeptic.
 
 ## Fast Loop
 

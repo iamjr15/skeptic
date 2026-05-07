@@ -27,8 +27,12 @@ skeptic --help
 ## Quick Start
 
 ```bash
+# Install the CLI
+npm install -g skeptic-cli
+
 # Initialize a project
 skeptic init
+npm install
 
 # Discover stable selectors before authoring a test
 skeptic inspect https://example.com
@@ -165,9 +169,13 @@ skeptic run --shard-split 4 --shard-index 1
 skeptic run --watch
 ```
 
-`skeptic tui` is the discoverable interactive entrypoint. `skeptic run` opens
-the same TUI automatically in an interactive terminal when the console reporter
-is active; use `skeptic run --no-tui` for plain console output.
+`skeptic tui` is the discoverable interactive entrypoint, matching Expect's
+explicit `expect tui` model. `skeptic run` is the plain spec runner for scripts,
+CI, and agent-invoked regression checks.
+
+Specs import from `skeptic-cli`, so project dependencies must be installed. A
+normal `skeptic init` writes the dependency into `package.json`; run
+`npm install` once before `skeptic run`.
 
 Important flags:
 

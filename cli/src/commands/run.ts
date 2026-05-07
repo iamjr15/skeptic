@@ -321,7 +321,8 @@ const shouldUseInkTui = (
   isCI: boolean,
 ): boolean => {
   if (opts.noTui || opts.watch || opts.ci) return false;
-  if (!opts.forceTui && isCI) return false;
+  if (!opts.forceTui) return false;
+  if (isCI) return false;
   if (process.env["SKEPTIC_DISABLE_INK_TUI"] === "1") return false;
   if (process.env["TERM"] === "dumb") return false;
   if (!process.stdout.isTTY || !process.stdin.isTTY) return false;

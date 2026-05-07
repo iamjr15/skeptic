@@ -75,10 +75,27 @@ export async function runInit(targetDir: string = process.cwd()): Promise<void> 
   // Print next steps
   console.log();
   console.log(chalk.bold("  Next steps:"));
-  console.log(chalk.dim("  1.") + ` Edit ${chalk.cyan(CONFIG_FILENAME)} with your base URL`);
-  console.log(chalk.dim("  2.") + ` Write tests in ${chalk.cyan("tests/*.spec.ts")}`);
-  console.log(chalk.dim("  3.") + ` Run ${chalk.cyan("skeptic run")} to execute`);
+  let step = 1;
+  console.log(chalk.dim(`  ${step}.`) + ` Run ${chalk.cyan(detectInstallCommand(dir).join(" "))}`);
+  step += 1;
+  console.log(chalk.dim(`  ${step}.`) + ` Edit ${chalk.cyan(CONFIG_FILENAME)} with your base URL`);
+  step += 1;
+  console.log(chalk.dim(`  ${step}.`) + ` Write tests in ${chalk.cyan("tests/*.spec.ts")}`);
+  step += 1;
+  console.log(chalk.dim(`  ${step}.`) + ` Run ${chalk.cyan("skeptic run")} to execute`);
   console.log();
+}
+
+function detectInstallCommand(projectDir: string): [string, ...string[]] {
+  if (fs.existsSync(path.join(projectDir, "pnpm-lock.yaml"))) return ["pnpm", "install"];
+  if (fs.existsSync(path.join(projectDir, "yarn.lock"))) return ["yarn", "install"];
+  if (
+    fs.existsSync(path.join(projectDir, "bun.lock")) ||
+    fs.existsSync(path.join(projectDir, "bun.lockb"))
+  ) {
+    return ["bun", "install"];
+  }
+  return ["npm", "install"];
 }
 
 function mkdirSafe(dir: string): void {

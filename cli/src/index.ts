@@ -41,7 +41,7 @@ export const program = new Command();
 
 const addRunOptions = (
   command: Command,
-  opts: { includeWatch?: boolean; includeTuiToggle?: boolean } = {},
+  opts: { includeWatch?: boolean } = {},
 ): Command => {
   const withCommonOptions = command
     .option("-c, --config <path>", "path to config file")
@@ -78,13 +78,6 @@ const addRunOptions = (
       parsePositiveInt,
     );
 
-  if (opts.includeTuiToggle) {
-    withCommonOptions.option(
-      "--no-tui",
-      "disable the interactive TUI and suppress the post-run artifact summary",
-    );
-  }
-
   return withCommonOptions
     .option("--trace", "record Playwright trace for each test")
     .option(
@@ -120,6 +113,15 @@ program
   .option("-v, --verbose", "enable verbose logging")
   .option("-q, --quiet", "suppress all output except errors")
   .option("--features", "print build-time feature map and exit")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  $ skeptic tui
+  $ skeptic tui tests/login.spec.ts
+  $ skeptic run tests/login.spec.ts --observability --video --trace
+  $ skeptic inspect https://example.com --interactive --compact`,
+  )
   .hook("preAction", (_thisCommand, _actionCommand) => {
     const opts = program.opts<{ verbose?: boolean; quiet?: boolean }>();
     let level: LogLevel = "info";
@@ -130,6 +132,7 @@ program
 
 program
   .command("init")
+  .alias("setup")
   .description("Initialize a new skeptic project")
   .argument("[dir]", "target directory", ".")
   .action(async (dir: string) => {
@@ -142,7 +145,7 @@ addRunOptions(
     .command("run")
     .description("Run TypeScript test specs")
     .argument("[specs...]", "spec file globs (default: tests/**/*.spec.ts)"),
-  { includeWatch: true, includeTuiToggle: true },
+  { includeWatch: true },
 )
   .action(async (specs: string[], cmdOpts: RunCommandOptions) => {
     const { runRun } = await import("./commands/run.js");
@@ -413,6 +416,10 @@ program
     const { runAudit } = await import("./commands/audit.js");
     await runAudit(cmdOpts);
   });
+
+program.action(() => {
+  program.outputHelp();
+});
 
 // Public test-author surface — `import { test, expect } from "skeptic-cli"`.
 export { test, expect } from "./api/index.js";
