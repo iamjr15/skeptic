@@ -15,7 +15,7 @@ const runCli = (
   args: string[],
   opts: { cwd?: string; timeout?: number; env?: Record<string, string> } = {},
 ): { stdout: string; stderr: string; status: number | null } => {
-  const result = spawnSync("node", [DIST, ...args], {
+  const result = spawnSync(process.execPath, [DIST, ...args], {
     cwd: opts.cwd ?? process.cwd(),
     timeout: opts.timeout ?? 60_000,
     encoding: "utf-8",

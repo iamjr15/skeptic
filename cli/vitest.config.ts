@@ -21,7 +21,7 @@ export default defineConfig({
     testTimeout: 30_000,
     ...(isCi
       ? {
-          maxWorkers: 2,
+          maxWorkers: 1,
           minWorkers: 1,
           reporters: "dot",
         }

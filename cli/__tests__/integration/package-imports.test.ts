@@ -15,6 +15,7 @@ import { pathToFileURL } from "node:url";
 const REPO_ROOT = path.resolve(import.meta.dirname, "../..");
 const DIST = path.resolve(REPO_ROOT, "dist/index.mjs");
 const distAvailable = fs.existsSync(DIST);
+const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 
 describe.skipIf(!distAvailable)("skeptic-cli public package surface", () => {
   let consumer: string;
@@ -39,13 +40,13 @@ describe.skipIf(!distAvailable)("skeptic-cli public package surface", () => {
     // the test quiet and isolated. The install creates a symlink-or-copy of the
     // workspace, which is enough to verify the exports map.
     const installed = spawnSync(
-      "npm",
+      npmCommand,
       ["install", "--no-package-lock", "--no-audit", "--no-fund", "--silent"],
       { cwd: consumer, encoding: "utf-8", timeout: 120_000 },
     );
     if (installed.status !== 0) {
       // eslint-disable-next-line no-console
-      console.warn("[package-imports] npm install failed:", installed.stderr);
+      console.warn("[package-imports] npm install failed:", installed.stderr ?? installed.error);
     }
   });
 
@@ -55,7 +56,7 @@ describe.skipIf(!distAvailable)("skeptic-cli public package surface", () => {
 
   it("import { test, expect } from 'skeptic-cli' resolves to functions", () => {
     const probe = spawnSync(
-      "node",
+      process.execPath,
       [
         "--input-type=module",
         "-e",

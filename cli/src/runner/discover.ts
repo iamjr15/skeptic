@@ -1,5 +1,5 @@
 import { Worker } from "node:worker_threads";
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
 import fastGlob from "fast-glob";
@@ -36,13 +36,28 @@ export const resolveSpecPaths = async (
   cwd: string = process.cwd(),
 ): Promise<string[]> => {
   const patternList = Array.isArray(patterns) ? patterns : [patterns];
-  const matches = await fastGlob(patternList, {
+  const seen = new Set<string>();
+  const globPatterns: string[] = [];
+
+  for (const pattern of patternList) {
+    const literalPath = resolvePath(cwd, pattern);
+    try {
+      if (existsSync(literalPath) && statSync(literalPath).isFile()) {
+        seen.add(resolvePath(literalPath));
+        continue;
+      }
+    } catch {
+      /* fall through to glob matching */
+    }
+    globPatterns.push(pattern.replace(/\\/g, "/"));
+  }
+
+  const matches = globPatterns.length === 0 ? [] : await fastGlob(globPatterns, {
     cwd,
     absolute: true,
     onlyFiles: true,
     dot: false,
   });
-  const seen = new Set<string>();
   for (const m of matches) seen.add(resolvePath(m));
   return [...seen].sort();
 };
