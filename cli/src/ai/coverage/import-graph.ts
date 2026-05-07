@@ -1,26 +1,15 @@
 import { execFileSync } from "node:child_process";
 import { builtinModules, createRequire } from "node:module";
-import { dirname, join } from "node:path";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { minimatch } from "minimatch";
 import type { ResolverFactory as ResolverFactoryType } from "oxc-resolver";
 import { matchExcludePath } from "../security.js";
 
-// SEA-aware sync loader for oxc-resolver (uses createRequire so the call
-// path stays sync; the cookies pattern in sqlite-loader.ts is the same).
-// Load node:sea via createRequire so esbuild leaves the `node:` prefix alone.
-const nodeSea = createRequire(import.meta.url)("node:sea") as {
-  isSea?: () => boolean;
-};
-const isSea: () => boolean = nodeSea.isSea ?? (() => false);
 let cachedResolverFactory: typeof ResolverFactoryType | null = null;
 function getResolverFactory(): typeof ResolverFactoryType {
   if (cachedResolverFactory) return cachedResolverFactory;
-  const anchor = isSea()
-    ? join(dirname(process.execPath), "_pkg.js")
-    : import.meta.url;
-  const req = createRequire(anchor);
+  const req = createRequire(import.meta.url);
   const mod = req("oxc-resolver") as { ResolverFactory: typeof ResolverFactoryType };
   cachedResolverFactory = mod.ResolverFactory;
   return cachedResolverFactory;

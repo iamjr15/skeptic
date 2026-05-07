@@ -14,10 +14,9 @@ export interface BrowsersInstallOptions {
  * signature) and `lib/cli/installActions.js:119-148` (CLI's call pattern:
  * resolveBrowsers → installDeps → install → validateHostRequirements).
  *
- * Why this exists: SEA-binary users have no `npx`, so we expose the install
- * logic directly. For npm-installed users, `npx playwright install` remains
- * a working synonym — both call into `playwright-core/lib/server` which
- * reaches the same code paths.
+ * Why this exists: users can stay inside the skeptic CLI instead of remembering
+ * Playwright's separate install command. `npx playwright install` remains a
+ * working synonym because both paths call into `playwright-core/lib/server`.
  */
 export async function runBrowsersInstall(
   args: string[],

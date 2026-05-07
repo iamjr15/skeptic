@@ -1,7 +1,6 @@
 /**
- * Watch-mode helper. Lazy-imports chokidar so the SEA binary doesn't pay the
- * cost when watch isn't requested, and so the runner stays usable without a
- * chokidar install in narrow distributions.
+ * Watch-mode helper. Lazy-imports chokidar so normal runs avoid the startup
+ * cost when watch is not requested.
  */
 export interface WatchOptions {
   patterns: string[];

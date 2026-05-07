@@ -25,7 +25,7 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsup && tsup --config tsup.sea.config.ts",
+    "build": "tsup",
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -39,8 +39,6 @@
   "files": [
     "agent-skills",
     "dist",
-    "!dist/sea-config.absolute.json",
-    "!dist/skeptic-sea.cjs",
     "bin/launcher.mjs",
     "scripts/install-agent-skills.mjs",
     "README.md",
@@ -82,11 +80,7 @@
   },
   "optionalDependencies": {
     "accessibility-checker-engine": "^4.0.0",
-    "better-sqlite3": "^12.9.0",
-    "skeptic-cli-bin-darwin-arm64": "0.2.0",
-    "skeptic-cli-bin-linux-arm64": "0.2.0",
-    "skeptic-cli-bin-linux-x64": "0.2.0",
-    "skeptic-cli-bin-win32-x64": "0.2.0"
+    "better-sqlite3": "^12.9.0"
   },
   "devDependencies": {
     "@agentclientprotocol/sdk": "^0.20.0",

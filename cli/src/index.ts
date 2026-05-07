@@ -225,8 +225,7 @@ const cookiesCmd = program
   .description("Manage browser cookie extraction");
 
 // `skeptic browsers install [chromium|firefox|webkit|all]` — installs
-// Playwright browsers without requiring `npx`. Useful for the SEA-binary
-// distribution where users may not have Node/npm.
+// Playwright browsers without requiring users to know Playwright's own CLI.
 const browsersCmd = program
   .command("browsers")
   .description("Manage Playwright browser binaries");

@@ -36,9 +36,8 @@ export default defineConfig({
   // entry shebangs.
   // The license comment lands first (some bundlers reorder; keeping it at the
   // head of the banner ensures it's the very first line of every emitted .mjs).
-  // The createRequire shim that follows is load-bearing for SEA-mode
-  // `node:sea` resolution and for CJS deps that call `require("events")`
-  // internally — do not remove or split.
+  // The createRequire shim is load-bearing for CJS deps that call
+  // `require("events")` internally — do not remove or split.
   banner: {
     js: [
       "/*! @license skeptic-cli — see LICENSES.md for third-party attributions */",
@@ -53,14 +52,9 @@ export default defineConfig({
     "playwright",
     "playwright-core",
     "better-sqlite3",
-    // node:sea is loaded via `createRequire("node:sea")` in sea-aware
-    // modules — esbuild was stripping the `node:` prefix when the module
-    // was imported statically, breaking runtime resolution. Keeping it out
-    // of `external` since the static-import path no longer exists.
   ],
 
-  // Pure JS — bundle for tree-shaking. MCP/ACP SDKs and axe-core/playwright
-  // are bundled here so the SEA sidecar stays at four packages.
+  // Pure JS — bundle for tree-shaking.
   noExternal: [
     "commander",
     "zod",

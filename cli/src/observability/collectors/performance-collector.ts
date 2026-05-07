@@ -13,8 +13,7 @@ import { logger } from "../../utils/logger.js";
 import { getWebVitalsIifeScript } from "../../utils/asset-path.js";
 import { redactUrl } from "../url-redact.js";
 
-// Three-tier resolution (handled by getWebVitalsIifeScript):
-//   - SEA: extract embedded `web-vitals.iife.js` to a temp file, return path
+// Resolution is handled by getWebVitalsIifeScript:
 //   - Bundled (npm dist): dist/web-vitals.iife.js sibling
 //   - Dev: node_modules/web-vitals/dist/web-vitals.iife.js
 // If the file isn't found at the resolved path, we no-op cleanly and the

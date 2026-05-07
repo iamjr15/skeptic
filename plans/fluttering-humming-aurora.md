@@ -1200,7 +1200,7 @@ After each phase:
 ```bash
 cd cli
 npm run check        # strict TS compile
-npm run build        # full build (sharding code is vanilla TS — no SEA / esbuild gates)
+npm run build        # full build (sharding code is vanilla TS with no special build gates)
 npm test             # all existing + new tests pass
 ```
 

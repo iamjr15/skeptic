@@ -57,9 +57,9 @@ export async function runInit(targetDir: string = process.cwd()): Promise<void> 
     logger.success(`Created ${chalk.dim("tsconfig.json")}`);
   }
 
-  // Install Playwright browsers via the skeptic-internal helper so no-Node
-  // binary users don't need npx. For users on the npm install path,
-  // `npx playwright install --with-deps chromium` remains a working synonym.
+  // Install Playwright browsers via the skeptic-internal helper. The
+  // equivalent `npx playwright install --with-deps chromium` remains a
+  // working fallback.
   logger.info("Installing Playwright browsers...");
   try {
     const { runBrowsersInstall } = await import("./browsers-install.js");
