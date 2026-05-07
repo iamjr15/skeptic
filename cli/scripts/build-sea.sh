@@ -12,7 +12,7 @@
 #      --experimental-sea-config + postject path is intentionally not
 #      supported.
 #   3. macOS only: strips Node's signature and applies an ad-hoc signature
-#      so local smoke tests can run. Release jobs replace it with Developer ID.
+#      so local smoke tests and unsigned release artifacts can run.
 set -euo pipefail
 
 OUT=""

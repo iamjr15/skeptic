@@ -25,16 +25,15 @@ Homebrew tap.
      verifies `skeptic --version` matches the tag, runs `npm pack --dry-run`.
    - **binary-build** matrix: builds SEA binaries on macos-14 (arm64),
      macos-13 (x64), ubuntu-22.04 (x64), ubuntu-22.04-arm (arm64),
-     windows-2022 (x64). macOS jobs sign + zip + notarize.
+     windows-2022 (x64). macOS binaries use an ad-hoc signature only.
    - **smoke-test** matrix: runs `--version`, `init`, `browsers install`,
-     `inspect`, and (on macOS) `cookies list` to verify the signed `.node`
-     loads under Hardened Runtime.
+     `inspect`, and (on macOS) `cookies list` to verify the native sidecar
+     loads.
    - **publish**: pushes all `skeptic-cli-bin-*` packages to npm, then the
      main `skeptic-cli` package, then creates the GitHub Release with all 5
      tarballs attached.
 
-A successful release takes ~12 minutes. Notarization can be the long pole
-on macOS (~5 minutes per binary).
+A successful release takes ~12 minutes.
 
 ## Required secrets
 
@@ -43,15 +42,6 @@ Configure these in **Settings → Secrets and variables → Actions**:
 | Secret | Purpose |
 |---|---|
 | `NPM_TOKEN` | `npm publish` for `skeptic-cli` + 5x `skeptic-cli-bin-*` |
-| `APPLE_ID` | Apple Developer email |
-| `APPLE_TEAM_ID` | Apple Developer Team ID |
-| `APPLE_APP_PASSWORD` | App-specific password for `notarytool` |
-| `APPLE_DEVELOPER_ID` | Common name of the Developer ID Application cert |
-
-The cert itself must already be importable on the macOS runner. The
-simplest path is a self-hosted runner with the cert pre-installed; the
-GitHub-hosted alternative is to base64-encode the `.p12` into another
-secret and have a step write+import it before the codesign call.
 
 ## Version stamping
 

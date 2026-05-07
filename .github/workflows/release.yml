@@ -148,41 +148,6 @@ jobs:
           STAGE_DIR="../cli-bin-${{ matrix.target }}"
           node scripts/stage-bin-sidecars.mjs --bin-pkg "$STAGE_DIR"
 
-      - name: macOS — sign binary + sidecar .node addons
-        if: matrix.os == 'darwin'
-        env:
-          APPLE_DEVELOPER_ID: ${{ secrets.APPLE_DEVELOPER_ID }}
-        run: |
-          STAGE_DIR="../cli-bin-${{ matrix.target }}"
-          # 1. Sign the SEA binary itself (Hardened Runtime + Developer ID).
-          codesign --force --options runtime --timestamp \
-            --sign "$APPLE_DEVELOPER_ID" \
-            "$STAGE_DIR/${{ steps.binname.outputs.name }}"
-          # 2. Sign every .node native addon in the sidecar. Hardened
-          #    Runtime library validation rejects unsigned/foreign-team
-          #    .node files, so better-sqlite3.node etc. need our cert.
-          find "$STAGE_DIR/node_modules" -name "*.node" -print0 | \
-            xargs -0 -I {} codesign --force --options runtime --timestamp \
-              --sign "$APPLE_DEVELOPER_ID" {}
-
-      - name: macOS — zip + notarize
-        if: matrix.os == 'darwin'
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-        run: |
-          STAGE_DIR="../cli-bin-${{ matrix.target }}"
-          # notarytool rejects raw binaries — wrap the whole bin-package dir
-          # so the .node files inside node_modules/ also get a notarization
-          # ticket.
-          ditto -c -k --keepParent "$STAGE_DIR" "$STAGE_DIR.zip"
-          xcrun notarytool submit "$STAGE_DIR.zip" \
-            --apple-id "$APPLE_ID" \
-            --team-id "$APPLE_TEAM_ID" \
-            --password "$APPLE_APP_PASSWORD" \
-            --wait
-
       - name: Tarball platform package
         run: |
           tar -czf "skeptic-${{ matrix.target }}.tar.gz" -C .. "cli-bin-${{ matrix.target }}"
@@ -246,9 +211,9 @@ jobs:
       - name: Smoke — inspect (sidecar Playwright load)
         run: ./cli-bin-${{ matrix.target }}/${{ steps.binname.outputs.name }} inspect https://example.com --interactive --compact --wait 250 --no-daemon
 
-      # macOS-only: verify signed `.node` loads under Hardened Runtime by
-      # exercising --cookies (which loads better-sqlite3.node).
-      - name: Smoke — macOS signed .node load via --cookies
+      # macOS-only: exercise the native sidecar path that loads
+      # better-sqlite3.node.
+      - name: Smoke — macOS native sidecar load via --cookies
         if: startsWith(matrix.target, 'darwin')
         run: ./cli-bin-${{ matrix.target }}/${{ steps.binname.outputs.name }} cookies list
 
@@ -398,11 +363,11 @@ jobs:
     name: Publish to npm + GitHub Releases
     # Both gates must pass: smoke-test covers the binary's runtime
     # (`--version`, `init`, `browsers install`, `inspect`, and the macOS
-    # signed-`.node` load via `cookies list`), and
+    # native sidecar load via `cookies list`), and
     # install-from-tarball-test covers the npm install path
     # (optionalDependencies resolution, launcher routing). Removing
-    # smoke-test from this list would silently lose the macOS Hardened
-    # Runtime check.
+    # smoke-test from this list would silently lose the direct binary
+    # runtime checks.
     needs: [smoke-test, install-from-tarball-test]
     runs-on: ubuntu-22.04
     defaults:
