@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { pathToFileURL } from "node:url";
 
 /**
  * Plan B0.5 §7 / Codex round 3 #1 — confirm the `skeptic-cli` package surface is
@@ -28,7 +29,7 @@ describe.skipIf(!distAvailable)("skeptic-cli public package surface", () => {
           version: "0.0.0",
           private: true,
           type: "module",
-          dependencies: { "skeptic-cli": `file:${REPO_ROOT}` },
+          dependencies: { "skeptic-cli": pathToFileURL(REPO_ROOT).href },
         },
         null,
         2,

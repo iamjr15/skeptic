@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { startDaemon, IdleTimer } from "../../../src/daemon/lifecycle.js";
 import { getPidPath, getSocketPath } from "../../../src/daemon/socket.js";
+import { sendRpc } from "../../../src/daemon/client.js";
 
 // Plan §B10 invariant 4-5 — idle timeout, lockfile, sidecar lifecycle.
 describe("daemon lifecycle", () => {
@@ -75,28 +77,32 @@ describe("daemon lifecycle", () => {
       return;
     }
     expect(fs.existsSync(getPidPath())).toBe(true);
-    expect(fs.existsSync(getSocketPath())).toBe(true);
+    const status = await sendRpc(getSocketPath(), { method: "daemon.status" }, 1500);
+    expect(status.error).toBeUndefined();
     await handle.shutdown("test");
     expect(fs.existsSync(getPidPath())).toBe(false);
     expect(fs.existsSync(getSocketPath())).toBe(false);
   }, 30_000);
 
   it("startDaemon refuses to start while a live PID lockfile exists", async () => {
-    // Plant a different live PID — PID 1 (init) is always alive on Unix.
-    // On Windows the test still works because OpenProcess succeeds for any
-    // active system PID. The lockfile check uses isPidAlive which returns
-    // true for live foreign PIDs. We deliberately avoid `process.pid` so
-    // the same-process bypass in acquirePidLock doesn't activate.
+    const child = spawn(process.execPath, ["-e", "setTimeout(() => {}, 30000)"], {
+      stdio: "ignore",
+    });
     fs.mkdirSync(tmpDir, { recursive: true });
-    fs.writeFileSync(getPidPath(), "1");
-    await expect(
-      startDaemon({
-        engine: "chromium",
-        headed: false,
-        cliVersion: "test-0.0.0",
-        idleTimeoutSeconds: 0,
-      }),
-    ).rejects.toThrow(/already running/);
+    try {
+      expect(child.pid).toBeTypeOf("number");
+      fs.writeFileSync(getPidPath(), String(child.pid));
+      await expect(
+        startDaemon({
+          engine: "chromium",
+          headed: false,
+          cliVersion: "test-0.0.0",
+          idleTimeoutSeconds: 0,
+        }),
+      ).rejects.toThrow(/already running/);
+    } finally {
+      child.kill();
+    }
   });
 
   it("startDaemon reclaims a stale PID lockfile (process gone)", async () => {

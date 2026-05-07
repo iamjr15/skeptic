@@ -18,6 +18,7 @@ import {
   getSocketPath,
   ensureDaemonDir,
   probeDaemon,
+  resolveIpcPath,
   type DaemonRpcResponse,
   type DaemonRpcRequest,
 } from "./socket.js";
@@ -135,7 +136,7 @@ export const sendRpc = async (
   timeoutMs: number,
 ): Promise<DaemonRpcResponse> => {
   return new Promise((resolve, reject) => {
-    const conn = net.createConnection(socketPath);
+    const conn = net.createConnection(resolveIpcPath(socketPath));
     let buf = "";
     const timer = setTimeout(() => {
       conn.destroy();
@@ -218,11 +219,11 @@ export const ensureDaemonRunning = async (
 
 const isSocketConnectable = (socketPath: string): Promise<boolean> => {
   return new Promise((resolve) => {
-    if (!fs.existsSync(socketPath)) {
+    if (process.platform !== "win32" && !fs.existsSync(socketPath)) {
       resolve(false);
       return;
     }
-    const conn = net.createConnection(socketPath);
+    const conn = net.createConnection(resolveIpcPath(socketPath));
     const done = (ok: boolean): void => {
       conn.removeAllListeners();
       conn.destroy();

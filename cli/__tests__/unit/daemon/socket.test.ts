@@ -11,13 +11,14 @@ import {
   unlinkStaleSocket,
   validateAuthToken,
   probeDaemon,
+  resolveIpcPath,
   MAX_LINE_BYTES,
   type DaemonRpcHandler,
 } from "../../../src/daemon/socket.js";
 
 const sendLine = (socketPath: string, line: string): Promise<string> =>
   new Promise((resolve, reject) => {
-    const conn = net.createConnection(socketPath);
+    const conn = net.createConnection(resolveIpcPath(socketPath));
     let buf = "";
     const timer = setTimeout(() => {
       conn.destroy();
@@ -63,6 +64,11 @@ describe("daemon/socket.ts", () => {
 
   it("ensureDaemonDir creates ~/.skeptic with 0700 permissions", () => {
     expect(fs.existsSync(tmpDir)).toBe(true);
+    if (process.platform === "win32") {
+      ensureDaemonDir();
+      expect(fs.existsSync(tmpDir)).toBe(true);
+      return;
+    }
     // Pre-existing tmpDir starts at 0700 anyway from mkdtemp; chmod-down it
     // first to verify the function tightens.
     fs.chmodSync(tmpDir, 0o755);
@@ -188,7 +194,7 @@ describe("daemon/socket.ts", () => {
     try {
       // The server must destroy the connection (no reply, no further data).
       const outcome = await new Promise<"closed" | "data" | "timeout">((resolve) => {
-        const conn = net.createConnection(sockPath);
+        const conn = net.createConnection(resolveIpcPath(sockPath));
         const timer = setTimeout(() => {
           conn.destroy();
           resolve("timeout");

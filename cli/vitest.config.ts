@@ -1,5 +1,7 @@
 import { defineConfig } from "vitest/config";
 
+const isCi = process.env["CI"] === "true";
+
 export default defineConfig({
   // Vitest reuses Vite's `define` mechanism. These mirror the build-time
   // constants substituted by tsup so unbundled test runs don't throw
@@ -17,5 +19,12 @@ export default defineConfig({
     include: ["__tests__/**/*.test.ts", "__tests__/**/*.test.tsx"],
     globals: true,
     testTimeout: 30_000,
+    ...(isCi
+      ? {
+          maxWorkers: 2,
+          minWorkers: 1,
+          reporters: "dot",
+        }
+      : {}),
   },
 });

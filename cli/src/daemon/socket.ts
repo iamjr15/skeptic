@@ -39,6 +39,31 @@ export const getDaemonDir = (): string => {
   return path.join(os.homedir(), ".skeptic");
 };
 
+const WINDOWS_PIPE_PREFIX = "\\\\.\\pipe\\";
+
+const isWindowsPipePath = (p: string): boolean =>
+  p.toLowerCase().startsWith(WINDOWS_PIPE_PREFIX.toLowerCase());
+
+/**
+ * Node's IPC transport is a filesystem socket on POSIX and a named pipe on
+ * Windows. Keep the public sidecar path stable, but translate it at the
+ * networking boundary so all callers can pass the same `getSocketPath()` value.
+ */
+export const resolveIpcPath = (socketPath: string): string => {
+  if (process.platform !== "win32" || isWindowsPipePath(socketPath)) return socketPath;
+  const resolved = path.resolve(socketPath);
+  const safeBase = path
+    .basename(resolved)
+    .replace(/[^a-zA-Z0-9_.-]/g, "_")
+    .slice(0, 32) || "daemon";
+  const hash = crypto
+    .createHash("sha256")
+    .update(resolved.toLowerCase())
+    .digest("hex")
+    .slice(0, 32);
+  return `${WINDOWS_PIPE_PREFIX}skeptic-${safeBase}-${hash}`;
+};
+
 export const getSocketPath = (): string => path.join(getDaemonDir(), "daemon.sock");
 export const getPidPath = (): string => path.join(getDaemonDir(), "daemon.pid");
 export const getVersionPath = (): string => path.join(getDaemonDir(), "daemon.version");
@@ -156,6 +181,7 @@ export const startSocketServer = async (
   handler: DaemonRpcHandler,
   opts: { onAccept?: () => void; onClose?: () => void } = {},
 ): Promise<SocketServerHandle> => {
+  const ipcPath = resolveIpcPath(socketPath);
   const server = net.createServer((conn) => {
     let buf = Buffer.alloc(0);
     let dropFrame = false;
@@ -238,13 +264,17 @@ export const startSocketServer = async (
 
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
-    server.listen(socketPath, () => {
+    server.listen(ipcPath, () => {
       server.removeListener("error", reject);
       try {
-        // Belt-and-suspenders — narrow the socket file too. The 0700 dir
-        // already gates access; this just keeps the file from being more
-        // permissive than the parent.
-        fs.chmodSync(socketPath, 0o600);
+        if (process.platform === "win32" && ipcPath !== socketPath) {
+          fs.writeFileSync(socketPath, `${ipcPath}\n`, { mode: 0o600 });
+        } else {
+          // Belt-and-suspenders — narrow the socket file too. The 0700 dir
+          // already gates access; this just keeps the file from being more
+          // permissive than the parent.
+          fs.chmodSync(socketPath, 0o600);
+        }
       } catch {
         /* best-effort */
       }
@@ -254,10 +284,19 @@ export const startSocketServer = async (
 
   return {
     server,
-    socketPath,
+    socketPath: ipcPath,
     close: () =>
       new Promise<void>((resolve) => {
-        server.close(() => resolve());
+        server.close(() => {
+          if (process.platform === "win32" && ipcPath !== socketPath) {
+            try {
+              fs.unlinkSync(socketPath);
+            } catch {
+              /* best-effort */
+            }
+          }
+          resolve();
+        });
       }),
   };
 };
@@ -282,7 +321,7 @@ export const probeDaemon = async (
   timeoutMs = 1500,
 ): Promise<{ ok: boolean; reason?: string; result?: unknown }> => {
   return new Promise((resolve) => {
-    const conn = net.createConnection(socketPath);
+    const conn = net.createConnection(resolveIpcPath(socketPath));
     let buf = "";
     const done = (out: { ok: boolean; reason?: string; result?: unknown }): void => {
       conn.removeAllListeners();

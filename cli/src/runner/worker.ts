@@ -1,6 +1,7 @@
 import { isMainThread, parentPort, workerData } from "node:worker_threads";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { tsImport } from "tsx/esm/api";
 import type { Browser, BrowserContext, Page } from "playwright";
 import type {
@@ -38,7 +39,7 @@ const post = (msg: WorkerToMain): void => {
 const importSpec = async (file: string): Promise<FileRegistry> => {
   const registry = beginRegistration(file);
   try {
-    await tsImport(file, import.meta.url);
+    await tsImport(pathToFileURL(file).href, import.meta.url);
   } finally {
     endRegistration();
   }

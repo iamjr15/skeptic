@@ -76,7 +76,7 @@ export function loadGuidance(
     return {
       domain,
       source: "builtin",
-      content: readTemplate(`guidance/${domain}.md`).toString("utf-8"),
+      content: readTemplate(`guidance/${domain}.md`).toString("utf-8").replace(/\r\n/g, "\n"),
     };
   } catch {
     throw new Error(
