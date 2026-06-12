@@ -37,7 +37,11 @@ Remaining LARGE builds — **fully planned, execution deferred by owner ("plan o
 - [ ] Skill-evals harness (real `claude -p`/`codex exec` scored on skill compliance): CLIs exist but it needs installing the new skill into a sandbox + recursive agent runs that modify `~/.claude` — do in a dedicated setup.
 
 ### Remaining (verifiable, but risky/large — pick deliberately)
-- [ ] P2 worker-reuse single-compile (deep runner surgery; ~6-11s on big suites; flakiness risk).
+- [✗] P2 worker-reuse single-compile — **MEASURED the premise; the perf win is sub-second, not 6-11s. Recommend NOT doing it.**
+  - Empirical: a 10-spec run (parallel 4, --no-daemon) is ~1.7s TOTAL. The double-import overhead can't be ~3s (275ms×10) because **discovery is already fully parallelized** (`Promise.all` over all specs) — its wall-clock is ~one worker's tsx-init (~300-500ms), not the sum. So eliminating the discovery phase saves only ~0.3-0.5s wall-clock for typical suites, regardless of spec count (it's parallel).
+  - The original "~6-11s" estimate wrongly assumed SERIAL per-spec overhead. It isn't.
+  - Doing it "properly" would still be a 6-file critical-path refactor (worker/execute/runSpecs/ipc/discover) that ALSO changes test.only from global→per-file and entangles sharding/retry/memory — high risk for a sub-second win.
+  - Verdict: not worth it. If sub-second startup ever matters, the lower-risk lever is the tsx→esbuild loader swap (no behavior change). Left as-is.
 - [ ] Phase-4 differentiators: self-healing-as-agent-loop, email/OTP + dynamic data, HAR export. New features.
 - [x] P10 flat compact render — already implemented (compactTree drops structural noise).
 
