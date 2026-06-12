@@ -98,7 +98,7 @@
     "chokidar": "^5.0.0",
     "commander": "^13.1.0",
     "fast-xml-parser": "^5.8.0",
-    "glob": "^11.0.2",
+    "glob": "^13.0.6",
     "ink-testing-library": "^4.0.0",
     "minimatch": "^10.0.0",
     "pixelmatch": "^7.1.0",
