@@ -32,8 +32,21 @@ export interface ObserveCommandOptions {
   cookies?: boolean;
   cookiesFrom?: string;
   timeout?: number;
-  noTui?: boolean;
+  /**
+   * Commander surfaces `--no-tui` as `tui: false` (and leaves it `undefined`/`true` otherwise).
+   * Reading a non-existent `noTui` key always yielded `undefined`, so `--no-tui` never suppressed
+   * the live console reporter. Read `tui === false` to honor the flag.
+   */
+  tui?: boolean;
 }
+
+/**
+ * Live console progress is on unless `--no-tui` was passed. Commander surfaces `--no-tui` as
+ * `tui: false`; absent/`--tui` leaves it `undefined`/`true`. The old code read a non-existent
+ * `noTui` key (always `undefined`), so `--no-tui` never suppressed the console reporter.
+ */
+export const observeShowsLiveConsole = (opts: Pick<ObserveCommandOptions, "tui">): boolean =>
+  opts.tui !== false;
 
 const timestampSlug = (): string => new Date().toISOString().replace(/[:.]/g, "-");
 
@@ -78,7 +91,7 @@ export const runObserve = async (
   const testFile = `skeptic observe ${url}`;
 
   const reporters: Reporter[] = [
-    ...(opts.noTui ? [] : [new ConsoleReporter()]),
+    ...(observeShowsLiveConsole(opts) ? [new ConsoleReporter()] : []),
     new JsonReporter(outputDir),
     new HtmlReporter(outputDir),
   ];
@@ -193,6 +206,7 @@ export const runObserve = async (
       total: 1,
       passed: result.status === "passed" ? 1 : 0,
       failed: result.status === "passed" ? 0 : 1,
+      skipped: 0,
       duration_ms: Math.round(performance.now() - start),
       tests: [result],
     };

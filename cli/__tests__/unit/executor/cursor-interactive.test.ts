@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { Page, Locator, ElementHandle } from "playwright";
+import type { Page, Locator } from "playwright";
 import { captureAriaSnapshot } from "../../../src/executor/aria-snapshot-capture.js";
 
 /**
@@ -44,45 +44,26 @@ function createFakePage(opts: {
     nth: vi.fn().mockReturnValue(makeNthLocator()),
   } as unknown as Locator);
 
-  const cursorElementHandle = (idx: number): ElementHandle => ({
-    dispose: vi.fn().mockResolvedValue(undefined),
-    evaluate: vi.fn().mockImplementation(async () => opts.selectorHints?.[idx] ?? ""),
-    _idx: idx,
-  } as unknown as ElementHandle);
-
-  const cursorLocator = (sel: string): Locator => {
-    const m = /data-__skeptic-ci="(\d+)"/.exec(sel);
-    const idx = m ? Number(m[1]) : -1;
-    return {
-      elementHandle: vi.fn().mockResolvedValue(idx >= 0 ? cursorElementHandle(idx) : null),
-    } as unknown as Locator;
-  };
-
   const scope: Locator = {
     ariaSnapshot,
     first: vi.fn().mockReturnValue({ ariaSnapshot }),
     getByRole: vi.fn().mockReturnValue(makeRoleLocator()),
   } as unknown as Locator;
 
-  const evalCalls = { count: 0 };
   const page = {
-    locator: vi.fn().mockImplementation((sel: string) => {
-      if (sel.includes("data-__skeptic-ci")) return cursorLocator(sel);
-      return scope;
-    }),
+    locator: vi.fn().mockReturnValue(scope),
     viewportSize: vi.fn().mockReturnValue({ width: 1280, height: 720 }),
-    evaluate: vi.fn().mockImplementation(async (_script: unknown, arg?: unknown) => {
-      // First call (no `arg`): returns the cursor-interactive raw list.
-      // Subsequent calls (with `arg = handle`): return the selectorHint.
-      if (arg === undefined) {
-        evalCalls.count++;
-        return opts.cursorEval.map((entry) => ({
-          bbox: [100, 100, 30, 20],
-          ...entry,
-        }));
+    evaluate: vi.fn().mockImplementation(async (script: unknown) => {
+      // Selector-hint generation is now batched into ONE evaluate that runs
+      // `window.__skeptic_selector` over every stamped candidate.
+      if (typeof script === "string" && script.includes("__skeptic_selector")) {
+        return opts.selectorHints ?? {};
       }
-      const idx = (arg as { _idx?: number })._idx ?? -1;
-      return opts.selectorHints?.[idx] ?? "";
+      // The cursor-interactive DOM walk (also a string evaluate, no arg).
+      return opts.cursorEval.map((entry) => ({
+        bbox: [100, 100, 30, 20],
+        ...entry,
+      }));
     }),
     addScriptTag: vi.fn().mockResolvedValue(undefined),
   } as unknown as Page & FakePage;

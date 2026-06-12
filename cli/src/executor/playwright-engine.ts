@@ -13,7 +13,6 @@ import type {
 } from "./types.js";
 import { ExecutionContext, DEFAULT_ARTIFACT_CONFIG } from "./context.js";
 import { appendWarning } from "./types.js";
-import { takeRedactedScreenshot } from "../ai/security.js";
 import { logger } from "../utils/logger.js";
 import { buildCollectors, type ObservabilityRuntimeConfig } from "../observability/registry.js";
 import type {
@@ -282,8 +281,6 @@ export class PlaywrightEngine {
         input.url,
         testDir,
         path.dirname(input.file),
-        this.options.aiClient,
-        this.options.aiProvider,
         effectiveTimeout,
         collectors,
         artifactConfig,
@@ -333,7 +330,7 @@ export class PlaywrightEngine {
           if (this.options.screenshotOnFailure && page && !page.isClosed()) {
             try {
               const screenshotPath = join(testDir, `failure.png`);
-              const buffer = await takeRedactedScreenshot(page);
+              const buffer = await page.screenshot({ fullPage: true });
               await writeFile(screenshotPath, buffer);
               stepResult.screenshot = screenshotPath;
               ctx.addScreenshot(screenshotPath);

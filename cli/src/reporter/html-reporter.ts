@@ -37,7 +37,7 @@ export class HtmlReporter implements Reporter {
     const outPath = path.join(this.outputDir, "report.html");
 
     const testsHtml = summary.tests
-      .map((test, i) => buildTestSection(test, i, summary.tests))
+      .map((test, i) => buildTestSection(test, i, summary.tests, this.outputDir))
       .join("\n");
     const passRate = summary.total > 0 ? Math.round((summary.passed / summary.total) * 100) : 0;
     const duration = formatDuration(summary.duration_ms);
@@ -161,20 +161,25 @@ document.querySelectorAll('.copy-btn').forEach(btn => {
   }
 }
 
-function buildTestSection(test: TestResult, _index: number, siblings: TestResult[]): string {
+function buildTestSection(
+  test: TestResult,
+  _index: number,
+  siblings: TestResult[],
+  outputDir: string,
+): string {
   const isPassed = test.status === "passed";
   const badge = isPassed
     ? '<span class="badge badge-pass">PASS</span>'
     : '<span class="badge badge-fail">FAIL</span>';
 
-  const stepsHtml = test.steps.map((step) => buildStepRow(step)).join("\n");
+  const stepsHtml = test.steps.map((step) => buildStepRow(step, outputDir)).join("\n");
 
   const videoPath = test.artifacts?.video?.path;
   const videoLink = videoPath
     ? `<span style="color:#90caf9;font-size:0.8rem;margin-left:0.5rem;" title="${esc(videoPath)}">&#127909; Video</span>`
     : "";
 
-  const artifactsPanel = buildArtifactsPanel(test);
+  const artifactsPanel = buildArtifactsPanel(test, outputDir);
   const metricsHtml = buildMetricsSection(test.metrics);
 
   return `<div class="test ${isPassed ? "passed" : "failed"}">
@@ -192,7 +197,7 @@ ${stepsHtml}${metricsHtml}
 </div>`;
 }
 
-function buildStepRow(step: StepResult): string {
+function buildStepRow(step: StepResult, outputDir: string): string {
   const icon =
     step.status === "passed"
       ? '<span class="icon pass">&#10003;</span>'
@@ -225,9 +230,9 @@ function buildStepRow(step: StepResult): string {
     const diff = readScreenshotAsset(step.diffPath);
     if (baseline && current && diff) {
       extra += `\n      <div class="visual-diff">`;
-      extra += renderScreenshotFigure("Baseline", baseline, "baseline screenshot");
-      extra += renderScreenshotFigure("Current", current, "current screenshot");
-      extra += renderScreenshotFigure("Diff", diff, "diff screenshot");
+      extra += renderScreenshotFigure("Baseline", baseline, "baseline screenshot", outputDir);
+      extra += renderScreenshotFigure("Current", current, "current screenshot", outputDir);
+      extra += renderScreenshotFigure("Diff", diff, "diff screenshot", outputDir);
       extra += `</div>`;
     }
   } else if (step.screenshot) {
@@ -238,7 +243,7 @@ function buildStepRow(step: StepResult): string {
       const altText = isFailure
         ? `failure evidence — ${step.command}${stepLabel ? ` ${stepLabel}` : ""}`
         : `${step.command} screenshot${stepLabel ? ` — ${stepLabel}` : ""}`;
-      extra += `\n      <div class="screenshot">${renderScreenshotMedia(screenshot, altText)}</div>`;
+      extra += `\n      <div class="screenshot">${renderScreenshotMedia(screenshot, altText, outputDir)}</div>`;
     }
   }
 
@@ -250,7 +255,7 @@ function buildStepRow(step: StepResult): string {
     </div>${extra}`;
 }
 
-function buildArtifactsPanel(test: TestResult): string {
+function buildArtifactsPanel(test: TestResult, outputDir: string): string {
   const a = test.artifacts ?? {};
   const cards: string[] = [];
 
@@ -268,47 +273,49 @@ function buildArtifactsPanel(test: TestResult): string {
         ? "failure evidence"
         : "last screenshot";
       cards.push(
-        `<div class="artifact-card"><h4>Screenshot</h4>${renderScreenshotMedia(asset, altLabel)}<div class="hint">${esc(heroPath)}</div></div>`,
+        `<div class="artifact-card"><h4>Screenshot</h4>${renderScreenshotMedia(asset, altLabel, outputDir)}<div class="hint">${esc(reportHref(outputDir, heroPath))}</div></div>`,
       );
     }
   }
 
-  // Video card — embed playable
+  // Video card — embed playable. `src` is relative to report.html (which lives in
+  // outputDir) so the link resolves when the report is opened from disk.
   if (a.video) {
-    const rel = path.relative(path.dirname(test.file), a.video.path) || a.video.path;
+    const href = reportHref(outputDir, a.video.path);
     cards.push(
-      `<div class="artifact-card"><h4>Video (${a.video.width}×${a.video.height})</h4><video controls preload="metadata" src="${esc(a.video.path)}"></video><div class="hint">${esc(rel)}</div></div>`,
+      `<div class="artifact-card"><h4>Video (${a.video.width}×${a.video.height})</h4><video controls preload="metadata" src="${esc(href)}"></video><div class="hint">${esc(href)}</div></div>`,
     );
   }
 
-  // Trace card — link plus copy-to-clipboard for the show-trace command
+  // Trace card — link (relative to the report) plus copy-to-clipboard for the show-trace
+  // command, which keeps the original path so it's runnable from the user's shell.
   if (a.trace) {
     const cmd = `npx playwright show-trace ${a.trace}`;
     cards.push(
-      `<div class="artifact-card"><h4>Playwright Trace</h4><a href="${esc(a.trace)}">Open trace zip</a><div class="hint">View interactively: <code>${esc(cmd)}</code><button class="copy-btn">Copy</button></div></div>`,
+      `<div class="artifact-card"><h4>Playwright Trace</h4><a href="${esc(reportHref(outputDir, a.trace))}">Open trace zip</a><div class="hint">View interactively: <code>${esc(cmd)}</code><button class="copy-btn">Copy</button></div></div>`,
     );
   }
 
   // Perf-trace markdown sidecar
   if (a.perfTrace) {
     cards.push(
-      `<div class="artifact-card"><h4>Performance Trace</h4><a href="${esc(a.perfTrace)}">Open performance-trace.md</a></div>`,
+      `<div class="artifact-card"><h4>Performance Trace</h4><a href="${esc(reportHref(outputDir, a.perfTrace))}">Open performance-trace.md</a></div>`,
     );
   }
 
   // Accessibility audit markdown sidecar — full violation list, no rule-level truncation.
   if (a.accessibilityAudit) {
     cards.push(
-      `<div class="artifact-card"><h4>Accessibility Audit</h4><a href="${esc(a.accessibilityAudit)}">Open audit.md</a></div>`,
+      `<div class="artifact-card"><h4>Accessibility Audit</h4><a href="${esc(reportHref(outputDir, a.accessibilityAudit))}">Open audit.md</a></div>`,
     );
   }
 
   // Console / network sidecars (Bundle 4 will write them under --observability-write-sidecars)
   const sidecarLinks: string[] = [];
-  if (a.consoleSnapshot) sidecarLinks.push(`<a href="${esc(a.consoleSnapshot)}">console.json</a>`);
-  if (a.networkSnapshot) sidecarLinks.push(`<a href="${esc(a.networkSnapshot)}">network.json</a>`);
-  if (a.accessibilityJson) sidecarLinks.push(`<a href="${esc(a.accessibilityJson)}">accessibility.json</a>`);
-  if (a.testJson) sidecarLinks.push(`<a href="${esc(a.testJson)}">test.json</a>`);
+  if (a.consoleSnapshot) sidecarLinks.push(`<a href="${esc(reportHref(outputDir, a.consoleSnapshot))}">console.json</a>`);
+  if (a.networkSnapshot) sidecarLinks.push(`<a href="${esc(reportHref(outputDir, a.networkSnapshot))}">network.json</a>`);
+  if (a.accessibilityJson) sidecarLinks.push(`<a href="${esc(reportHref(outputDir, a.accessibilityJson))}">accessibility.json</a>`);
+  if (a.testJson) sidecarLinks.push(`<a href="${esc(reportHref(outputDir, a.testJson))}">test.json</a>`);
   if (sidecarLinks.length > 0) {
     cards.push(
       `<div class="artifact-card"><h4>Sidecars</h4>${sidecarLinks.join(" · ")}</div>`,
@@ -438,15 +445,33 @@ function readScreenshotAsset(filePath: string): ScreenshotAsset | null {
   return null;
 }
 
-function renderScreenshotFigure(label: string, asset: ScreenshotAsset, alt: string): string {
-  return `<figure><figcaption>${esc(label)}</figcaption>${renderScreenshotMedia(asset, alt)}</figure>`;
+function renderScreenshotFigure(
+  label: string,
+  asset: ScreenshotAsset,
+  alt: string,
+  outputDir: string,
+): string {
+  return `<figure><figcaption>${esc(label)}</figcaption>${renderScreenshotMedia(asset, alt, outputDir)}</figure>`;
 }
 
-function renderScreenshotMedia(asset: ScreenshotAsset, alt: string): string {
+function renderScreenshotMedia(asset: ScreenshotAsset, alt: string, outputDir: string): string {
   if (asset.base64) {
     return `<img src="data:image/png;base64,${asset.base64}" alt="${esc(alt)}">`;
   }
-  return `<a href="${esc(asset.filePath)}" title="${esc(asset.filePath)}">Open image (${formatBytes(asset.bytes)})</a>`;
+  // Large assets are linked, not embedded. The href is relative to report.html (in
+  // outputDir); the title keeps the full on-disk path as a tooltip.
+  return `<a href="${esc(reportHref(outputDir, asset.filePath))}" title="${esc(asset.filePath)}">Open image (${formatBytes(asset.bytes)})</a>`;
+}
+
+/**
+ * Resolve an artifact path to an href relative to the report file's directory (outputDir),
+ * where report.html is written. Artifact paths in results may be CWD-relative or absolute;
+ * `path.relative` normalizes both against the report location so links resolve when the
+ * report is opened from disk. Separators are normalized to `/` for URL use.
+ */
+function reportHref(outputDir: string, target: string): string {
+  const rel = path.relative(outputDir, target);
+  return (rel.length > 0 ? rel : target).split(path.sep).join("/");
 }
 
 function htmlEmbedMaxBytes(): number {

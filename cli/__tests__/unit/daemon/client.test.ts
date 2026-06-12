@@ -7,7 +7,12 @@ import {
   ensureDaemonDir,
   type DaemonRpcHandler,
 } from "../../../src/daemon/socket.js";
-import { sendRpc } from "../../../src/daemon/client.js";
+import {
+  sendRpc,
+  getDaemonClientCount,
+  isMismatchReason,
+  resolveMismatchAction,
+} from "../../../src/daemon/client.js";
 
 // `connectDaemon` itself touches Playwright + spawns subprocesses, so it's
 // covered by the daemon integration tests. These unit tests target the
@@ -69,5 +74,57 @@ describe("daemon/client.ts — sendRpc + auth path", () => {
     await expect(
       sendRpc(sockPath, { method: "anything" }, 500),
     ).rejects.toBeTruthy();
+  });
+
+  // Regression: the daemon is a single global slot. A version/engine/headed
+  // mismatch must NOT shut down a daemon that other clients are actively using —
+  // the mismatched caller should fall back to its own private browser instead.
+  describe("mismatch handling preserves concurrent runs", () => {
+    it("falls back to standalone only when other clients are active", () => {
+      expect(resolveMismatchAction("version-mismatch", 0)).toBe("restart");
+      expect(resolveMismatchAction("version-mismatch", 2)).toBe("standalone");
+      expect(resolveMismatchAction("engine-mismatch", 1)).toBe("standalone");
+      expect(resolveMismatchAction("headed-mismatch", 1)).toBe("standalone");
+      // Non-mismatch reasons never trigger a standalone fallback.
+      expect(resolveMismatchAction("auth-failed", 3)).toBe("restart");
+    });
+
+    it("classifies handshake reasons", () => {
+      expect(isMismatchReason("engine-mismatch")).toBe(true);
+      expect(isMismatchReason("headed-mismatch")).toBe(true);
+      expect(isMismatchReason("version-mismatch")).toBe(true);
+      expect(isMismatchReason("auth-failed")).toBe(false);
+      expect(isMismatchReason("unknown")).toBe(false);
+    });
+
+    it("reads the active-client count from daemon.status", async () => {
+      ensureDaemonDir();
+      const sockPath = path.join(tmpDir, "status.sock");
+      const handler: DaemonRpcHandler = async (req) =>
+        req.method === "daemon.status"
+          ? { result: { clients: 3, uptimeMs: 1, engine: "chromium" } }
+          : { error: "unexpected" };
+      const server = await startSocketServer(sockPath, handler);
+      try {
+        expect(await getDaemonClientCount(sockPath)).toBe(3);
+      } finally {
+        await server.close();
+      }
+    });
+
+    it("defaults the client count to 0 when status is unreachable or malformed", async () => {
+      // Unreachable socket -> conservative 0 (lets a dead/unused daemon restart).
+      expect(await getDaemonClientCount(path.join(tmpDir, "nope.sock"))).toBe(0);
+
+      ensureDaemonDir();
+      const sockPath = path.join(tmpDir, "malformed.sock");
+      const handler: DaemonRpcHandler = async () => ({ result: { uptimeMs: 1 } });
+      const server = await startSocketServer(sockPath, handler);
+      try {
+        expect(await getDaemonClientCount(sockPath)).toBe(0);
+      } finally {
+        await server.close();
+      }
+    });
   });
 });

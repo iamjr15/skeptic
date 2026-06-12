@@ -40,6 +40,9 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install chromium
 
+      - name: Type-check
+        run: npm run check
+
       - name: Build package
         run: npm run build
 
@@ -57,6 +60,30 @@ jobs:
 
       - name: Validate npm pack layout
         run: npm pack --dry-run
+
+      # Pack the real tarball and install it into a throwaway project to prove
+      # the published artifact actually runs (bin resolves, dist is present,
+      # version is stamped) before we publish it to the registry.
+      - name: Smoke-test packed tarball
+        run: |
+          set -euo pipefail
+          PKG="$(npm pack --silent)"
+          echo "Packed tarball: $PKG"
+          PKG_PATH="$PWD/$PKG"
+          WORK="$(mktemp -d)"
+          cd "$WORK"
+          npm init -y >/dev/null
+          # --ignore-scripts skips Playwright's browser download and skeptic's
+          # agent-skill postinstall; neither is needed to smoke-test the CLI.
+          npm install "$PKG_PATH" --ignore-scripts --no-audit --no-fund >/dev/null
+          EXPECTED="${GITHUB_REF_NAME#v}"
+          STAMPED="$(node_modules/.bin/skeptic --version)"
+          if [[ "$STAMPED" != "$EXPECTED" ]]; then
+            echo "::error::Installed tarball prints $STAMPED but tag is $EXPECTED"
+            exit 1
+          fi
+          node_modules/.bin/skeptic --help >/dev/null
+          echo "Tarball smoke test passed: skeptic $STAMPED"
 
       - name: Publish main package
         env:

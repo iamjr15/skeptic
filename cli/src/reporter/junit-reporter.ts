@@ -31,14 +31,20 @@ export class JUnitReporter implements Reporter {
     const outPath = path.join(this.outputDir, "junit.xml");
 
     const totalTime = (summary.duration_ms / 1000).toFixed(3);
-    const testsuites = summary.tests
-      .map((test) => buildTestSuite(test, summary.tests))
-      .join("\n");
+    const suites = summary.tests.map((test) => buildTestSuite(test, summary.tests));
+
+    // The aggregate `tests`/`failures`/`skipped` attributes must summarize the actual
+    // <testcase> elements emitted (one per step, plus a synthetic case for whole-test
+    // skips) — not the run's test-level totals. The previous code mixed the two (test-level
+    // counts over step-level testcases), so the numbers never reconciled.
+    const totalTests = suites.reduce((n, s) => n + s.tests, 0);
+    const totalFailures = suites.reduce((n, s) => n + s.failures, 0);
+    const totalSkipped = suites.reduce((n, s) => n + s.skipped, 0);
 
     const xml = [
       `<?xml version="1.0" encoding="UTF-8"?>`,
-      `<testsuites name="${esc(PRODUCT_NAME)}" tests="${summary.total}" failures="${summary.failed}" time="${totalTime}">`,
-      testsuites,
+      `<testsuites name="${esc(PRODUCT_NAME)}" tests="${totalTests}" failures="${totalFailures}" skipped="${totalSkipped}" time="${totalTime}">`,
+      suites.map((s) => s.xml).join("\n"),
       `</testsuites>`,
     ].join("\n");
 
@@ -47,12 +53,32 @@ export class JUnitReporter implements Reporter {
   }
 }
 
-function buildTestSuite(test: TestResult, siblings: TestResult[]): string {
+interface SuiteRender {
+  xml: string;
+  tests: number;
+  failures: number;
+  skipped: number;
+}
+
+function buildTestSuite(test: TestResult, siblings: TestResult[]): SuiteRender {
+  const time = (test.duration_ms / 1000).toFixed(3);
+  const displayName = formatTestDisplayName(test, siblings);
+
+  // A test declared `test.skip(...)` never runs its body, so it has no steps. Emit a single
+  // skipped testcase so the skip shows up in the tally rather than vanishing as an empty
+  // testsuite (which most JUnit consumers read as "0 tests").
+  if (test.skipped && test.steps.length === 0) {
+    const xml =
+      `  <testsuite name="${esc(displayName)}" tests="1" failures="0" skipped="1" time="${time}">\n` +
+      `    <testcase classname="${esc(displayName)}" name="${esc(test.name)}" time="${time}"><skipped /></testcase>\n` +
+      `  </testsuite>`;
+    return { xml, tests: 1, failures: 0, skipped: 1 };
+  }
+
   const failures = test.steps.filter(
     (s) => s.status === "failed" || s.status === "error",
   ).length;
-  const time = (test.duration_ms / 1000).toFixed(3);
-  const displayName = formatTestDisplayName(test, siblings);
+  const skipped = test.steps.filter((s) => s.status === "skipped").length;
 
   const testcases = test.steps
     .map((step) => {
@@ -60,12 +86,19 @@ function buildTestSuite(test: TestResult, siblings: TestResult[]): string {
       if (step.status === "passed") {
         return `    <testcase classname="${esc(displayName)}" name="${esc(step.command)}" time="${stepTime}" />`;
       }
+      if (step.status === "skipped") {
+        return `    <testcase classname="${esc(displayName)}" name="${esc(step.command)}" time="${stepTime}"><skipped /></testcase>`;
+      }
       const failureMsg = step.error ? `\n      <failure message="${esc(step.error)}">${esc(step.error)}</failure>\n    ` : "";
       return `    <testcase classname="${esc(displayName)}" name="${esc(step.command)}" time="${stepTime}">${failureMsg}</testcase>`;
     })
     .join("\n");
 
-  return `  <testsuite name="${esc(displayName)}" tests="${test.steps.length}" failures="${failures}" time="${time}">\n${testcases}\n  </testsuite>`;
+  const xml =
+    `  <testsuite name="${esc(displayName)}" tests="${test.steps.length}" failures="${failures}" skipped="${skipped}" time="${time}">\n` +
+    `${testcases}\n  </testsuite>`;
+
+  return { xml, tests: test.steps.length, failures, skipped };
 }
 
 function esc(s: string): string {

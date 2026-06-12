@@ -2,7 +2,12 @@ import type { CollectorName } from "../observability/types.js";
 import type { SkepticFixture } from "./fixture.js";
 
 export interface TestUseOptions {
-  /** Base URL — used by the runner to set the page's default base. Per-test override via `await page.goto(absoluteUrl)`. */
+  /**
+   * Base URL for the test page. Relative `page.goto('/path')` calls resolve
+   * against it — the runner passes it through as Playwright's browser-context
+   * `baseURL` (see `worker.ts`). Pass an absolute URL to `page.goto(...)` to
+   * override it for a single navigation. CLI `--base-url` takes precedence.
+   */
   url?: string;
   viewport?: { width: number; height: number };
   /**

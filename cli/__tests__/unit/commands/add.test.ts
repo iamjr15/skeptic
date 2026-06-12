@@ -2,7 +2,6 @@ import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { ENV_KEY_BY_PROVIDER } from "../../../src/ai/ai-client.js";
 
 let tmpDir: string;
 
@@ -62,214 +61,17 @@ describe("add command", () => {
       expect(content).toContain("yarn dev");
       expect(content).toContain("http://localhost:4000");
     });
-  });
 
-  describe("runAddGitHubAction AI env block", () => {
-    it("has no provider env block when --ai is omitted", async () => {
-      const { runAddGitHubAction } = await import("../../../src/commands/add.js");
-      await runAddGitHubAction({});
-      const content = fs.readFileSync(workflowPath(), "utf-8");
-      for (const key of Object.values(ENV_KEY_BY_PROVIDER)) {
-        expect(content).not.toContain(key);
-      }
-    });
-
-    for (const provider of ["gemini", "openai", "anthropic"] as const) {
-      it(`injects ${ENV_KEY_BY_PROVIDER[provider]} when --ai --provider=${provider}`, async () => {
-        const { runAddGitHubAction } = await import("../../../src/commands/add.js");
-        await runAddGitHubAction({ ai: true, provider });
-        const content = fs.readFileSync(workflowPath(), "utf-8");
-        const expected = ENV_KEY_BY_PROVIDER[provider];
-        expect(content).toContain(`${expected}: \${{ secrets.${expected} }}`);
-        for (const key of Object.values(ENV_KEY_BY_PROVIDER)) {
-          if (key !== expected) expect(content).not.toContain(key);
-        }
-      });
-    }
-  });
-
-  describe("runAddGitHubAction AI runtime drift fixes (Phase 5)", () => {
-    // Helper: extract the YAML chunk for the step containing `npx skeptic run`
-    // so assertions are scoped to that step's `env:` block, not job-level / other steps.
-    function extractTestStep(yaml: string): string {
-      const stepHeaders = yaml.split(/\n\s+- name: /);
-      const testStep = stepHeaders.find((s) => s.includes("npx skeptic run"));
-      if (!testStep) throw new Error("Could not find skeptic run step in YAML");
-      return testStep;
-    }
-
-    for (const provider of ["gemini", "openai", "anthropic"] as const) {
-      it(`emits SKEPTIC_AI_PROVIDER=${provider} in test step env when --ai --provider=${provider}`, async () => {
-        const { runAddGitHubAction } = await import("../../../src/commands/add.js");
-        await runAddGitHubAction({ ai: true, provider });
-        const yaml = fs.readFileSync(workflowPath(), "utf-8");
-        const testStep = extractTestStep(yaml);
-        expect(testStep).toContain(`SKEPTIC_AI_PROVIDER: ${provider}`);
-      });
-
-      it(`emits SKEPTIC_AI_API_KEY referencing the same secret as the API key env (${provider})`, async () => {
-        const { runAddGitHubAction } = await import("../../../src/commands/add.js");
-        await runAddGitHubAction({ ai: true, provider });
-        const yaml = fs.readFileSync(workflowPath(), "utf-8");
-        const testStep = extractTestStep(yaml);
-        const envKey = ENV_KEY_BY_PROVIDER[provider];
-        expect(testStep).toContain(`SKEPTIC_AI_API_KEY: \${{ secrets.${envKey} }}`);
-      });
-
-      it(`appends --analyze to the test command for --ai --provider=${provider}`, async () => {
-        const { runAddGitHubAction } = await import("../../../src/commands/add.js");
-        await runAddGitHubAction({ ai: true, provider });
-        const yaml = fs.readFileSync(workflowPath(), "utf-8");
-        expect(yaml).toMatch(/npx skeptic run .* --analyze/);
-      });
-    }
-
-    it("does NOT emit SKEPTIC_AI_PROVIDER, SKEPTIC_AI_API_KEY, or --analyze when --ai is omitted", async () => {
+    it("emits no AI provider env, secrets, or --analyze flag", async () => {
       const { runAddGitHubAction } = await import("../../../src/commands/add.js");
       await runAddGitHubAction({});
       const yaml = fs.readFileSync(workflowPath(), "utf-8");
       expect(yaml).not.toContain("SKEPTIC_AI_PROVIDER");
       expect(yaml).not.toContain("SKEPTIC_AI_API_KEY");
       expect(yaml).not.toContain("--analyze");
-    });
-
-    it("stale ai.apiKey: $GEMINI_API_KEY in config doesn't break --ai --provider openai workflow", async () => {
-      // The Codex round-6 scenario: user has the README example apiKey in their config but
-      // scaffolds with --provider openai. The workflow must surface the OpenAI key through
-      // SKEPTIC_AI_API_KEY so runtime apiKey is non-empty regardless of stale config.
-      fs.writeFileSync(
-        path.join(tmpDir, "skeptic.config.yaml"),
-        "ai:\n  provider: gemini\n  apiKey: $GEMINI_API_KEY\n",
-        "utf-8",
-      );
-      const { runAddGitHubAction } = await import("../../../src/commands/add.js");
-      await runAddGitHubAction({ ai: true, provider: "openai" });
-      const yaml = fs.readFileSync(workflowPath(), "utf-8");
-
-      // All three injections present, all referencing OpenAI's secret
-      expect(yaml).toContain("OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}");
-      expect(yaml).toContain("SKEPTIC_AI_PROVIDER: openai");
-      expect(yaml).toContain("SKEPTIC_AI_API_KEY: ${{ secrets.OPENAI_API_KEY }}");
-
-      // Step-scoped: all three live in the test step's env: block (not somewhere else)
-      const testStep = extractTestStep(yaml);
-      expect(testStep).toContain("OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}");
-      expect(testStep).toContain("SKEPTIC_AI_PROVIDER: openai");
-      expect(testStep).toContain("SKEPTIC_AI_API_KEY: ${{ secrets.OPENAI_API_KEY }}");
-
-      // Negative: nothing references GEMINI_API_KEY anywhere
       expect(yaml).not.toContain("GEMINI_API_KEY");
-    });
-  });
-
-  describe("runAddGitHubAction config-driven provider", () => {
-    it("reads provider from skeptic.config.yaml when --provider is omitted", async () => {
-      fs.writeFileSync(
-        path.join(tmpDir, "skeptic.config.yaml"),
-        `ai:\n  provider: anthropic\n`,
-        "utf-8",
-      );
-      const { runAddGitHubAction } = await import("../../../src/commands/add.js");
-      await runAddGitHubAction({ ai: true });
-      const content = fs.readFileSync(workflowPath(), "utf-8");
-      expect(content).toContain("ANTHROPIC_API_KEY");
-      expect(content).not.toContain("GEMINI_API_KEY");
-      expect(content).not.toContain("OPENAI_API_KEY");
-    });
-
-    it("defaults to gemini when no config exists", async () => {
-      const { runAddGitHubAction } = await import("../../../src/commands/add.js");
-      await runAddGitHubAction({ ai: true });
-      const content = fs.readFileSync(workflowPath(), "utf-8");
-      expect(content).toContain("GEMINI_API_KEY");
-    });
-
-    it("CLI --provider overrides config", async () => {
-      fs.writeFileSync(
-        path.join(tmpDir, "skeptic.config.yaml"),
-        `ai:\n  provider: gemini\n`,
-        "utf-8",
-      );
-      const { runAddGitHubAction } = await import("../../../src/commands/add.js");
-      await runAddGitHubAction({ ai: true, provider: "openai" });
-      const content = fs.readFileSync(workflowPath(), "utf-8");
-      expect(content).toContain("OPENAI_API_KEY");
-      expect(content).not.toContain("GEMINI_API_KEY");
-    });
-  });
-
-  describe("runAddGitHubAction console guidance", () => {
-    it("prints provider-aware guidance mentioning the correct env var (anthropic)", async () => {
-      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-      const { runAddGitHubAction } = await import("../../../src/commands/add.js");
-      await runAddGitHubAction({ ai: true, provider: "anthropic" });
-      const printed = logSpy.mock.calls.flat().join("\n");
-      expect(printed).toContain("ANTHROPIC_API_KEY");
-      expect(printed).toContain("anthropic");
-      expect(printed).not.toContain("GEMINI_API_KEY");
-      logSpy.mockRestore();
-    });
-
-    it("prints gemini guidance when --ai without --provider and no config", async () => {
-      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-      const { runAddGitHubAction } = await import("../../../src/commands/add.js");
-      await runAddGitHubAction({ ai: true });
-      const printed = logSpy.mock.calls.flat().join("\n");
-      expect(printed).toContain("GEMINI_API_KEY");
-      logSpy.mockRestore();
-    });
-
-    it("prints no API-key guidance when --ai is omitted", async () => {
-      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-      const { runAddGitHubAction } = await import("../../../src/commands/add.js");
-      await runAddGitHubAction({});
-      const printed = logSpy.mock.calls.flat().join("\n");
-      for (const key of Object.values(ENV_KEY_BY_PROVIDER)) {
-        expect(printed).not.toContain(key);
-      }
-      logSpy.mockRestore();
-    });
-  });
-
-  describe("runAddGitHubAction error paths", () => {
-    it("errors when --provider is passed without --ai", async () => {
-      const { runAddGitHubAction } = await import("../../../src/commands/add.js");
-      await runAddGitHubAction({ provider: "openai" });
-      expect(process.exitCode).toBe(1);
-      expect(fs.existsSync(workflowPath())).toBe(false);
-      expect(fs.existsSync(workflowsDir())).toBe(false);
-    });
-
-    it("errors on invalid --provider value (zod enum rejection)", async () => {
-      const { runAddGitHubAction } = await import("../../../src/commands/add.js");
-      await runAddGitHubAction({ ai: true, provider: "claude" });
-      expect(process.exitCode).toBe(1);
-      expect(fs.existsSync(workflowPath())).toBe(false);
-      expect(fs.existsSync(workflowsDir())).toBe(false);
-    });
-
-    it("errors cleanly when --config points to a missing file", async () => {
-      const { runAddGitHubAction } = await import("../../../src/commands/add.js");
-      await runAddGitHubAction({
-        ai: true,
-        config: path.join(tmpDir, "nonexistent.yaml"),
-      });
-      expect(process.exitCode).toBe(1);
-      expect(fs.existsSync(workflowPath())).toBe(false);
-      expect(fs.existsSync(workflowsDir())).toBe(false);
-    });
-
-    it("errors cleanly on malformed config YAML", async () => {
-      fs.writeFileSync(
-        path.join(tmpDir, "skeptic.config.yaml"),
-        `ai:\n  provider: "unterminated`,
-        "utf-8",
-      );
-      const { runAddGitHubAction } = await import("../../../src/commands/add.js");
-      await runAddGitHubAction({ ai: true });
-      expect(process.exitCode).toBe(1);
-      expect(fs.existsSync(workflowPath())).toBe(false);
-      expect(fs.existsSync(workflowsDir())).toBe(false);
+      expect(yaml).not.toContain("OPENAI_API_KEY");
+      expect(yaml).not.toContain("ANTHROPIC_API_KEY");
     });
   });
 

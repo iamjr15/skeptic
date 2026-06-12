@@ -27,8 +27,8 @@ spec.
 
 The npm package installs a managed `skeptic` skill for Claude Code, Codex,
 Cursor, and OpenCode into user-level skill directories when `npm install` runs.
-Use that skill when an agent needs browser QA, spec authoring, or MCP browser
-tool guidance.
+Use that skill when an agent needs browser QA, spec authoring, or interactive
+browser-session driving.
 
 Manual install commands:
 
@@ -185,60 +185,28 @@ Annotated screenshots add numbered labels over interactive refs and return an
 annotation map without accessible names, so structured metadata does not repeat
 potentially sensitive page text.
 
-## AI
+## Browser Session Verbs
 
-Configure a provider and key before using AI helpers.
-
-```yaml
-ai:
-  provider: openai
-  model: gpt-4o
-```
-
-```ts
-await ai.assert("the success toast is visible");
-await ai.assertNoDefects();
-const total = await ai.extract("invoice total");
-```
-
-Use:
+Skeptic is agent-native — you drive a persistent browser from the shell, no MCP
+server and no built-in AI/keys. A daemon holds the session so `@eN` refs persist
+between commands:
 
 ```bash
-skeptic generate --message "test checkout"
-skeptic generate --diff
-skeptic run --analyze
+skeptic open https://app.example.com    # opens a session
+skeptic snapshot -i                      # mints @e1.. refs + selectorHints
+skeptic click @e3
+skeptic fill @e5 "user@test.com"
+skeptic snapshot -i                      # re-snapshot after the DOM changed
+skeptic console --errors
+skeptic screenshot --full                # returns a file path
+skeptic close
 ```
 
-Generated tests are typechecked and imported before being written.
-
-## MCP Browser Tools
-
-When Skeptic is exposed through MCP, prefer its browser tools for page QA:
-
-| Tool | Use |
-|---|---|
-| `browser_open` | Navigate using project browser/auth/safety config |
-| `browser_snapshot` | Capture refs and snapshot text |
-| `browser_playwright` | Run focused Playwright code with `page`, `context`, `browser`, `ref` |
-| `browser_screenshot` | Capture PNG, annotated PNG, or snapshot-only output |
-| `browser_console_logs` | Read captured console messages |
-| `browser_network_requests` | Read requests and computed issues |
-| `browser_performance_metrics` | Capture Web Vitals, LoAF, resources, and `perf-trace.md` |
-| `browser_accessibility_audit` | Run axe-core plus IBM Equal Access when available |
-| `browser_close` | Close the session |
-
-MCP browser tools honor:
-
-```yaml
-safety:
-  allowedDomains: ["example.com", "*.example.org"]
-  actionPolicy: .skeptic/action-policy.json
-  confirmActions: ["browser_playwright"]
-  maxOutputChars: 120000
-  contentBoundaries: true
-```
-
-`confirmActions` fail closed in MCP because stdio tools cannot prompt safely.
+Verbs: `open`, `snapshot` (`-i`/`-c`), `click`, `fill`, `type`, `press`, `hover`,
+`check`, `uncheck`, `select`, `get`, `screenshot`, `console`, `wait`, `list`,
+`close`. Add `--json` to any verb; `--session <name>` for isolated sessions;
+`--headless` on `open` for CI. Re-snapshot after navigation — refs invalidate on
+DOM change and acting on a stale ref returns a clear `[ariaRef:stale]` error.
 
 ## Evidence
 

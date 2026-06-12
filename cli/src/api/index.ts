@@ -19,7 +19,6 @@ export type {
   ConsoleAssertOpts,
   AxeAuditOpts,
 } from "./observability.js";
-export type { AiFixture, AiAssertOpts, AiDefectsOpts, AiExtractOpts } from "./ai.js";
 
 export { buildFixture } from "./fixture.js";
 export {

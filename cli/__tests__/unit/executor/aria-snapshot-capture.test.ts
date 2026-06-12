@@ -23,9 +23,20 @@ function createMockPage(yaml: string, opts?: {
   const bounds = new Map(Object.entries(opts?.bounds ?? {}));
 
   const ariaSnapshot = vi.fn().mockResolvedValue(yaml);
+  const viewportSize = opts?.viewportSize ?? { width: 1280, height: 720 };
 
   const makeNthLocator = (key: string): Locator => ({
     boundingBox: vi.fn().mockResolvedValue(bounds.get(key) ?? null),
+  } as unknown as Locator);
+
+  // aria-ref locators now also resolve element handles — the viewport pass batches
+  // bbox/visibility for all refs through a single page.evaluate over those handles.
+  const makeRefLocator = (sel: string): Locator => ({
+    boundingBox: vi.fn().mockResolvedValue(bounds.get(sel) ?? null),
+    elementHandle: vi.fn().mockResolvedValue({
+      _ref: sel.slice("aria-ref=".length),
+      dispose: vi.fn().mockResolvedValue(undefined),
+    }),
   } as unknown as Locator);
 
   const makeRoleLocator = (key: string): Locator => ({
@@ -44,17 +55,35 @@ function createMockPage(yaml: string, opts?: {
 
   const page = {
     _yaml: yaml,
-    _viewportSize: opts?.viewportSize ?? { width: 1280, height: 720 },
+    _viewportSize: viewportSize,
     _bounds: bounds,
     _calls: calls,
     locator: vi.fn().mockImplementation((sel: string) => {
       calls.locator.push(sel);
       if (sel.startsWith("aria-ref=")) {
-        return makeNthLocator(sel);
+        return makeRefLocator(sel);
       }
       return scope;
     }),
-    viewportSize: vi.fn().mockReturnValue(opts?.viewportSize ?? { width: 1280, height: 720 }),
+    // Batched viewport visibility: production passes the resolved handle array into a
+    // single evaluate; the mock maps each handle's `_ref` back to its bounds.
+    evaluate: vi.fn().mockImplementation((fn: unknown, arg: unknown) => {
+      if (typeof fn === "function" && arg && Array.isArray((arg as { els?: unknown }).els)) {
+        const a = arg as { els: Array<{ _ref: string } | null>; vw: number; vh: number };
+        return Promise.resolve(
+          a.els.map((h) => {
+            if (!h) return false;
+            const box = bounds.get(`aria-ref=${h._ref}`);
+            if (!box) return false;
+            const cx = box.x + box.width / 2;
+            const cy = box.y + box.height / 2;
+            return cx >= 0 && cx <= a.vw && cy >= 0 && cy <= a.vh;
+          }),
+        );
+      }
+      return Promise.resolve([]);
+    }),
+    viewportSize: vi.fn().mockReturnValue(viewportSize),
   } as unknown as MockPage;
   return page;
 }
@@ -142,7 +171,7 @@ describe("captureAriaSnapshot", () => {
     expect(entries[0]).toMatchObject({ ref: "e1", role: "heading", name: "Title" });
   });
 
-  it("viewport=true filters out entries whose bounding box is outside the viewport", async () => {
+  it("viewport=true marks off-viewport entries via offViewportRefs but keeps them in the registry", async () => {
     const yaml = `- button "InView" [ref=e1]
 - button "OffScreen" [ref=e2]
 `;
@@ -153,12 +182,30 @@ describe("captureAriaSnapshot", () => {
         "aria-ref=e2": { x: 100, y: 2000, width: 50, height: 30 }, // y > viewport
       },
     });
-    const { entries } = await captureAriaSnapshot(page, "body", { viewport: true });
+    const result = await captureAriaSnapshot(page, "body", { viewport: true });
 
-    expect(entries.map((e) => e.ref)).toEqual(["e1"]);
+    // Both refs stay resolvable (registry/byRef parity); only e2 is flagged off-screen.
+    expect(result.entries.map((e) => e.ref)).toEqual(["e1", "e2"]);
+    expect([...(result.offViewportRefs ?? [])]).toEqual(["e2"]);
+    expect(result.offViewportRefs?.has("e1")).toBe(false);
   });
 
-  it("viewport=true keeps the YAML field unchanged (registry shrinks, not the snapshot)", async () => {
+  it("viewport=true batches visibility into a single page.evaluate (one round-trip, not per-ref)", async () => {
+    const yaml = `- button "A" [ref=e1]\n- button "B" [ref=e2]\n- button "C" [ref=e3]\n`;
+    const page = createMockPage(yaml, {
+      viewportSize: { width: 1000, height: 800 },
+      bounds: {
+        "aria-ref=e1": { x: 10, y: 10, width: 20, height: 20 },
+        "aria-ref=e2": { x: 10, y: 50, width: 20, height: 20 },
+        "aria-ref=e3": { x: 10, y: 90, width: 20, height: 20 },
+      },
+    });
+    await captureAriaSnapshot(page, "body", { viewport: true });
+    // One evaluate covers all three refs; no per-ref boundingBox round-trips.
+    expect(vi.mocked(page.evaluate)).toHaveBeenCalledTimes(1);
+  });
+
+  it("viewport=true keeps the YAML field unchanged (snapshot is never trimmed)", async () => {
     const yaml = `- button "InView" [ref=e1]\n- button "OffScreen" [ref=e2]\n`;
     const page = createMockPage(yaml, {
       viewportSize: { width: 1000, height: 800 },

@@ -12,11 +12,8 @@
 
 const g = globalThis as Record<string, unknown>;
 g["__SKEPTIC_CLI_VERSION__"] = "0.0.0-dev";
-g["__SKEPTIC_FEATURE_AI_ASSERTIONS__"] = true;
 g["__SKEPTIC_FEATURE_COOKIE_EXTRACTION__"] = true;
 g["__SKEPTIC_FEATURE_RECORDING__"] = true;
-g["__SKEPTIC_FEATURE_MCP__"] = true;
-g["__SKEPTIC_FEATURE_ACP__"] = true;
 
 // Importing the .ts source directly (this file is only meant to be run
 // under tsx, which understands TS extensions). The eslint-style comment

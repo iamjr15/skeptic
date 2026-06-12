@@ -14,14 +14,20 @@ describe("skeptic add github-action CLI surface", () => {
     }
   });
 
-  it("advertises --provider, -c/--config, --ai, --dev-command, --dev-url in --help", () => {
+  it("advertises -c/--config, --dev-command, --dev-url in --help", () => {
     const help = execFileSync("node", [skepticBin, "add", "github-action", "--help"], {
       encoding: "utf-8",
     });
-    expect(help).toContain("--ai");
     expect(help).toContain("--dev-command");
     expect(help).toContain("--dev-url");
-    expect(help).toContain("--provider");
     expect(help).toContain("-c, --config");
+  });
+
+  it("no longer advertises removed AI flags", () => {
+    const help = execFileSync("node", [skepticBin, "add", "github-action", "--help"], {
+      encoding: "utf-8",
+    });
+    expect(help).not.toContain("--ai");
+    expect(help).not.toContain("--provider");
   });
 });

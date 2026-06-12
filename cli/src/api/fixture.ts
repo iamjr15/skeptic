@@ -13,10 +13,6 @@ import { PerformanceCollector } from "../observability/collectors/performance-co
 import { takeScreenshot, type ScreenshotOptions, type ScreenshotResult } from "./screenshot.js";
 import { snapshot, type SnapshotOptions, type SnapshotTree } from "./snapshot.js";
 import {
-  buildAiFixture,
-  type AiFixture,
-} from "./ai.js";
-import {
   buildObservabilityFixture,
   type ObservabilityFixture,
 } from "./observability.js";
@@ -39,7 +35,6 @@ export interface SkepticFixture {
   screenshot: (name: string, opts?: ScreenshotOptions) => Promise<ScreenshotResult>;
   settle: () => Promise<void>;
   observability: ObservabilityFixture;
-  ai: AiFixture;
 }
 
 export interface FixtureBuildOptions {
@@ -167,12 +162,6 @@ export const buildFixture = (
     collectors: collectorRefs,
   });
 
-  const ai = buildAiFixture({
-    runAction,
-    page,
-    ctx,
-  });
-
   return {
     page: exposedPage,
     ctx,
@@ -181,7 +170,6 @@ export const buildFixture = (
     screenshot: fixtureScreenshot,
     settle: fixtureSettle,
     observability,
-    ai,
   };
 };
 

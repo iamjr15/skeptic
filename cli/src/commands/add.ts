@@ -5,58 +5,22 @@ import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import chalk from "chalk";
 import { PRODUCT_NAME, CLI_NAME } from "../constants.js";
-import { loadConfig } from "../config/loader.js";
-import { ENV_KEY_BY_PROVIDER, type AIProvider } from "../ai/ai-client.js";
 import { logger } from "../utils/logger.js";
 
 export interface AddGitHubActionOptions {
   devCommand?: string;
   devUrl?: string;
-  ai?: boolean;
-  provider?: string;
   config?: string;
 }
 
 export async function runAddGitHubAction(opts: AddGitHubActionOptions): Promise<void> {
   const devCommand = opts.devCommand ?? "npm run dev";
   const devUrl = opts.devUrl ?? "http://localhost:3000";
-  const useAI = opts.ai ?? false;
 
-  // --provider only makes sense with --ai.
-  if (opts.provider && !useAI) {
-    logger.error("--provider requires --ai. Pass both, or omit --provider to use the default.");
-    process.exitCode = 1;
-    return;
-  }
-
-  // Resolve provider via loadConfig overrides so zod validates the enum, catches
-  // unreadable config paths, and reports malformed config files in one try/catch.
-  let provider: AIProvider = "gemini";
-  if (useAI) {
-    try {
-      const config = loadConfig({
-        configPath: opts.config,
-        overrides: opts.provider ? { ai: { provider: opts.provider } } : undefined,
-      });
-      provider = config.ai.provider;
-    } catch (err) {
-      logger.error(err instanceof Error ? err.message : String(err));
-      process.exitCode = 1;
-      return;
-    }
-  }
-
-  // All validation passed — now safe to create the output directory.
   const workflowDir = path.resolve(process.cwd(), ".github/workflows");
   fs.mkdirSync(workflowDir, { recursive: true });
 
   const workflowPath = path.join(workflowDir, "skeptic-tests.yml");
-
-  const envKey = ENV_KEY_BY_PROVIDER[provider];
-  const aiEnvBlock = useAI
-    ? `\n          ${envKey}: \${{ secrets.${envKey} }}\n          SKEPTIC_AI_PROVIDER: ${provider}\n          SKEPTIC_AI_API_KEY: \${{ secrets.${envKey} }}`
-    : "";
-  const analyzeFlag = useAI ? " --analyze" : "";
 
   const yaml = `name: ${PRODUCT_NAME} E2E Tests
 
@@ -97,9 +61,9 @@ jobs:
         run: npx wait-on ${devUrl} --timeout 30000
 
       - name: Run ${PRODUCT_NAME} tests
-        run: npx ${CLI_NAME} run --ci --reporter console --reporter junit --reporter json --output ./skeptic-output${analyzeFlag}
+        run: npx ${CLI_NAME} run --ci --reporter console --reporter junit --reporter json --output ./skeptic-output
         env:
-          BASE_URL: ${devUrl}${aiEnvBlock}
+          BASE_URL: ${devUrl}
 
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4
@@ -122,17 +86,6 @@ jobs:
 
   fs.writeFileSync(workflowPath, yaml, "utf-8");
   logger.success(`Created ${chalk.cyan(workflowPath)}`);
-
-  if (useAI) {
-    console.log();
-    console.log(
-      chalk.yellow(`  Add ${envKey} to your repository secrets (provider: ${provider}):`),
-    );
-    console.log(
-      chalk.dim("  Settings → Secrets and variables → Actions → New repository secret"),
-    );
-    console.log();
-  }
 }
 
 export interface AddSkillOptions {

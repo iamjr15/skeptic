@@ -1,9 +1,88 @@
 # Third-party licenses and attributions
 
 skeptic-cli is distributed under the [MIT License](#mit-license-skeptic-cli)
-(see `package.json:license`). Portions of skeptic are derived from upstream
-projects under their own terms; those terms and the corresponding NOTICE
-attributions follow.
+(see `package.json:license`). Two kinds of third-party material are covered
+below: (1) npm dependencies that are **inlined into the published bundle**
+(`dist/skeptic.mjs`) at build time, and (2) source code **derived from upstream
+projects**. Their terms and the corresponding NOTICE attributions follow.
+
+## Bundled npm dependencies
+
+The published `skeptic-cli` bundle inlines several pure-JS dependencies at build
+time — the `noExternal` list in `tsup.config.ts` — instead of resolving them
+from `node_modules` at runtime. Their license terms are reproduced or pointed to
+here. Runtime-external dependencies (`playwright`, `playwright-core`, and the
+optional `better-sqlite3`) are installed separately and keep their own license
+files in your `node_modules`.
+
+### Mozilla Public License 2.0 — axe-core, @axe-core/playwright
+
+The accessibility audit inlines **axe-core** (via its Playwright wrapper
+**@axe-core/playwright**), © Deque Systems, Inc., licensed under the
+**Mozilla Public License, Version 2.0 (MPL-2.0)**.
+
+MPL-2.0 is a file-level copyleft: because skeptic distributes these files in
+executable (bundled) form, the corresponding **source is made available** to
+recipients at:
+
+- `axe-core` — https://github.com/dequelabs/axe-core (npm: `axe-core@4.11.x`)
+- `@axe-core/playwright` — https://github.com/dequelabs/axe-core-npm
+  (npm: `@axe-core/playwright@4.11.x`)
+
+The full MPL-2.0 text is available at https://www.mozilla.org/en-US/MPL/2.0/.
+Per MPL-2.0 Exhibit A, the covered source is governed by this notice:
+
+```
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at https://mozilla.org/MPL/2.0/.
+```
+
+### Apache License 2.0 — web-vitals
+
+**web-vitals** © Google LLC is licensed under the Apache License 2.0 and is
+shipped both inlined and as the standalone `dist/web-vitals.iife.js` asset.
+Source: https://github.com/GoogleChrome/web-vitals. The full Apache 2.0 text is
+reproduced in the [agent-browser section below](#apache-license-20-full-text).
+
+### Blue Oak Model License 1.0.0 — glob, minimatch
+
+**glob** and **minimatch** © Isaac Z. Schlueter and contributors are licensed
+under the **Blue Oak Model License 1.0.0**. Full text:
+https://blueoakcouncil.org/license/1.0.0.
+
+### ISC License — yaml, pixelmatch
+
+**yaml** © Eemeli Aro and **pixelmatch** © Mapbox are licensed under the ISC
+license (a permissive, functionally-MIT-equivalent license). Full texts ship in
+each package's `node_modules` distribution.
+
+### MIT License — commander, zod, chokidar, chalk, figures, cli-truncate, string-width, pretty-ms, pngjs, react, ink, ink-spinner
+
+The following bundled dependencies are licensed under the MIT License and carry
+their own copyright notices in their respective packages:
+
+| Package | Copyright holder |
+|---|---|
+| commander | TJ Holowaychuk and contributors |
+| zod | Colin McDonnell |
+| chokidar | Paul Miller |
+| chalk | Sindre Sorhus |
+| figures | Sindre Sorhus |
+| cli-truncate | Sindre Sorhus |
+| string-width | Sindre Sorhus |
+| pretty-ms | Sindre Sorhus |
+| pngjs | the pngjs contributors |
+| react | Meta Platforms, Inc. and affiliates |
+| ink | Vadim Demedes |
+| ink-spinner | Vadim Demedes |
+
+Each MIT/ISC/BlueOak license is permissive and grants redistribution provided
+the copyright notice and permission text are preserved; those texts are
+distributed inside each package and reproduced under the canonical license URLs
+cited above. (skeptic carries no bundled AI/MCP/ACP SDKs — those dependencies
+and their attributions were removed when the AI, MCP, and ACP subsystems were
+deleted.)
 
 ## NOTICE — agent-browser (Apache License 2.0)
 

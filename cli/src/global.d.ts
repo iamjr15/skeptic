@@ -10,11 +10,8 @@
 // runtime values so `__SKEPTIC_FEATURE_*__` references don't throw
 // ReferenceError.
 
-declare const __SKEPTIC_FEATURE_AI_ASSERTIONS__: boolean;
 declare const __SKEPTIC_FEATURE_COOKIE_EXTRACTION__: boolean;
 declare const __SKEPTIC_FEATURE_RECORDING__: boolean;
-declare const __SKEPTIC_FEATURE_MCP__: boolean;
-declare const __SKEPTIC_FEATURE_ACP__: boolean;
 declare const __SKEPTIC_CLI_VERSION__: string;
 
 // playwright-core's package.json exposes `./lib/server` but ships no .d.ts

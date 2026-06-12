@@ -40,7 +40,8 @@ export interface SnapshotTree {
   rawYaml: string;
   refs: Map<string, AriaRefEntry>;
   stats: SnapshotStats;
-  byRef(ref: string): Locator | Promise<Locator>;
+  /** Always async — `await tree.byRef("eN")` for every ref kind. */
+  byRef(ref: string): Promise<Locator>;
   byRole(role: string, opts?: ByRoleOptions): Locator;
   byText(text: string | RegExp): Locator;
   byTestId(id: string): Locator;
@@ -73,11 +74,13 @@ const ESTIMATED_CHARS_PER_TOKEN = 4;
  * Build a SnapshotTree backed by Playwright's native `Locator.ariaSnapshot({mode:"ai"})`,
  * extended with a cursor-interactive pass and per-link href extraction.
  *
- * `byRef("eN")` is `kind`-aware:
- *   - ARIA refs route through `getByRole(...).nth(n)` (sync, returns a Locator).
- *   - Cursor-interactive refs route through the existing skeptic resolver (async,
- *     so `byRef` returns a `Promise<Locator>` for those entries — callers should
- *     `await` it). Tests for the common ARIA path stay synchronous-feeling.
+ * `byRef("eN")` is `kind`-aware but UNIFORMLY async — always `await tree.byRef(...)`:
+ *   - ARIA refs route through `getByRole(...).nth(n)`.
+ *   - Cursor-interactive refs route through the existing skeptic resolver, which is
+ *     itself async (it re-counts the live candidate group).
+ *   Returning `Promise<Locator>` for both keeps `await tree.byRef("e1").then(l => l.click())`
+ *   — and the chained `(await tree.byRef("e1")).click()` the skill teaches — well-typed
+ *   and crash-free regardless of which kind a ref turns out to be.
  */
 export const snapshot = async (
   target: Page | Locator,
@@ -112,10 +115,11 @@ export const snapshot = async (
   const renderedYaml = renderSnapshotYaml(capture.yaml, capture.entries, {
     interactive: opts.interactive ?? false,
     compact: opts.compact ?? false,
+    offViewportRefs: capture.offViewportRefs,
   });
   const stats = computeSnapshotStats(renderedYaml, capture.entries);
 
-  const byRef = (ref: string): Locator | Promise<Locator> => {
+  const byRef = async (ref: string): Promise<Locator> => {
     const entry = refs.get(ref);
     if (!entry) {
       throw new Error(
@@ -123,7 +127,6 @@ export const snapshot = async (
       );
     }
     if (entry.kind === "cursor-interactive") {
-      // Async path — caller must await.
       return resolveAriaRef(page, ctx, `@${ref}`);
     }
     const scope = page.locator(entry.scopeSelector);
@@ -144,7 +147,9 @@ export const snapshot = async (
       ...roleOpts,
     });
     if (byOpts.hrefIncludes !== undefined) {
-      resolved = resolved.filter({ has: page.locator(`[href*="${byOpts.hrefIncludes}"]`) });
+      // `.and(...)` matches the element's OWN attributes; `.filter({ has })` would
+      // require a matching DESCENDANT, so a link's own `href` would never match.
+      resolved = resolved.and(page.locator(`[href*="${byOpts.hrefIncludes}"]`));
     }
     return byOpts.index !== undefined ? resolved.nth(byOpts.index) : resolved;
   };
@@ -192,13 +197,20 @@ const refsInText = (text: string): Set<string> =>
 interface RenderOpts {
   interactive: boolean;
   compact: boolean;
+  /**
+   * Refs whose element is currently outside the viewport. They stay in the
+   * registry (resolvable via `byRef`) and in the rendered tree, but each line is
+   * annotated `[off-viewport]` so an agent knows it must scroll before acting —
+   * rather than reading a ref the registry then reports "not found".
+   */
+  offViewportRefs?: ReadonlySet<string>;
 }
 
 /**
  * Post-process Playwright's `ariaSnapshot()` YAML into the agent-browser-compatible
  * rendering. We append per-link `/url:` markers and cursor-interactive entries
- * (Playwright's tree omits both); then optionally filter to interactive lines and
- * prune to minimal ancestors for compact mode.
+ * (Playwright's tree omits both), annotate off-viewport refs, then optionally filter
+ * to interactive lines or flatten to interactive-first compact mode.
  */
 export const renderSnapshotYaml = (
   rawYaml: string,
@@ -206,15 +218,19 @@ export const renderSnapshotYaml = (
   opts: RenderOpts,
 ): string => {
   const REF_LINE_RE = /\[ref=(e\d+)\]/;
+  const offViewport = opts.offViewportRefs;
   const lines = rawYaml.split("\n");
   const result: string[] = [];
   const refToEntry = new Map(entries.map((e) => [e.ref, e]));
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i] ?? "";
+    let line = lines[i] ?? "";
     if (line.length === 0 && lines.length === 1) continue;
-    result.push(line);
     const m = REF_LINE_RE.exec(line);
+    if (m && offViewport?.has(m[1]!)) {
+      line = line.replace(`[ref=${m[1]}]`, `[ref=${m[1]}] [off-viewport]`);
+    }
+    result.push(line);
     if (m) {
       const entry = refToEntry.get(m[1]!);
       const nextLine = lines[i + 1] ?? "";
@@ -270,52 +286,42 @@ const interactiveTree = (tree: string, displayRefs: ReadonlySet<string>): string
   return kept.join("\n");
 };
 
-const countIndent = (line: string): number => {
-  let i = 0;
-  while (i < line.length && line[i] === " ") i++;
-  return i;
-};
-
-/**
- * Mark every line carrying `ref=` (or a trailing `/url:`) as kept, then walk
- * upward to mark ancestor lines (lower indent) so the kept lines retain context.
- */
 const extractRef = (line: string): string | null => {
   const match = /\[ref=(e\d+)\]/.exec(line);
   return match?.[1] ?? null;
 };
 
+/**
+ * Interactive-first compact mode. Keeps every high-signal ref line (and its
+ * `/url:` continuation) and DROPS the pure-structural nesting lines — `generic`,
+ * `group`, `list`, layout wrappers with no actionable ref — that the ancestor-keep
+ * renderer previously retained just for indentation. Each kept line is flattened to
+ * the left margin (its `/url:` continuation indented two spaces) so no signal is
+ * lost — roles, names, refs, `[off-viewport]`/`clickable` markers, and urls all
+ * survive — while structural noise and deep orphaned indentation are removed,
+ * cutting both token count and the wall-clock cost of emitting them.
+ */
 const compactTree = (tree: string, displayRefs: ReadonlySet<string>): string => {
   const lines = tree.split("\n");
   if (lines.length === 0) return "";
 
-  const keep = new Array<boolean>(lines.length).fill(false);
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i] ?? "";
+  const kept: string[] = [];
+  let keepUrlContinuation = false;
+  for (const line of lines) {
     const ref = extractRef(line);
-    const keepRef = ref !== null && displayRefs.has(ref);
-    const keepUrl =
-      line.includes("/url:") && i > 0 && keep[i - 1] === true;
-    if (keepRef || keepUrl) {
-      keep[i] = true;
-      const myIndent = countIndent(line);
-      for (let j = i - 1; j >= 0; j--) {
-        const ancestorIndent = countIndent(lines[j] ?? "");
-        if (ancestorIndent < myIndent) {
-          keep[j] = true;
-          if (ancestorIndent === 0) break;
-        }
-      }
+    if (ref && displayRefs.has(ref)) {
+      kept.push(line.replace(/^\s+/, ""));
+      keepUrlContinuation = true;
+      continue;
     }
+    if (keepUrlContinuation && /^\s*-?\s*\/url:/.test(line)) {
+      kept.push(`  ${line.trim()}`);
+      keepUrlContinuation = false;
+      continue;
+    }
+    if (line.trim().length > 0) keepUrlContinuation = false;
   }
 
-  const kept = lines
-    .filter((_, i) => keep[i])
-    .map((line) => {
-      const ref = extractRef(line);
-      if (!ref || displayRefs.has(ref)) return line;
-      return line.replace(/\s+\[ref=e\d+\]/, "");
-    });
   const out = kept.join("\n").trim();
   return out.length === 0 ? "(no interactive elements)" : out;
 };

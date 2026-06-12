@@ -9,11 +9,8 @@ export default defineConfig({
   // All features default to `true` in tests so the gated branches execute.
   define: {
     __SKEPTIC_CLI_VERSION__: '"0.0.0-dev"',
-    __SKEPTIC_FEATURE_AI_ASSERTIONS__: "true",
     __SKEPTIC_FEATURE_COOKIE_EXTRACTION__: "true",
     __SKEPTIC_FEATURE_RECORDING__: "true",
-    __SKEPTIC_FEATURE_MCP__: "true",
-    __SKEPTIC_FEATURE_ACP__: "true",
   },
   test: {
     include: ["__tests__/**/*.test.ts", "__tests__/**/*.test.tsx"],

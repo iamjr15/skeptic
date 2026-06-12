@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildSelectorHint,
   discoverCdpUrl,
+  parseWait,
 } from "../../../src/commands/inspect.js";
 import type { AriaRefEntry } from "../../../src/executor/aria-ref-types.js";
 
@@ -83,6 +84,28 @@ describe("discoverCdpUrl", () => {
   it("brackets IPv6 addresses in the fallback URL", async () => {
     const ws = await discoverCdpUrl("[::1]:1");
     expect(ws).toBe("ws://[::1]:1/devtools/browser");
+  });
+});
+
+describe("parseWait (#8 — default extra settle is 0)", () => {
+  it("defaults to 0 when --wait is omitted (was 1500ms fixed)", () => {
+    expect(parseWait(undefined)).toBe(0);
+  });
+
+  it("defaults to 0 on invalid input", () => {
+    expect(parseWait("not-a-number")).toBe(0);
+  });
+
+  it("treats an explicit 0 as 0", () => {
+    expect(parseWait("0")).toBe(0);
+  });
+
+  it("honors an explicit positive --wait (opt-in long settle)", () => {
+    expect(parseWait("250")).toBe(250);
+  });
+
+  it("falls back to the default on negative input", () => {
+    expect(parseWait("-5")).toBe(0);
   });
 });
 

@@ -12,9 +12,10 @@ venv/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
-coverage/
-!cli/src/ai/coverage/
-!cli/src/ai/coverage/**
+# Coverage-report output only — anchored so it never matches source/test
+# directories named "coverage" (e.g. __tests__/.../coverage).
+/coverage/
+/cli/coverage/
 
 # OS files
 .DS_Store
@@ -29,3 +30,7 @@ skeptic-output/
 # CLI test artifacts
 cli/live-output/
 cli/live-tests/
+
+# Personal agent runtime state
+last-session.json
+scheduled_tasks.lock

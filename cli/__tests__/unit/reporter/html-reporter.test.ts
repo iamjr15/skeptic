@@ -106,18 +106,54 @@ describe("HtmlReporter", () => {
 
   it("renders an embedded <video controls> in the artifacts panel when artifacts.video is set", () => {
     const reporter = new HtmlReporter(tmpDir);
+    // Real artifacts live UNDER outputDir; the report.html is written into outputDir, so the
+    // <video src> must be relative to it (here `test-0/video.webm`), not the on-disk path.
+    const videoPath = path.join(tmpDir, "test-0", "video.webm");
     const summary = makeSummary({
       tests: [
-        makeTest("Video Test", "tests/video.spec.ts", "passed", {
-          videoPath: "/output/video.webm",
-        }),
+        makeTest("Video Test", "tests/video.spec.ts", "passed", { videoPath }),
       ],
     });
     reporter.onRunComplete(summary);
 
     const html = fs.readFileSync(path.join(tmpDir, "report.html"), "utf-8");
-    expect(html).toContain('<video controls preload="metadata" src="/output/video.webm">');
+    expect(html).toContain('<video controls preload="metadata" src="test-0/video.webm">');
     expect(html).toContain("1280×720");
+  });
+
+  it("makes artifact hrefs relative to the report directory (not CWD)", () => {
+    // Repro for the 404 bug: artifacts were linked with CWD-relative/absolute paths while
+    // report.html lives inside outputDir, so the browser resolved them against the report
+    // dir and 404'd. Every artifact href must be relative to outputDir.
+    const videoPath = path.join(tmpDir, "test-0", "video.webm");
+    const tracePath = path.join(tmpDir, "test-0", "trace.zip");
+    const consolePath = path.join(tmpDir, "test-0", "console.json");
+    const test: TestResult = {
+      ...makeTest("Rel Test", "tests/rel.spec.ts", "passed"),
+      artifacts: {
+        video: { path: videoPath, width: 1280, height: 720 },
+        trace: tracePath,
+        consoleSnapshot: consolePath,
+      },
+    };
+    const reporter = new HtmlReporter(tmpDir);
+    reporter.onRunComplete({
+      total: 1,
+      passed: 1,
+      failed: 0,
+      duration_ms: 1500,
+      tests: [test],
+    });
+
+    const html = fs.readFileSync(path.join(tmpDir, "report.html"), "utf-8");
+    expect(html).toContain('src="test-0/video.webm"');
+    expect(html).toContain('href="test-0/trace.zip"');
+    expect(html).toContain('href="test-0/console.json"');
+    // The absolute on-disk paths must NOT appear as hrefs/srcs.
+    expect(html).not.toContain(`src="${videoPath}"`);
+    expect(html).not.toContain(`href="${tracePath}"`);
+    // ...but the runnable show-trace command keeps the real path.
+    expect(html).toContain(`npx playwright show-trace ${tracePath}`);
   });
 
   it("renders a trace link with copyable show-trace command when artifacts.trace is set", () => {

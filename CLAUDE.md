@@ -1,58 +1,94 @@
-# CLAUDE.md — skeptic CLI
+# CLAUDE.md — skeptic
 
 ## Project Overview
 
-skeptic is a CLI-first E2E testing tool combining Maestro-style declarative YAML flows with Expect-style AI-powered diff-aware test generation. Users write YAML test flows that Playwright executes deterministically, with optional AI assertions via Gemini.
+skeptic is an **agent-native, CLI-first QA tool**. A host coding agent (Claude
+Code, Codex, Cursor, OpenCode, …) drives it through a bundled skill and a CLI to
+inspect live pages, run deterministic TypeScript end-to-end specs with
+Playwright, and read back a rich evidence bundle (screenshots, video, traces,
+performance, network, console, accessibility).
+
+skeptic brings **no model of its own**. It uses **no API keys** and makes **no
+LLM calls**. The intelligence comes from the host agent; skeptic is the
+deterministic execution and evidence layer. There is no MCP server, no ACP
+server, and no built-in AI/model subsystem — do not reintroduce them, import
+from `src/ai`/`src/mcp`/`src/acp` (they no longer exist), or add LLM calls.
+
+Web QA ships today (Playwright). Native **mobile** QA (driving devices and
+emulators via `adb` and `simctl`) is on the roadmap; the agent loop and evidence
+model are designed to extend to it.
 
 ## Architecture
 
-- **CLI package:** `cli/` — TypeScript, Commander, Playwright, Zod
-- **Plan:** `plans/eager-crunching-popcorn.md` — Full implementation plan
+skeptic is three pieces — **skill + CLI + daemon**:
+
+- **Skill:** `cli/agent-skills/skeptic/` — agent-facing guidance that routes a
+  coding agent through the inspect → author/run → read-evidence loop. Installed
+  into agent skill directories by `scripts/install-agent-skills.mjs` on
+  `npm install` (skipped in CI unless opted in).
+- **CLI package:** `cli/` — TypeScript (ESM), Commander, Playwright, Zod.
+  - `src/index.ts` — command surface: `init`, `run`, `tui`, `observe`,
+    `inspect`, `doctor`, `add` (`github-action`, `skill`), `cookies`,
+    `browsers`, `daemon`, `comment`, `audit`.
+  - `src/runner/` — spec discovery and worker-thread execution
+    (`discover.ts`, `execute.ts`, `worker.ts`, `ipc.ts`, `watch.ts`).
+  - `src/executor/` — Playwright engine, ARIA/cursor snapshot capture, ref
+    resolution, cursor/annotation overlays, visual settle, sharding.
+  - `src/observability/` — performance, network, console/page-error, and
+    accessibility collectors plus sidecar writers.
+  - `src/daemon/` — persistent Playwright `BrowserServer` over a Unix socket so
+    repeated `run`/`inspect` calls reuse a warm browser.
+  - `src/cookies/`, `src/config/`, `src/api/` (public `test`/`expect` and
+    fixtures), `src/reporter/`, `src/ui/` (Ink TUI), `src/safety/`, `src/utils/`.
+- **Daemon:** the `BrowserServer` lifecycle/control plane (`~/.skeptic/`),
+  managed via `skeptic daemon start|stop|status|logs` and auto-spawned when a
+  browser-using command needs it.
 
 ## Key Technical Decisions
 
-- TypeScript + Node.js (ESM, `"type": "module"`)
-- `tsconfig.json`: strict, Node16 module resolution, ES2022 target
-- Playwright for browser automation (not Puppeteer)
-- YAML with front-matter (`---` delimiter) for flow files
-- Zod for all schema validation
-- Commander for CLI framework
-- Config precedence: CLI flags > env vars > flow-level > config file > defaults
-- Cookie extraction is opt-in (`--cookies` flag, default off)
-- rrweb recording on by default, replays are local HTML files
-- AI features require explicit `GEMINI_API_KEY` config
+- TypeScript + Node.js, ESM (`"type": "module"`), `engines.node >= 22`.
+- `tsconfig.json`: strict, Node16 module resolution, ES2022 target.
+- **tsup** bundles to `dist/` (entry points `skeptic`, `index`, `worker`);
+  `bin/launcher.mjs` is the published bin and loads `dist/skeptic.mjs`.
+- Playwright for browser automation (not Puppeteer).
+- TypeScript `*.spec.ts` specs that `import { test, expect } from "skeptic-cli"`
+  — no bespoke YAML flow format.
+- Zod for all schema validation; Commander for the CLI framework.
+- Config precedence: CLI flags > env vars > config file > defaults.
+- Cookie extraction is opt-in (`--cookies` flag, default off) and stays local;
+  Chromium decryption strips the M127+ `host_key` hash prefix.
+- A persistent daemon reuses a warm `BrowserServer` across invocations.
+- **No API keys, no outbound LLM calls.** Execution is fully deterministic.
 
-### Executor invariants (Bundle 1 — runtime reliability)
+## Runtime notes
 
-- **`hardTimeout` is enforced by Promise.race, not just Playwright's `setDefaultTimeout`.** Several handlers hard-code their own timeouts or ignore the default (`assert-visible.ts`, `wait.ts`, etc.), so `ctx.activeTimeout` alone is not a reliable ceiling. `raceWithHardTimeout` in `nested-executor.ts` wraps every step-body Promise against a Node-side `setTimeout`; whichever resolves first wins.
-- **Hard-timeout sets `ctx.abortReason`.** Every composite handler (`retry`, `repeat`, `run-flow`) and the top-level flow-body loop must check this flag before any dispatch or `when`/`while` condition evaluation. The order is always `abortReason → when → handler`.
-- **`ctx.inTeardown` bypasses the abort check.** It's a ctx-level boolean flipped only inside the `onFlowComplete` try/finally in `playwright-engine.ts`. Because it lives on the shared context object, composite teardown hooks (e.g. `retry:` inside `onFlowComplete`) inherit it through their own `executeNestedSteps` calls without any per-call plumbing. The per-call `continueOnError` option is a separate, orthogonal knob for ignoring step errors within a list.
-- **`ctx.abortReason` is cleared on non-fatal paths.** Both the `optional: true` downgrade branches (nested-executor + playwright-engine) and the `onFlowStart` hook-failure warning branch must set `ctx.abortReason = null` so a hardTimeout inside those contexts doesn't halt the rest of the flow.
-- **Any body passed to `raceWithHardTimeout` must re-check `ctx.abortReason` between awaits.** Promise.race cannot cancel the body; if the timer wins, the body keeps running in the background. Every side-effecting `await` (especially destructive ones like a retry click) must be preceded by `if (ctx.abortReason !== null) return result;`. See `buildStepBody` in `nested-executor.ts` for the canonical shape.
+- Specs run in **worker threads** (`src/runner/worker.ts`); the parent
+  coordinates discovery, sharding, and reporting over `src/runner/ipc.ts`.
+- A **hard per-test timeout** ceiling is enforced by the runner independent of
+  Playwright's soft action timeout (`--hard-timeout`); see `src/runner/` and
+  `src/executor/context.ts`.
+- `skeptic inspect --connect <url>` attaches to an existing browser over CDP
+  (auto-discovery). This is page inspection only and is unrelated to the
+  removed AI flow.
 
 ## Code Style
 
-- Arrow functions preferred
-- No comments unless explaining non-obvious "why"
-- Descriptive variable names
-- `interface` over `type` where possible
-- kebab-case filenames
-- Each step handler is a pure function: `(page, ctx, args) => Promise<StepResult>`
+- Arrow functions preferred.
+- No comments unless explaining a non-obvious "why".
+- Descriptive variable names.
+- `interface` over `type` where possible.
+- kebab-case filenames.
 
 ## Build & Test
 
 ```bash
 cd cli
-npm run build      # TypeScript compile
-npm run check      # Type check only
-npm test           # Run vitest
-npm run dev        # Watch mode compile
+npm run build      # bundle with tsup
+npm run check      # type-check only (tsc --noEmit)
+npm test           # run vitest
+npm run dev        # tsup watch-mode build
+
+# Run a single test file or name filter
+npx vitest run __tests__/<suite>.test.ts
+npx vitest run -t "test name substring"
 ```
-
-## Extracted Code References (from old platform, saved at /tmp/skeptic-extract/)
-
-- `device_profiles.py` → port to `cli/src/config/device-profiles.ts`
-- `vision_activities.py` lines 15-44 → visual assertion prompt for `cli/src/ai/prompts.ts`
-- `gemini_adapter.py` → API call pattern for `cli/src/ai/gemini-client.ts`
-- `post_results.py` lines 98-136 → PR comment format
-- `extension-content.ts` lines 10-45 → selector priority logic for element-resolver

@@ -111,6 +111,29 @@ const hostnameMatchesPattern = (hostname: string, rawPattern: string): boolean =
   return host === pattern;
 };
 
+/**
+ * Non-http(s) schemes (`file:`, `chrome:`, `data:`, `blob:`, …) are denied by
+ * default whenever an allowlist is active — a domain allowlist says nothing
+ * about local-file or browser-internal access, so leaving them open would let
+ * `file:///etc/passwd` bypass the allowlist entirely. A scheme only passes when
+ * the catch-all `*` is allowlisted, or when an entry explicitly names the same
+ * scheme (e.g. `file://`, `chrome://settings`). A bare hostname entry never
+ * authorizes a non-http scheme.
+ */
+const schemeExplicitlyAllowed = (parsed: URL, allowedDomains: string[]): boolean =>
+  allowedDomains.some((raw) => {
+    const pattern = raw.trim().toLowerCase();
+    if (!pattern) return false;
+    if (pattern === "*") return true;
+    const colon = pattern.indexOf(":");
+    if (colon === -1) return false;
+    if (`${pattern.slice(0, colon)}:` !== parsed.protocol) return false;
+    const rest = pattern.slice(colon + 1).replace(/^\/+/, "");
+    if (!rest) return true;
+    const host = rest.replace(/[/?#].*$/, "");
+    return host === "" || host === parsed.hostname.toLowerCase();
+  });
+
 export const isUrlAllowed = (targetUrl: string, allowedDomains: string[]): boolean => {
   if (allowedDomains.length === 0) return true;
   let parsed: URL;
@@ -119,8 +142,10 @@ export const isUrlAllowed = (targetUrl: string, allowedDomains: string[]): boole
   } catch {
     return false;
   }
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return true;
-  return allowedDomains.some((pattern) => hostnameMatchesPattern(parsed.hostname, pattern));
+  if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+    return allowedDomains.some((pattern) => hostnameMatchesPattern(parsed.hostname, pattern));
+  }
+  return schemeExplicitlyAllowed(parsed, allowedDomains);
 };
 
 export const assertUrlAllowed = (targetUrl: string, allowedDomains: string[]): void => {

@@ -4,14 +4,22 @@
 //  are an original implementation per the velvety-finding-beacon spec — NOT copied from
 //  expect/runtime/lib/scroll-detection.ts.)
 
-import type { Locator, Page } from "playwright";
+import type { Page } from "playwright";
 import type { AriaRefEntry } from "./aria-ref-types.js";
-import { generateSelectorForHandle } from "../utils/selector-generator.js";
+import { ensureSelectorHelper } from "../utils/selector-generator.js";
 
 export interface CaptureResult {
   yaml: string;
   entries: AriaRefEntry[];
   truncated: boolean;
+  /**
+   * Refs whose element is currently outside the viewport (viewport mode only).
+   * These entries STAY in `entries` (and therefore in the byRef registry) so an
+   * agent can still resolve them after scrolling — the renderer annotates their
+   * lines `[off-viewport]` rather than dropping the refs and desyncing the
+   * registry from the printed tree.
+   */
+  offViewportRefs?: Set<string>;
   /** Optional viewport-aware hidden-item markers for snapshot rendering. */
   hiddenAbove?: number;
   hiddenBelow?: number;
@@ -61,10 +69,13 @@ export async function captureAriaSnapshot(
     );
   }
 
-  let entries = parseEntries(yaml, scopeSelector, limitBytes);
+  const entries = parseEntries(yaml, scopeSelector, limitBytes);
 
+  let offViewportRefs: Set<string> | undefined;
   if (opts.viewport) {
-    entries = await filterToViewport(page, entries);
+    // Keep every ref in the registry; just record which ones are off-screen so the
+    // renderer can annotate them. Dropping them desynced byRef from the printed tree.
+    offViewportRefs = await computeOffViewportRefs(page, entries);
   }
 
   if (opts.extractLinkHrefs) {
@@ -76,7 +87,7 @@ export async function captureAriaSnapshot(
     for (const ce of cursorEntries) entries.push(ce);
   }
 
-  return { yaml, entries, truncated };
+  return { yaml, entries, truncated, offViewportRefs };
 }
 
 /**
@@ -129,30 +140,77 @@ function parseEntries(
   return entries;
 }
 
-async function filterToViewport(
+/**
+ * Compute which ARIA refs sit outside the current viewport.
+ *
+ * Performance (P7): the heavy work — reading every element's box and testing its
+ * centre against the viewport — happens in ONE `page.evaluate`, instead of one
+ * `boundingBox()` protocol round-trip per ref (hundreds on a large page). We resolve
+ * each `aria-ref=eN` to an element handle (cheap selector resolution, no layout/
+ * actionability wait), then pass the whole handle array into a single evaluate that
+ * returns one boolean per ref. A null handle or an evaluate failure is treated as
+ * in-viewport — we never hide a ref we couldn't measure.
+ */
+async function computeOffViewportRefs(
   page: Page,
   entries: AriaRefEntry[],
-): Promise<AriaRefEntry[]> {
+): Promise<Set<string>> {
+  const offViewport = new Set<string>();
   const viewport = page.viewportSize();
-  if (!viewport) return entries;
+  if (!viewport) return offViewport;
 
-  const inViewport = await Promise.all(
-    entries.map(async (entry) => {
-      try {
-        const box = await page
-          .locator(`aria-ref=${entry.ref}`)
-          .boundingBox({ timeout: 250 });
-        if (!box) return false;
-        const cx = box.x + box.width / 2;
-        const cy = box.y + box.height / 2;
-        return cx >= 0 && cx <= viewport.width && cy >= 0 && cy <= viewport.height;
-      } catch {
-        return false;
-      }
-    }),
+  const ariaEntries = entries.filter((e) => e.kind === "aria");
+  if (ariaEntries.length === 0) return offViewport;
+
+  const handles = await Promise.all(
+    ariaEntries.map((entry) =>
+      page
+        .locator(`aria-ref=${entry.ref}`)
+        .elementHandle({ timeout: 250 })
+        .catch(() => null),
+    ),
   );
 
-  return entries.filter((_, i) => inViewport[i]);
+  // String-free function form is required so Playwright deserializes the handle
+  // array into live DOM nodes; cast through `unknown` so DOM globals stay out of
+  // tsconfig's lib. Returns one boolean per handle in input order.
+  const evalInViewport = (arg: unknown): boolean[] => {
+    const a = arg as {
+      els: Array<{
+        getBoundingClientRect: () => { left: number; top: number; width: number; height: number };
+      } | null>;
+      vw: number;
+      vh: number;
+    };
+    return a.els.map((el) => {
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      return cx >= 0 && cx <= a.vw && cy >= 0 && cy <= a.vh;
+    });
+  };
+
+  let inView: boolean[];
+  try {
+    inView = await (page.evaluate as unknown as (
+      fn: (arg: unknown) => boolean[],
+      arg: unknown,
+    ) => Promise<boolean[]>)(evalInViewport, {
+      els: handles,
+      vw: viewport.width,
+      vh: viewport.height,
+    });
+  } catch {
+    inView = ariaEntries.map(() => true); // best-effort: keep all refs visible
+  } finally {
+    await Promise.all(handles.map((h) => h?.dispose().catch(() => {})));
+  }
+
+  ariaEntries.forEach((entry, i) => {
+    if (inView[i] === false) offViewport.add(entry.ref);
+  });
+  return offViewport;
 }
 
 /**
@@ -274,6 +332,12 @@ async function captureCursorInteractive(
   let nextRefNum = 1;
   while (usedRefs.has(nextRefNum)) nextRefNum++;
 
+  // Generate every selectorHint in ONE round-trip (P6): the surviving candidates are
+  // already stamped with `data-__skeptic-ci="<index>"`, so a single `page.evaluate`
+  // can run `window.__skeptic_selector(el)` over all of them — instead of one
+  // `elementHandle()` + one `evaluate()` per candidate (up to ~100 round-trips).
+  const hints = await generateSelectorHints(page, SELECTION_ATTR, raws.map((r) => r.index));
+
   const newEntries: AriaRefEntry[] = [];
   for (const raw of raws) {
     const refNum = nextRefNum;
@@ -281,24 +345,10 @@ async function captureCursorInteractive(
     while (usedRefs.has(nextRefNum)) nextRefNum++;
     const ref = `e${refNum}`;
 
-    // Generate a stable selectorHint via the recorder helper.
-    let selectorHint = "";
-    try {
-      const handle = await page.locator(`[${SELECTION_ATTR}="${raw.index}"]`).elementHandle({ timeout: 500 });
-      if (handle) {
-        try {
-          selectorHint = await generateSelectorForHandle(page, handle);
-        } finally {
-          await handle.dispose();
-        }
-      }
-    } catch {
-      // best-effort; fall back to the attribute selector
-    }
-
-    if (!selectorHint) {
-      selectorHint = `css=[${SELECTION_ATTR}="${raw.index}"]`;
-    }
+    const generated = hints[String(raw.index)] ?? "";
+    const selectorHint = generated.length > 0
+      ? generated
+      : `css=[${SELECTION_ATTR}="${raw.index}"]`;
 
     newEntries.push({
       ref,
@@ -313,6 +363,38 @@ async function captureCursorInteractive(
   }
 
   return newEntries;
+}
+
+/**
+ * Batch selectorHint generation for stamped cursor candidates. Injects the shared
+ * recorder helper once, then evaluates `window.__skeptic_selector(el)` for every
+ * `data-__skeptic-ci="<index>"` element in a single in-page pass. Returns a map of
+ * `index -> selector` (string keys, since object keys stringify); a missing or empty
+ * value tells the caller to fall back to the attribute selector. Best-effort: any
+ * failure yields an empty map so every candidate falls back gracefully.
+ */
+async function generateSelectorHints(
+  page: Page,
+  selectionAttr: string,
+  indices: number[],
+): Promise<Record<string, string>> {
+  if (indices.length === 0) return {};
+  try {
+    await ensureSelectorHelper(page);
+    const script = `((attrName, indices) => {
+      var fn = (typeof window !== "undefined") ? window.__skeptic_selector : null;
+      var out = {};
+      for (var i = 0; i < indices.length; i++) {
+        var idx = indices[i];
+        var el = document.querySelector('[' + attrName + '="' + idx + '"]');
+        out[idx] = (el && typeof fn === "function") ? (fn(el) || "") : "";
+      }
+      return out;
+    })(${JSON.stringify(selectionAttr)}, ${JSON.stringify(indices)})`;
+    return (await page.evaluate<Record<string, string>>(script)) ?? {};
+  } catch {
+    return {};
+  }
 }
 
 const bboxMatchesAny = (

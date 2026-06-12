@@ -155,10 +155,21 @@ export class AccessibilityCollector implements Collector {
       : null;
 
     const axeRuleIds = new Set(axeResult.violations.map((v) => v.ruleId));
-    const merged: AccessibilityViolation[] = [
+    const dedupedViolations: AccessibilityViolation[] = [
       ...axeResult.violations,
       ...(ibmResult?.violations.filter((v) => !axeRuleIds.has(v.ruleId)) ?? []),
     ];
+
+    // Apply the requested impact filter (e.g. ['critical','serious']). When omitted or
+    // empty, every impact level passes through. Filtering is scoped to violations only —
+    // passes/incomplete counts still reflect the full audit.
+    const impactFilter =
+      invocation.impacts && invocation.impacts.length > 0
+        ? new Set<AccessibilityViolation["impact"]>(invocation.impacts)
+        : null;
+    const merged = impactFilter
+      ? dedupedViolations.filter((v) => impactFilter.has(v.impact))
+      : dedupedViolations;
 
     merged.sort((a, b) => IMPACT_ORDER[a.impact] - IMPACT_ORDER[b.impact]);
 

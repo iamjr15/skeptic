@@ -139,6 +139,40 @@ describe("redactUrl — vendor-prefixed (suffix-match)", () => {
   });
 });
 
+describe("redactUrl — OAuth implicit-flow fragment tokens", () => {
+  it("redacts #access_token in a fragment-only URL (no query string)", () => {
+    expect(
+      redactUrl("https://app.example.com/callback#access_token=XYZ&token_type=bearer"),
+    ).toBe("https://app.example.com/callback#access_token=***&token_type=bearer");
+  });
+
+  it("redacts multiple sensitive fragment params", () => {
+    expect(
+      redactUrl(
+        "https://app/cb#access_token=AAA&refresh_token=BBB&expires_in=3600&state=ok",
+      ),
+    ).toBe("https://app/cb#access_token=***&refresh_token=***&expires_in=3600&state=ok");
+  });
+
+  it("redacts both query and fragment secrets in one URL", () => {
+    expect(redactUrl("https://app/cb?token=q1#access_token=f1")).toBe(
+      "https://app/cb?token=***#access_token=***",
+    );
+  });
+
+  it("leaves a plain anchor fragment untouched", () => {
+    expect(redactUrl("https://example.com/docs#installation")).toBe(
+      "https://example.com/docs#installation",
+    );
+  });
+
+  it("leaves a non-sensitive fragment param untouched", () => {
+    expect(redactUrl("https://example.com/#page=2")).toBe(
+      "https://example.com/#page=2",
+    );
+  });
+});
+
 describe("redactUrl — false-positive guards", () => {
   it("?lookup=foo is NOT redacted (no separator before 'key' or any other suffix)", () => {
     expect(redactUrl("https://example.com/?lookup=foo")).toBe(

@@ -13,6 +13,7 @@ import { ExecutionContext } from "../executor/context.js";
 import { snapshot, type SnapshotOptions, type SnapshotStats } from "../api/snapshot.js";
 import type { AnnotationMapEntry } from "../api/screenshot.js";
 import type { AriaRefEntry } from "../executor/aria-ref-types.js";
+import { buildSelectorHint } from "./snapshot-render.js";
 
 export interface InspectCommandOptions {
   interactive?: boolean;
@@ -58,7 +59,13 @@ interface InspectJsonOutput {
   annotatedPath?: string;
 }
 
-const DEFAULT_WAIT_MS = 1500;
+// Default extra settle is 0 — the adaptive networkidle race below already settles most pages.
+// The old 1500ms fixed wait (plus an unconditional 5s networkidle ceiling) cost ~1.9s per call
+// even on quiet pages. Opt back into a long fixed wait via `--wait <ms>`.
+const DEFAULT_WAIT_MS = 0;
+// Upper bound on the pre-snapshot settle. A quiet page resolves networkidle well under this; a
+// chatty page (analytics beacons, polling) bails here instead of blocking the snapshot.
+const SETTLE_CAP_MS = 1_000;
 
 /**
  * Run `skeptic inspect <url>` — open a page, capture an ARIA + cursor-interactive
@@ -136,11 +143,14 @@ export const runInspect = async (
     }
 
     await page.goto(url, { waitUntil: "domcontentloaded" });
-    try {
-      await page.waitForLoadState("networkidle", { timeout: 5_000 });
-    } catch {
-      // networkidle is heuristic — proceed even if it never quiesces
-    }
+    // Adaptive settle: race networkidle against a hard cap. A quiet page resolves the moment its
+    // network goes idle (snapshot fires early); a chatty page bails at SETTLE_CAP_MS rather than
+    // paying the old unconditional ~1.9s. The dangling networkidle promise is harmless — it's
+    // `.catch`-guarded so its eventual rejection on page close never surfaces.
+    await Promise.race([
+      page.waitForLoadState("networkidle").catch(() => {}),
+      delay(SETTLE_CAP_MS),
+    ]);
     if (wait > 0) await delay(wait);
 
     const ctx = new ExecutionContext(page, url);
@@ -197,7 +207,7 @@ export const runInspect = async (
   }
 };
 
-const parseWait = (raw?: string): number => {
+export const parseWait = (raw?: string): number => {
   if (!raw) return DEFAULT_WAIT_MS;
   const n = Number.parseInt(raw, 10);
   if (!Number.isFinite(n) || n < 0) return DEFAULT_WAIT_MS;
@@ -234,46 +244,10 @@ interface RenderedTree {
   cursorInteractiveCount: number;
 }
 
-/**
- * Build the per-ref `selectorHint` line. Priority:
- *   1. Cursor-interactive entries already carry one (recorder-helper output).
- *   2. ARIA entry with name → `role=<role>:<name>`
- *   3. ARIA entry with href → `css=<tag>[href*="<host>"]`
- *   4. Otherwise → `role=<role>` (caller may need to disambiguate further)
- *
- * All three forms validate against the existing `element-resolver.ts` skeptic-grammar parser.
- */
-export const buildSelectorHint = (entry: AriaRefEntry): string => {
-  if (entry.selectorHint && entry.selectorHint.length > 0) {
-    return entry.selectorHint;
-  }
-  if (entry.kind === "aria") {
-    if (entry.name && entry.name.length > 0 && entry.name.length < 60) {
-      return `role=${entry.role}:${entry.name}`;
-    }
-    if (entry.role === "link" && entry.href) {
-      // Link with no accessible name (icon-only) — fall back to a stable href substring.
-      const host = extractHrefHostFragment(entry.href);
-      if (host) return `css=a[href*="${host}"]`;
-    }
-    return `role=${entry.role}`;
-  }
-  return "css=*";
-};
-
-const extractHrefHostFragment = (href: string): string | null => {
-  try {
-    const u = new URL(href, "http://dummy.invalid");
-    if (u.host && u.host !== "dummy.invalid") {
-      return u.host.replace(/^www\./, "");
-    }
-    // Relative or path-only — pick the last non-empty segment as a hint.
-    const seg = u.pathname.split("/").filter(Boolean).pop();
-    return seg ?? null;
-  } catch {
-    return null;
-  }
-};
+// The per-ref `selectorHint` builder is shared with the persistent `snapshot`
+// verb so both surfaces emit identical hints. Re-exported for callers (and
+// inspect.test.ts) that import it from this module.
+export { buildSelectorHint };
 
 const buildPlaywrightHint = (entry: AriaRefEntry): string | undefined => {
   if (entry.kind !== "aria") return undefined;

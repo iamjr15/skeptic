@@ -24,6 +24,11 @@ export interface RunnerOptions {
   /** Optional override of the worker entry URL — vitest tests can substitute a fake. */
   workerEntry?: URL;
   killGraceMs?: number;
+  /**
+   * Optional cancellation, threaded into the executor. On abort the runner terminates in-flight
+   * workers and stops scheduling. `run.ts` wires this to SIGINT/Ctrl-C. Backward-compatible.
+   */
+  signal?: AbortSignal;
 }
 
 export interface RunnerOutcome extends RunnerExecuteOutcome {
@@ -120,6 +125,7 @@ export const runSpecs = async (options: RunnerOptions): Promise<RunnerOutcome> =
         total: filtered.length,
         passed: 0,
         failed: 0,
+        skipped: 0,
         duration_ms: 0,
         tests: [],
       },
@@ -132,7 +138,10 @@ export const runSpecs = async (options: RunnerOptions): Promise<RunnerOutcome> =
     partition,
     manifests: manifestMap,
     bail: options.bail ?? false,
-    concurrency: options.config.parallel ?? 1,
+    // Only forward concurrency when `--parallel` was explicitly resolved. When undefined, the
+    // executor auto-picks a safe default from os.availableParallelism().
+    ...(options.config.parallel !== undefined ? { concurrency: options.config.parallel } : {}),
+    ...(options.signal !== undefined ? { signal: options.signal } : {}),
     ...(options.workerEntry !== undefined ? { workerEntry: options.workerEntry } : {}),
     ...(options.killGraceMs !== undefined ? { killGraceMs: options.killGraceMs } : {}),
   };

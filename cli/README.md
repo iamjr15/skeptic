@@ -43,8 +43,8 @@ skeptic observe https://example.com
 # Run TypeScript specs with full QA evidence
 skeptic run tests/homepage.spec.ts --observability --video --trace
 
-# Generate a validated TypeScript spec with AI
-skeptic generate -m "test the login page"
+# Drive a browser interactively from the shell (persistent session)
+skeptic open https://example.com && skeptic snapshot -i
 
 # Check local setup
 skeptic doctor
@@ -249,53 +249,31 @@ It writes an output directory containing an HTML report, JSON report,
 screenshots, annotated screenshots, snapshot text/JSON, console/network data,
 performance summary, accessibility JSON, and an accessibility markdown audit.
 
-## AI Features
+## Browser Session Verbs
 
-Skeptic supports Gemini, OpenAI, and Anthropic.
+Skeptic is agent-native: a coding agent drives a persistent browser entirely from
+the shell. A daemon holds the session, so `@eN` refs from one `skeptic snapshot`
+stay valid for the next `skeptic click @eN` — across separate commands. There is
+no MCP/ACP server and no built-in AI: the host agent is the intelligence.
 
-```yaml
-ai:
-  provider: openai
-  model: gpt-4o
+```bash
+skeptic open https://app.example.com    # opens a session (default name "default")
+skeptic snapshot -i                      # mints @e1.. refs + stable selectorHints
+skeptic click @e3                        # act on a ref from the last snapshot
+skeptic fill @e5 "user@test.com"
+skeptic snapshot -i                      # re-snapshot after the DOM changed
+skeptic console --errors                 # check for uncaught errors
+skeptic screenshot --full                # returns a file path
+skeptic close
 ```
 
-Set the matching provider key with `GEMINI_API_KEY`, `OPENAI_API_KEY`, or
-`ANTHROPIC_API_KEY`. You can also use `SKEPTIC_AI_PROVIDER` and
-`SKEPTIC_AI_API_KEY` to override config in CI.
-
-Available AI paths:
-
-- `ai.assert("the dashboard greets the user")`
-- `ai.assertNoDefects()`
-- `ai.extract("the invoice total")`
-- `skeptic generate --message "test checkout"`
-- `skeptic generate --diff`
-- `skeptic run --analyze`
-
-Generated specs are typechecked and imported before being written.
-
-## MCP And ACP
-
-`skeptic mcp` exposes testing and browser QA tools over stdio:
-
-| Tool | Purpose |
-|---|---|
-| `list_tests` | Discover specs |
-| `validate_tests` | Typecheck and import-check specs |
-| `generate_test` | Generate a validated TypeScript spec |
-| `run_test` | Run specs and stream progress |
-| `browser_open` | Open a page with config-driven browser/auth/safety |
-| `browser_snapshot` | Capture ARIA/cursor refs |
-| `browser_playwright` | Run focused Playwright code |
-| `browser_screenshot` | Capture PNG, annotated PNG, or snapshot-only output |
-| `browser_console_logs` | Read console messages |
-| `browser_network_requests` | Read requests and computed issues |
-| `browser_performance_metrics` | Capture Web Vitals, LoAF, resources, and `perf-trace.md` |
-| `browser_accessibility_audit` | Run axe-core plus IBM Equal Access when available |
-| `browser_close` | Close the browser session |
-
-`skeptic acp` exposes a testing-focused agent server for editors that support
-Agent Client Protocol.
+Verbs: `open`, `snapshot` (`-i`/`-c`), `click`, `fill`, `type`, `press`, `hover`,
+`check`, `uncheck`, `select`, `get <text|box|url|title> [@ref]`, `screenshot`
+(`--full`/`--annotate`), `console` (`--errors`), `wait`, `list`, `close`
+(`--all`). Add `--json` to any verb. Use `--session <name>` for isolated parallel
+sessions; the session browser defaults to headed (`--headless` for CI/containers).
+Refs are minted per snapshot and invalidated by navigation — re-snapshot after any
+navigation or DOM change.
 
 ## Configuration
 

@@ -1,7 +1,7 @@
 {
   "name": "skeptic-cli",
   "version": "0.2.1",
-  "description": "CLI E2E testing for AI agents — TypeScript test runner with AI assertions, observability, and snapshot-based discovery",
+  "description": "Agent-native CLI for browser QA — deterministic Playwright TypeScript test runner with observability, evidence capture, and snapshot-based page discovery. No API keys, no LLM of its own.",
   "type": "module",
   "bin": {
     "skeptic": "bin/launcher.mjs"
@@ -47,9 +47,13 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/iamjr15/skeptic.git"
+    "url": "git+https://github.com/iamjr15/skeptic.git",
+    "directory": "cli"
   },
-  "homepage": "https://github.com/iamjr15/skeptic",
+  "homepage": "https://github.com/iamjr15/skeptic#readme",
+  "bugs": {
+    "url": "https://github.com/iamjr15/skeptic/issues"
+  },
   "author": "iamjr15",
   "keywords": [
     "testing",
@@ -57,7 +61,9 @@
     "playwright",
     "typescript",
     "cli",
-    "ai",
+    "qa",
+    "agent-native",
+    "observability",
     "agents",
     "browser"
   ],
@@ -69,7 +75,6 @@
     "figures": "^6.1.0",
     "ink": "^7.0.2",
     "ink-spinner": "^5.0.0",
-    "oxc-resolver": "^11.19.1",
     "playwright": "^1.52.0",
     "playwright-core": "^1.52.0",
     "pretty-ms": "^9.3.0",
@@ -83,11 +88,7 @@
     "better-sqlite3": "^12.9.0"
   },
   "devDependencies": {
-    "@agentclientprotocol/sdk": "^0.20.0",
     "@axe-core/playwright": "^4.11.2",
-    "@faker-js/faker": "^9.0.0",
-    "@google/generative-ai": "^0.24.1",
-    "@modelcontextprotocol/sdk": "^1.29.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.15.3",
     "@types/pngjs": "^6.0.5",
@@ -95,7 +96,7 @@
     "chalk": "^5.4.1",
     "chokidar": "^5.0.0",
     "commander": "^13.1.0",
-    "fast-xml-parser": "^5.2.3",
+    "fast-xml-parser": "^5.8.0",
     "glob": "^11.0.2",
     "ink-testing-library": "^4.0.0",
     "minimatch": "^10.0.0",

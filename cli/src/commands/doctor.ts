@@ -15,7 +15,6 @@ import {
   getVersionPath,
 } from "../daemon/socket.js";
 import { isPidAlive } from "../daemon/lifecycle.js";
-import { ENV_KEY_BY_PROVIDER } from "../ai/ai-client.js";
 import { loadPlaywright } from "../utils/playwright-loader.js";
 import { logger } from "../utils/logger.js";
 import { safeJsonStringify } from "../utils/safe-json.js";
@@ -295,21 +294,6 @@ export const collectDoctorReport = async (
       })),
     },
   );
-
-  if (cfg) {
-    const envKey = ENV_KEY_BY_PROVIDER[cfg.ai.provider];
-    const hasConfiguredKey = Boolean(cfg.ai.apiKey || process.env[envKey]);
-    push(
-      checks,
-      "ai-provider",
-      hasConfiguredKey ? "pass" : "warn",
-      "AI Provider",
-      hasConfiguredKey
-        ? `${cfg.ai.provider} key configured (${cfg.ai.apiKey ? "config" : envKey})`
-        : `${cfg.ai.provider} selected but ${envKey} is not set`,
-      { provider: cfg.ai.provider, envKey, model: cfg.ai.model ?? null },
-    );
-  }
 
   const summary: Record<DoctorStatus, number> = {
     pass: 0,

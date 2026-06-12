@@ -14,17 +14,26 @@ const makeMsg = (
     location: () => loc ?? { url: "", lineNumber: 0, columnNumber: 0 },
   }) as unknown as PWConsoleMessage;
 
-const makePage = (): Page & { __dispatch: (msg: PWConsoleMessage) => void } => {
+type MockPage = Page & {
+  __dispatch: (msg: PWConsoleMessage) => void;
+  __dispatchPageError: (err: Error) => void;
+};
+
+const makePage = (): MockPage => {
   let listener: ((msg: PWConsoleMessage) => void) | undefined;
+  let errListener: ((err: Error) => void) | undefined;
   return {
-    on: vi.fn().mockImplementation((event: string, fn: (msg: PWConsoleMessage) => void) => {
-      if (event === "console") listener = fn;
+    on: vi.fn().mockImplementation((event: string, fn: (arg: never) => void) => {
+      if (event === "console") listener = fn as (msg: PWConsoleMessage) => void;
+      if (event === "pageerror") errListener = fn as (err: Error) => void;
     }),
     off: vi.fn().mockImplementation((event: string) => {
       if (event === "console") listener = undefined;
+      if (event === "pageerror") errListener = undefined;
     }),
     __dispatch: (msg) => listener?.(msg),
-  } as unknown as Page & { __dispatch: (msg: PWConsoleMessage) => void };
+    __dispatchPageError: (err) => errListener?.(err),
+  } as unknown as MockPage;
 };
 
 describe("ConsoleCollector", () => {
@@ -103,10 +112,26 @@ describe("ConsoleCollector", () => {
     expect(snap.messages[0]!.location?.lineNumber).toBe(42);
   });
 
-  it("removes the listener on detach", async () => {
+  it("captures uncaught page exceptions (pageerror) as errors", async () => {
+    const collector = new ConsoleCollector({ captureLimit: 200, redact: true });
+    await collector.attach(page, ctx);
+
+    const err = new Error("Cannot read properties of undefined (reading 'foo')");
+    err.stack = "TypeError: Cannot read properties of undefined (reading 'foo')\n    at app.js:10:5";
+    page.__dispatchPageError(err);
+
+    const snap = await collector.snapshot();
+    expect(snap.summary.errorCount).toBe(1);
+    expect(snap.messages[0]!.type).toBe("error");
+    expect(snap.messages[0]!.text).toContain("Uncaught");
+    expect(snap.messages[0]!.text).toContain("reading 'foo'");
+  });
+
+  it("removes both console and pageerror listeners on detach", async () => {
     const collector = new ConsoleCollector({ captureLimit: 200, redact: true });
     await collector.attach(page, ctx);
     await collector.detach();
     expect(page.off).toHaveBeenCalledWith("console", expect.any(Function));
+    expect(page.off).toHaveBeenCalledWith("pageerror", expect.any(Function));
   });
 });

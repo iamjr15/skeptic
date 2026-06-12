@@ -54,7 +54,63 @@ describe("renderSnapshotYaml", () => {
     expect(rendered).not.toContain("[ref=e3]");
     expect(rendered.match(/\/url: \/iphone\//g)).toHaveLength(1);
   });
+
+  it("compact mode is flat: drops pure-structural wrappers and removes orphaned indentation", () => {
+    const raw = [
+      "- generic [ref=e1]:",
+      "  - navigation [ref=e2]:",
+      '    - button "Menu" [ref=e3]',
+    ].join("\n");
+
+    const rendered = renderSnapshotYaml(
+      raw,
+      [
+        entry("e1", "generic"),
+        entry("e2", "navigation"),
+        entry("e3", "button", "Menu"),
+      ],
+      { interactive: false, compact: true },
+    );
+
+    // generic + nameless navigation wrappers are dropped entirely (not merely
+    // ref-stripped), and the surviving button is flattened to column 0.
+    expect(rendered).toBe('- button "Menu" [ref=e3]');
+  });
+
+  it("annotates off-viewport refs inline while keeping the ref token parseable", () => {
+    const raw = [
+      '- button "Visible" [ref=e1]',
+      '- button "Below the fold" [ref=e2]',
+    ].join("\n");
+
+    const rendered = renderSnapshotYaml(
+      raw,
+      [entry("e1", "button", "Visible"), entry("e2", "button", "Below the fold")],
+      { interactive: false, compact: false, offViewportRefs: new Set(["e2"]) },
+    );
+
+    expect(rendered).toContain('button "Below the fold" [ref=e2] [off-viewport]');
+    // The in-viewport ref is left untouched.
+    expect(rendered).toContain('- button "Visible" [ref=e1]');
+    expect(rendered).not.toContain("[ref=e1] [off-viewport]");
+    // Ref token stays intact so a byRef lookup of the annotated line still parses.
+    expect(refsOf(rendered)).toEqual(["e1", "e2"]);
+  });
+
+  it("keeps off-viewport annotation through compact mode for high-signal refs", () => {
+    const raw = ['- link "Footer" [ref=e1]', "  - /url: /footer"].join("\n");
+    const rendered = renderSnapshotYaml(
+      raw,
+      [entry("e1", "link", "Footer", "/footer")],
+      { interactive: false, compact: true, offViewportRefs: new Set(["e1"]) },
+    );
+    expect(rendered).toContain('link "Footer" [ref=e1] [off-viewport]');
+    expect(rendered).toContain("/url: /footer");
+  });
 });
+
+const refsOf = (text: string): string[] =>
+  [...text.matchAll(/\[ref=(e\d+)\]/g)].map((m) => m[1]!);
 
 describe("computeSnapshotStats", () => {
   it("counts lines, characters, estimated tokens, captured refs, rendered refs, and interactive refs", () => {

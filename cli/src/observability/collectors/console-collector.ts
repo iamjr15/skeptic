@@ -20,6 +20,7 @@ export class ConsoleCollector implements Collector {
   private readonly messages: ConsoleMessage[] = [];
   private readonly options: ConsoleCollectorOptions;
   private onConsole?: (msg: PWConsoleMessage) => void;
+  private onPageError?: (error: Error) => void;
 
   constructor(options: ConsoleCollectorOptions) {
     this.options = options;
@@ -55,7 +56,23 @@ export class ConsoleCollector implements Collector {
       });
     };
 
+    // Uncaught in-page exceptions and unhandled promise rejections arrive via
+    // the separate `pageerror` event, NOT `console`. For a QA tool this is the
+    // highest-signal failure event — a page that throws on load otherwise
+    // produces an empty console log. Record it as a type:"error" message so it
+    // feeds errorCount and observability.expectNoConsoleErrors().
+    this.onPageError = (error) => {
+      if (this.messages.length >= this.options.captureLimit) return;
+      const rawText = `Uncaught ${error.stack || `${error.name}: ${error.message}`}`;
+      this.messages.push({
+        type: "error",
+        text: this.options.redact ? redactConsoleText(rawText) : rawText,
+        timestamp: Date.now(),
+      });
+    };
+
     page.on("console", this.onConsole);
+    page.on("pageerror", this.onPageError);
   }
 
   async snapshot(): Promise<ConsoleSnapshot> {
@@ -83,6 +100,9 @@ export class ConsoleCollector implements Collector {
   async detach(): Promise<void> {
     if (this.page && this.onConsole) {
       this.page.off("console", this.onConsole);
+    }
+    if (this.page && this.onPageError) {
+      this.page.off("pageerror", this.onPageError);
     }
     logger.debug(`[console] detach — captured ${this.messages.length} message(s)`);
     this.page = null;

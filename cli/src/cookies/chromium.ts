@@ -91,6 +91,33 @@ export function detectChromiumBrowsers(): BrowserProfile[] {
   return profiles;
 }
 
+/**
+ * Build the set of Chromium `host_key` values a real browser would send for a
+ * given target host, matching cookie domain-matching semantics:
+ *
+ *   - the exact host as a host-only cookie (`app.example.com`)
+ *   - a domain cookie for the exact host (`.app.example.com`)
+ *   - domain cookies for every registrable parent (`.example.com`)
+ *
+ * Parent suffixes are limited to those with at least two labels so we never
+ * descend to a bare TLD (`.com`) and grab unrelated domains. Sibling hosts
+ * (`other.example.com`) are never generated — only strict suffixes of the
+ * target — so this broadens to true parents without over-matching.
+ */
+export function buildCookieHostKeys(domain: string): string[] {
+  const host = domain.replace(/^\.+/, "").trim().toLowerCase();
+  if (!host) return [];
+  const keys = new Set<string>();
+  keys.add(host); // host-only cookie for the exact host
+  keys.add(`.${host}`); // domain cookie for the exact host
+  const labels = host.split(".");
+  // Registrable parents: every proper suffix with >= 2 labels.
+  for (let i = 1; i + 2 <= labels.length; i += 1) {
+    keys.add(`.${labels.slice(i).join(".")}`);
+  }
+  return [...keys];
+}
+
 /** Extract cookies from a Chromium-based browser profile. */
 export function extractChromiumCookies(
   profile: BrowserProfile,
@@ -130,20 +157,25 @@ export function extractChromiumCookies(
     // Derive decryption key
     const key = getDecryptionKey(profile);
 
-    const domainPattern = domain.startsWith(".") ? domain : `.${domain}`;
+    const hostKeys = buildCookieHostKeys(domain);
+    if (hostKeys.length === 0) {
+      db.close();
+      return { cookies: [], browser: profile.browser, profilePath: profile.profilePath };
+    }
+    const placeholders = hostKeys.map(() => "?").join(", ");
     const rows = db
       .prepare(
         `SELECT host_key, name, encrypted_value, path, expires_utc, is_secure, is_httponly, samesite
          FROM cookies
-         WHERE host_key = ? OR host_key = ?`,
+         WHERE host_key IN (${placeholders})`,
       )
-      .all(domain, domainPattern) as ChromiumCookieRow[];
+      .all(...hostKeys) as ChromiumCookieRow[];
 
     db.close();
 
     const cookies: BrowserCookie[] = rows.map((row) => ({
       name: row.name,
-      value: decryptCookieValue(row.encrypted_value, key),
+      value: decryptCookieValue(row.encrypted_value, key, row.host_key),
       domain: row.host_key,
       path: row.path,
       expires: chromiumTimestampToUnix(row.expires_utc),
@@ -213,9 +245,9 @@ function getDecryptionKey(profile: BrowserProfile): Buffer {
   return deriveChromiumKey(password);
 }
 
-function decryptCookieValue(encrypted: Buffer, key: Buffer): string {
+function decryptCookieValue(encrypted: Buffer, key: Buffer, hostKey?: string): string {
   if (!encrypted || encrypted.length === 0) return "";
-  return decryptChromiumValue(encrypted, key);
+  return decryptChromiumValue(encrypted, key, hostKey);
 }
 
 /**

@@ -204,6 +204,44 @@ describe("AccessibilityCollector", () => {
     }
   });
 
+  it("filters violations to the requested impact levels", async () => {
+    axeAnalyzeMock.mockResolvedValue({
+      violations: [
+        { id: "crit", impact: "critical", help: "h", nodes: [] },
+        { id: "ser", impact: "serious", help: "h", nodes: [] },
+        { id: "mod", impact: "moderate", help: "h", nodes: [] },
+        { id: "min", impact: "minor", help: "h", nodes: [] },
+      ],
+      passes: [{ id: "p1" }, { id: "p2" }],
+      incomplete: [],
+    });
+    const collector = new AccessibilityCollector(DEFAULT_OPTS);
+    await collector.attach(fakePage(), mockCtx);
+    const snap = await collector.audit({
+      standard: "WCAG2AA",
+      impacts: ["critical", "serious"],
+    });
+    expect(snap.violations.map((v) => v.ruleId)).toEqual(["crit", "ser"]);
+    // summary.violations reflects the filtered count; passes are unaffected.
+    expect(snap.summary.violations).toBe(2);
+    expect(snap.summary.passes).toBe(2);
+  });
+
+  it("keeps all violations when no impact filter is supplied", async () => {
+    axeAnalyzeMock.mockResolvedValue({
+      violations: [
+        { id: "crit", impact: "critical", help: "h", nodes: [] },
+        { id: "min", impact: "minor", help: "h", nodes: [] },
+      ],
+      passes: [],
+      incomplete: [],
+    });
+    const collector = new AccessibilityCollector(DEFAULT_OPTS);
+    await collector.attach(fakePage(), mockCtx);
+    const snap = await collector.audit({ standard: "WCAG2AA" });
+    expect(snap.summary.violations).toBe(2);
+  });
+
   it("populates enginesRequested + enginesErrored on a clean axe run", async () => {
     const collector = new AccessibilityCollector(DEFAULT_OPTS);
     await collector.attach(fakePage(), mockCtx);

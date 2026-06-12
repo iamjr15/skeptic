@@ -123,18 +123,6 @@ function applyEnvOverrides(raw: Record<string, unknown>): Record<string, unknown
     result["auth"] = { ...auth, cookies: true };
   }
 
-  const providerOverride = process.env["SKEPTIC_AI_PROVIDER"];
-  if (providerOverride) {
-    const ai = (result["ai"] ?? {}) as Record<string, unknown>;
-    result["ai"] = { ...ai, provider: providerOverride };
-  }
-
-  const apiKeyOverride = process.env["SKEPTIC_AI_API_KEY"];
-  if (apiKeyOverride) {
-    const ai = (result["ai"] ?? {}) as Record<string, unknown>;
-    result["ai"] = { ...ai, apiKey: apiKeyOverride };
-  }
-
   return result;
 }
 

@@ -50,6 +50,77 @@ describe("daemon lifecycle", () => {
     }
   });
 
+  it("idle timer defers shutdown while clients are active, then reclaims when they drop", async () => {
+    // Regression: a `skeptic run` connects once over WS then drives the
+    // BrowserServer with no further control-socket RPC, so the idle timer must
+    // not shut the daemon down while a client still holds a session. This
+    // mirrors the onFire gate wired in startDaemon (clients > 0 -> re-arm).
+    vi.useFakeTimers();
+    let clients = 1;
+    let shutdowns = 0;
+    let timer: IdleTimer;
+    timer = new IdleTimer(0.1, () => {
+      if (clients > 0) {
+        timer.arm();
+        return;
+      }
+      shutdowns += 1;
+    });
+    try {
+      timer.arm();
+      // Several full intervals elapse while a client is active — no shutdown.
+      await vi.advanceTimersByTimeAsync(350);
+      expect(shutdowns).toBe(0);
+      // The client disconnects; the next interval reclaims the BrowserServer.
+      clients = 0;
+      await vi.advanceTimersByTimeAsync(150);
+      expect(shutdowns).toBe(1);
+    } finally {
+      timer.disarm();
+      vi.useRealTimers();
+    }
+  });
+
+  it("tracks active clients and keeps the daemon alive past the idle timeout", async () => {
+    let handle: Awaited<ReturnType<typeof startDaemon>> | null = null;
+    try {
+      handle = await startDaemon({
+        engine: "chromium",
+        headed: false,
+        cliVersion: "test-0.0.0",
+        idleTimeoutSeconds: 0.3,
+      });
+    } catch (err) {
+      // Browser binary may be missing in the test sandbox — soft-skip.
+      // eslint-disable-next-line no-console
+      console.warn("[lifecycle] BrowserServer launch failed; skipping:", err);
+      return;
+    }
+    try {
+      // A client connecting bumps the active-client count (browser.getEndpoint).
+      const ep = await sendRpc(getSocketPath(), { method: "browser.getEndpoint" }, 2000);
+      expect(ep.error).toBeUndefined();
+      const status1 = await sendRpc(getSocketPath(), { method: "daemon.status" }, 2000);
+      expect((status1.result as { clients: number }).clients).toBe(1);
+
+      // Sleep well past the 0.3s idle timeout — the daemon must still be alive
+      // because a client is active.
+      await new Promise((r) => setTimeout(r, 700));
+      expect(fs.existsSync(getSocketPath())).toBe(true);
+      const status2 = await sendRpc(getSocketPath(), { method: "daemon.status" }, 2000);
+      expect(status2.error).toBeUndefined();
+      expect((status2.result as { clients: number }).clients).toBe(1);
+
+      // Releasing the session drops the count so the idle timer can reclaim it.
+      const rel = await sendRpc(getSocketPath(), { method: "browser.release" }, 2000);
+      expect(rel.result).toEqual({ ok: true });
+      const status3 = await sendRpc(getSocketPath(), { method: "daemon.status" }, 2000);
+      expect((status3.result as { clients: number }).clients).toBe(0);
+    } finally {
+      await handle.shutdown("test").catch(() => {});
+    }
+  }, 30_000);
+
   it("IdleTimer with seconds=0 never fires", async () => {
     let fired = 0;
     const timer = new IdleTimer(0, () => {

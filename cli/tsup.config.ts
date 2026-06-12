@@ -27,7 +27,9 @@ export default defineConfig({
   sourcemap: buildSourcemap,
   minify: minifyBuild,
   treeshake: true,
-  splitting: false,
+  // Split shared code into chunks so skeptic.mjs / index.mjs / worker.mjs don't
+  // each inline a full copy of the common bundle (~1.8MB was duplicated).
+  splitting: true,
   clean: true,
   // Banner injects a `require()` shim for CJS deps (Commander, etc.) that
   // call `require("events")` etc. internally. Without this, esbuild's ESM
@@ -68,16 +70,12 @@ export default defineConfig({
     "pretty-ms",
     "minimatch",
     "web-vitals",
-    "@google/generative-ai",
-    "@faker-js/faker",
     "fast-xml-parser",
     "pixelmatch",
     "pngjs",
     "react",
     "ink",
     "ink-spinner",
-    "@modelcontextprotocol/sdk",
-    "@agentclientprotocol/sdk",
     "@axe-core/playwright",
   ],
 
@@ -95,14 +93,10 @@ export default defineConfig({
   // for now only the version is used (Phase 2's fast path).
   define: {
     __SKEPTIC_CLI_VERSION__: JSON.stringify(pkg.version),
-    __SKEPTIC_FEATURE_AI_ASSERTIONS__:
-      process.env.SKEPTIC_FEATURE_AI_ASSERTIONS ?? "true",
     __SKEPTIC_FEATURE_COOKIE_EXTRACTION__:
       process.env.SKEPTIC_FEATURE_COOKIE_EXTRACTION ?? "true",
     __SKEPTIC_FEATURE_RECORDING__:
       process.env.SKEPTIC_FEATURE_RECORDING ?? "true",
-    __SKEPTIC_FEATURE_MCP__: process.env.SKEPTIC_FEATURE_MCP ?? "true",
-    __SKEPTIC_FEATURE_ACP__: process.env.SKEPTIC_FEATURE_ACP ?? "true",
   },
 
   async onSuccess() {

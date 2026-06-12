@@ -124,19 +124,92 @@ describe("JUnitReporter", () => {
     expect(xml).toContain("&quot;");
   });
 
-  it("includes correct test counts in testsuites element", () => {
+  it("aggregates testsuites counts from the emitted testcases, not run-level totals", () => {
+    // Each <testcase> is a step, so the <testsuites> tests/failures/skipped attributes must
+    // sum the steps — NOT summary.total/summary.failed (the previous bug used the latter,
+    // so the attributes never reconciled with the testcases they summarize).
     const summary = makeSummary({
-      total: 2,
-      passed: 1,
-      failed: 1,
+      total: 99, // intentionally wrong run-level numbers; must be ignored
+      passed: 99,
+      failed: 99,
+      tests: [
+        {
+          name: "Suite A",
+          file: "tests/a.spec.ts",
+          status: "passed",
+          duration_ms: 300,
+          steps: [
+            { command: "navigate", args: {}, status: "passed", duration_ms: 100 },
+            { command: "click", args: {}, status: "passed", duration_ms: 100 },
+          ],
+        },
+        {
+          name: "Suite B",
+          file: "tests/b.spec.ts",
+          status: "failed",
+          duration_ms: 200,
+          steps: [
+            { command: "assert", args: {}, status: "failed", duration_ms: 50, error: "boom" },
+          ],
+        },
+      ],
     });
 
     const reporter = new JUnitReporter(tmpDir);
     reporter.onRunComplete(summary);
 
     const xml = fs.readFileSync(path.join(tmpDir, "junit.xml"), "utf-8");
-    expect(xml).toContain('tests="2"');
-    expect(xml).toContain('failures="1"');
+    // 3 steps total (2 passed + 1 failed), 1 failure, 0 skipped.
+    expect(xml).toContain('<testsuites name="skeptic" tests="3" failures="1" skipped="0"');
+    expect(xml).not.toContain('tests="99"');
+  });
+
+  it("emits <skipped/> for skipped steps and counts them", () => {
+    const summary = makeSummary({
+      tests: [
+        {
+          name: "Partly Skipped",
+          file: "tests/skip.spec.ts",
+          status: "passed",
+          duration_ms: 150,
+          steps: [
+            { command: "navigate", args: {}, status: "passed", duration_ms: 100 },
+            { command: "click", args: {}, status: "skipped", duration_ms: 0 },
+          ],
+        },
+      ],
+    });
+
+    const reporter = new JUnitReporter(tmpDir);
+    reporter.onRunComplete(summary);
+
+    const xml = fs.readFileSync(path.join(tmpDir, "junit.xml"), "utf-8");
+    expect(xml).toContain("<skipped />");
+    expect(xml).toContain('<testsuites name="skeptic" tests="2" failures="0" skipped="1"');
+    expect(xml).toContain('<testsuite name="Partly Skipped" tests="2" failures="0" skipped="1"');
+  });
+
+  it("represents a whole skipped test (test.skip, no steps) as a skipped testcase", () => {
+    const summary = makeSummary({
+      tests: [
+        {
+          name: "Skipped Test",
+          file: "tests/whole-skip.spec.ts",
+          status: "passed",
+          skipped: true,
+          duration_ms: 0,
+          steps: [],
+        },
+      ],
+    });
+
+    const reporter = new JUnitReporter(tmpDir);
+    reporter.onRunComplete(summary);
+
+    const xml = fs.readFileSync(path.join(tmpDir, "junit.xml"), "utf-8");
+    expect(xml).toContain('<testsuites name="skeptic" tests="1" failures="0" skipped="1"');
+    expect(xml).toContain('name="Skipped Test"');
+    expect(xml).toContain("<skipped />");
   });
 
   it("renders shardId suffix on testsuite + testcase under sharding", () => {

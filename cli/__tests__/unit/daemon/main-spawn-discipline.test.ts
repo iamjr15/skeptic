@@ -109,9 +109,6 @@ describe("main-spawn discipline (task #17 audit fix)", () => {
     ["audit"],
     ["comment"],
     ["browsers", "install"],
-    ["mcp"],
-    ["acp"],
-    ["generate"],
     ["daemon", "start"],
   ])("does NOT pre-warm for non-browser command %s", async (...cmd) => {
     await prewarmDaemonIfNeeded(["node", "skeptic", ...cmd], {

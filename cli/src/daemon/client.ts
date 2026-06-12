@@ -22,7 +22,11 @@ import {
   type DaemonRpcResponse,
   type DaemonRpcRequest,
 } from "./socket.js";
-import type { BrowserGetEndpointResult, DaemonPingParams } from "./rpc.js";
+import type {
+  BrowserGetEndpointResult,
+  DaemonPingParams,
+  DaemonStatusResult,
+} from "./rpc.js";
 import type { Engine } from "./lifecycle.js";
 
 export interface ConnectDaemonOptions {
@@ -87,12 +91,27 @@ export const connectDaemon = async (
           // closes the context(s) this client created. The daemon's BrowserServer
           // keeps running for the next caller.
           await browser.close().catch(() => {});
+          // Tell the daemon this session ended so its active-client count drops
+          // and the idle timer can reclaim the BrowserServer (lifecycle.ts).
+          await sendRelease(socketPath).catch(() => {});
         },
       };
     }
 
     const reason = probe.reason ?? "unknown";
-    if (reason === "engine-mismatch" || reason === "headed-mismatch" || reason === "version-mismatch") {
+    if (isMismatchReason(reason)) {
+      // The daemon is a single global slot. Restarting it on a mismatch would
+      // kill the BrowserServer out from under any other run already connected
+      // to it. Only restart when nobody else is using it; otherwise this caller
+      // falls back to its own private (non-daemon) browser and leaves the shared
+      // daemon untouched.
+      const activeClients = await getDaemonClientCount(socketPath);
+      if (resolveMismatchAction(reason, activeClients) === "standalone") {
+        logger.warn(
+          `[daemon] ${reason} but ${activeClients} active client(s) — launching a private (non-daemon) browser for this run instead of restarting the shared daemon`,
+        );
+        return launchStandalone(opts);
+      }
       logger.warn(
         `[daemon] ${reason} — restarting daemon with engine=${opts.engine} headed=${opts.headed}`,
       );
@@ -126,6 +145,61 @@ const getEndpoint = async (
 
 const sendShutdown = async (socketPath: string): Promise<void> => {
   await sendRpc(socketPath, { method: "daemon.shutdown" }, 1500).catch(() => {});
+};
+
+/** Signal the daemon that this client's browser session has ended so the
+ *  daemon's active-client count drops (handled in lifecycle.ts's rpcHandler). */
+const sendRelease = async (socketPath: string): Promise<void> => {
+  await sendRpc(socketPath, { method: "browser.release" }, 1500).catch(() => {});
+};
+
+/** Handshake reasons that mean the running daemon can't serve this caller and
+ *  would otherwise trigger a restart. */
+export const isMismatchReason = (reason: string): boolean =>
+  reason === "engine-mismatch" ||
+  reason === "headed-mismatch" ||
+  reason === "version-mismatch";
+
+/**
+ * Decide what a mismatched caller should do. When other clients are actively
+ * connected, restarting the shared daemon would kill their BrowserServer
+ * mid-run, so the mismatched caller launches its own private browser instead.
+ * Only when nobody else is using the daemon is it safe to restart it.
+ */
+export const resolveMismatchAction = (
+  reason: string,
+  activeClients: number,
+): "standalone" | "restart" => {
+  if (!isMismatchReason(reason)) return "restart";
+  return activeClients > 0 ? "standalone" : "restart";
+};
+
+/** Read the daemon's current active-client count. Returns 0 if the status RPC
+ *  fails or is malformed — a conservative default that allows the caller to
+ *  restart a daemon that looks unused rather than spuriously refusing. */
+export const getDaemonClientCount = async (socketPath: string): Promise<number> => {
+  const resp = await sendRpc(socketPath, { method: "daemon.status" }, 1500).catch(
+    () => null,
+  );
+  if (!resp || resp.error) return 0;
+  const result = resp.result as DaemonStatusResult | undefined;
+  return typeof result?.clients === "number" ? result.clients : 0;
+};
+
+/** Launch a private, non-daemon browser for this caller. Used when the shared
+ *  daemon can't satisfy this run (engine/headed/version mismatch) but other
+ *  clients are still using it, so we must not kill the shared BrowserServer. */
+const launchStandalone = async (
+  opts: ConnectDaemonOptions,
+): Promise<DaemonConnection> => {
+  const pw = await loadPlaywright();
+  const browser = await pw[opts.engine].launch({ headless: !opts.headed });
+  return {
+    browser,
+    disconnect: async () => {
+      await browser.close().catch(() => {});
+    },
+  };
 };
 
 /** Generic line-delimited JSON RPC round-trip. Used for follow-up calls after

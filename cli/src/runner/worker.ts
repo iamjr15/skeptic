@@ -1,9 +1,11 @@
 import { isMainThread, parentPort, workerData } from "node:worker_threads";
 import { mkdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { tsImport } from "tsx/esm/api";
 import type { Browser, BrowserContext, Page } from "playwright";
+import { getDeviceProfile } from "../config/device-profiles.js";
 import type {
   WorkerStartMessage,
   WorkerStartConfig,
@@ -87,6 +89,40 @@ const handleDiscover = async (file: string): Promise<void> => {
 
 const sanitizeName = (name: string): string => name.replace(/[^a-zA-Z0-9_-]/g, "_");
 
+/**
+ * Per-file artifact slug. Keying the test directory only by `<sanitizedTestName>-<ordinal>`
+ * collides when two spec files each register a test with the same name (e.g. "login") — under
+ * `--parallel` they race to write the same dir and overwrite each other. We prefix a slug
+ * derived from the spec path: a readable basename plus a short hash of the full absolute path
+ * so distinct files never collide, even when basenames match across directories. Deterministic
+ * per file, so reporters get stable paths.
+ */
+const fileSlug = (file: string): string => {
+  const base = sanitizeName(path.basename(file).replace(/\.[^./\\]+$/, "")) || "spec";
+  const hash = createHash("sha1").update(file).digest("hex").slice(0, 8);
+  return `${base}-${hash}`;
+};
+
+/**
+ * Best-effort full-page failure screenshot. Mirrors the legacy engine: guarded by
+ * `screenshotOnFailure` (default on) and a live page. Returns the written path or undefined.
+ */
+const captureFailureScreenshot = async (
+  page: Page,
+  testDir: string,
+  config: WorkerStartConfig,
+): Promise<string | undefined> => {
+  if (config.screenshotOnFailure === false) return undefined;
+  if (!page || page.isClosed()) return undefined;
+  try {
+    const screenshotPath = path.join(testDir, "failure.png");
+    await page.screenshot({ path: screenshotPath, fullPage: true });
+    return screenshotPath;
+  } catch {
+    return undefined;
+  }
+};
+
 const runOneTest = async (
   test: RegisteredTest,
   registry: FileRegistry,
@@ -94,23 +130,78 @@ const runOneTest = async (
   browser: Browser,
 ): Promise<TestResult> => {
   const start = performance.now();
+
+  // Per-run env overrides (--env / config.env) applied to process.env before the test body runs
+  // so `process.env.FOO` reads inside the test see them.
+  for (const [key, value] of Object.entries(config.envOverrides)) {
+    process.env[key] = value;
+  }
+
   const safeName = sanitizeName(test.name || `test-${test.ordinal}`);
-  const testDir = path.join(config.outputDir, `${safeName}-${test.ordinal}`);
+  // File-unique dir: prevents same-named tests in different spec files from racing to the same
+  // path (and overwriting each other) under --parallel. See `fileSlug`.
+  const testDir = path.join(
+    config.outputDir,
+    `${fileSlug(registry.file)}-${safeName}-${test.ordinal}`,
+  );
   await mkdir(testDir, { recursive: true });
 
   const merged = { ...registry.fileUse, ...test.use };
-  const viewport = merged.viewport ?? config.viewport ?? { width: 1280, height: 720 };
+
+  // Device profile — per-test `test.use({ device })` overrides the CLI/config device. Supplies the
+  // viewport fallback plus userAgent + deviceScaleFactor for the browser context.
+  const deviceId = merged.device ?? config.device;
+  const deviceProfile = deviceId ? getDeviceProfile(deviceId) : undefined;
+  const viewport =
+    merged.viewport ??
+    (deviceProfile ? { width: deviceProfile.width, height: deviceProfile.height } : undefined) ??
+    config.viewport ??
+    { width: 1280, height: 720 };
+
   const effectiveTimeout = merged.timeout ?? config.timeout;
-  const effectiveHardTimeout =
-    merged.hardTimeout ?? (merged.timeout !== undefined ? merged.timeout : config.hardTimeout);
+  // Soft per-action timeout (setDefaultTimeout) and the hard kill ceiling are INDEPENDENT. A
+  // spec's soft `timeout` must not silently become the hard ceiling — hardTimeout falls back to
+  // the run-level config.hardTimeout, never to the soft timeout.
+  const effectiveHardTimeout = merged.hardTimeout ?? config.hardTimeout;
   // Precedence: CLI flag > test.use override > viewport. Earlier draft had
   // the operands reversed — see velvety-finding-beacon.md §B8 / Codex round 1 #6.
   const videoSize = config.videoSize ?? merged.videoSize ?? viewport;
 
+  // Base URL so relative `page.goto('/x')` resolves; mirrors the ExecutionContext.baseUrl below.
+  const resolvedUrl = config.baseUrl ?? merged.url;
+
   const context: BrowserContext = await browser.newContext({
     viewport,
+    ...(resolvedUrl ? { baseURL: resolvedUrl } : {}),
+    ...(deviceProfile?.dpr ? { deviceScaleFactor: deviceProfile.dpr } : {}),
+    ...(deviceProfile?.userAgent ? { userAgent: deviceProfile.userAgent } : {}),
     ...(config.video ? { recordVideo: { dir: testDir, size: videoSize } } : {}),
   });
+
+  // Cookie extraction (opt-in). Mirrors the legacy engine: gated behind the build feature flag,
+  // needs a resolvable URL to derive the domain, and is best-effort (failures warn, never fail).
+  const perTestCookies = merged.cookies;
+  const cookiesEnabled =
+    config.cookies?.enabled === true ||
+    perTestCookies === true ||
+    typeof perTestCookies === "object";
+  if (__SKEPTIC_FEATURE_COOKIE_EXTRACTION__ && cookiesEnabled && resolvedUrl) {
+    try {
+      const { extractAndInjectCookies } = await import("../cookies/extractor.js");
+      const domain = new URL(resolvedUrl).hostname;
+      const browserName =
+        typeof perTestCookies === "object" ? perTestCookies.browser : config.cookies?.browser;
+      await extractAndInjectCookies(context, domain, {
+        ...(browserName ? { browsers: [browserName] } : {}),
+      });
+    } catch (err) {
+      post({
+        type: "log",
+        level: "warn",
+        message: `[skeptic] cookie extraction failed: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  }
   if (config.trace) {
     await context.tracing.start({ screenshots: true, snapshots: true, sources: false });
   }
@@ -161,9 +252,13 @@ const runOneTest = async (
     config: observabilityConfig,
   });
 
+  // Visual-settle is driven by `--visual-settle` (config.visualSettle) independently of
+  // `--observability`. When the flag is unset we fall back to observability.forceAll so the
+  // prior behavior is preserved.
+  const settleEnabled = config.visualSettle ?? config.observability.forceAll;
   const artifactConfig: ArtifactRuntimeConfig = {
     fullPageScreenshots: config.artifact.fullPageScreenshots,
-    visualSettle: config.observability.forceAll ? OBSERVABILITY_SETTLE_PROFILE : DISABLED_SETTLE,
+    visualSettle: settleEnabled ? OBSERVABILITY_SETTLE_PROFILE : DISABLED_SETTLE,
     blankFrameDetection: config.artifact.blankFrameDetection,
     writeSidecars: config.artifact.writeSidecars,
   };
@@ -173,8 +268,6 @@ const runOneTest = async (
     config.baseUrl ?? merged.url ?? "",
     testDir,
     path.dirname(registry.file),
-    undefined,
-    undefined,
     effectiveTimeout,
     collectors,
     artifactConfig,
@@ -247,6 +340,7 @@ const runOneTest = async (
   });
 
   let testError: string | undefined;
+  let failureScreenshot: string | undefined;
   try {
     for (const hook of registry.beforeEach) {
       await fixture.runAction("beforeEach", () => Promise.resolve(hook.fn(fixture)));
@@ -258,13 +352,19 @@ const runOneTest = async (
     if (outcome === "hard-timeout") {
       result.status = "failed";
       testError = ctx.abortReason ?? `test timeout exceeded (${effectiveHardTimeout}ms)`;
+      // The ceiling already closed the context, so this usually no-ops — but it's the right
+      // place to try in case the page is still live.
+      failureScreenshot = await captureFailureScreenshot(page, testDir, config);
     }
   } catch (err) {
     result.status = "failed";
     testError = err instanceof Error ? err.message : String(err);
+    // Capture before teardown closes the context — the page is still live here.
+    failureScreenshot = await captureFailureScreenshot(page, testDir, config);
   } finally {
     if (ceilingTimer) clearTimeout(ceilingTimer);
   }
+  if (failureScreenshot) ctx.addScreenshot(failureScreenshot);
 
   // afterEach with inTeardown=true so the abort gate doesn't short-circuit teardown
   ctx.inTeardown = true;
@@ -392,9 +492,11 @@ const runOneTest = async (
       status: "failed",
       duration_ms: result.duration_ms,
       error: testError,
+      ...(failureScreenshot ? { screenshot: failureScreenshot } : {}),
     });
   } else if (test.skip) {
     result.status = "passed";
+    result.skipped = true;
     result.steps.push({
       command: "test",
       args: { name: test.name },

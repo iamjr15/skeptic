@@ -20,11 +20,8 @@ if (process.argv.length === 3) {
     console.log(
       JSON.stringify(
         {
-          AI_ASSERTIONS: __SKEPTIC_FEATURE_AI_ASSERTIONS__,
           COOKIE_EXTRACTION: __SKEPTIC_FEATURE_COOKIE_EXTRACTION__,
           RECORDING: __SKEPTIC_FEATURE_RECORDING__,
-          MCP: __SKEPTIC_FEATURE_MCP__,
-          ACP: __SKEPTIC_FEATURE_ACP__,
         },
         null,
         2,

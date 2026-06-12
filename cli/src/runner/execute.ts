@@ -1,6 +1,7 @@
 import { Worker } from "node:worker_threads";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import * as os from "node:os";
 import type { Reporter, RunSummary, TestIdentifier } from "../reporter/types.js";
 import type { StepResult, TestResult } from "../executor/types.js";
 import type { FileManifest, ManifestEntry } from "./discover.js";
@@ -18,12 +19,17 @@ export interface RunnerExecuteOptions {
   /** Map from file → manifest (used for skip/only short-circuiting in the main process). */
   manifests: Map<string, FileManifest>;
   bail: boolean;
-  /** Maximum number of spec-file workers to run at once. */
+  /** Maximum number of spec-file workers to run at once. When undefined, the runner auto-picks. */
   concurrency?: number;
   /** Resolves the worker entry URL — abstracted so tests can pass in a fake. */
   workerEntry?: URL;
   /** Hard-kill grace after Promise.race ceiling — gives afterEach a chance to run. */
   killGraceMs?: number;
+  /**
+   * Optional cancellation. On abort the runner terminates in-flight workers and stops scheduling
+   * new partitions. Threaded from `runSpecs`; `run.ts` wires it to SIGINT/Ctrl-C.
+   */
+  signal?: AbortSignal;
 }
 
 export interface RunnerExecuteOutcome {
@@ -85,12 +91,55 @@ interface FileRunResult {
   killTimeoutMs?: number;
   /** Set when the runner already requeued the unfinished tests. */
   requeueAttempted: boolean;
+  /**
+   * True when the worker exited unexpectedly (uncaught throw / unhandled rejection / non-zero
+   * exit) with tests still unfinished — distinct from an intentional hard-timeout kill, bail, or
+   * abort. The caller synthesizes error results for the unfinished tests so they aren't silently
+   * dropped and the run fails.
+   */
+  crashed?: boolean;
+  /** Crash error message when the worker emitted an 'error' event. */
+  crashError?: string;
+  /** True when the run was aborted via AbortSignal — stop, do not requeue or synthesize. */
+  aborted?: boolean;
 }
 
+// Soft per-action timeout and the hard kill ceiling are independent: a per-test soft `timeout`
+// must NOT become the hard ceiling. hardTimeout falls back to the run-level config value only.
 const effectiveHardTimeoutForEntry = (
   entry: ManifestEntry | undefined,
   fallback: number,
-): number => entry?.use.hardTimeout ?? (entry?.use.timeout !== undefined ? entry.use.timeout : fallback);
+): number => entry?.use.hardTimeout ?? fallback;
+
+const availableParallelism = (): number => {
+  try {
+    if (typeof os.availableParallelism === "function") return os.availableParallelism();
+  } catch {
+    /* fall through to cpus() */
+  }
+  const cpus = os.cpus?.().length ?? 1;
+  return cpus > 0 ? cpus : 1;
+};
+
+/**
+ * Resolve worker concurrency. An explicit `--parallel` value (options.concurrency) always wins.
+ * When the user did not pass it (undefined), auto-pick `min(specFileCount, ceil(cores/2))` so
+ * multi-file runs use the machine without oversubscribing — per-test contexts + the daemon make
+ * this safe. Bail and single-file runs force serial.
+ */
+export const resolveConcurrency = (
+  options: RunnerExecuteOptions,
+  partitionCount: number,
+): number => {
+  if (options.bail) return 1;
+  if (partitionCount <= 1) return 1;
+  const explicit = options.concurrency;
+  if (explicit !== undefined && explicit >= 1) {
+    return Math.min(Math.max(1, Math.floor(explicit)), partitionCount);
+  }
+  const auto = Math.max(1, Math.ceil(availableParallelism() / 2));
+  return Math.min(auto, partitionCount);
+};
 
 const runWorkerForFile = async (
   file: string,
@@ -110,9 +159,14 @@ const runWorkerForFile = async (
   const entriesById = new Map(entries.map((entry) => [entry.id, entry]));
   const actionCountsByTestId = new Map<string, number>();
   const killGrace = options.killGraceMs ?? DEFAULT_KILL_GRACE_MS;
+  const signal = options.signal;
   let workerTerminated = false;
   let killTimeoutMs: number | undefined;
   let killTimer: NodeJS.Timeout | undefined;
+  // Distinguish an unexpected crash from intentional terminations (hard-timeout kill, bail, abort)
+  // so the exit handler only synthesizes error results for genuine crashes.
+  let workerError: Error | null = null;
+  let bailTerminated = false;
 
   const armKillTimer = (hardTimeoutMs: number = options.config.hardTimeout): void => {
     if (killTimer) clearTimeout(killTimer);
@@ -126,6 +180,15 @@ const runWorkerForFile = async (
   };
 
   return new Promise<FileRunResult>((resolve) => {
+    let aborted = false;
+    const onAbort = (): void => {
+      aborted = true;
+      worker.terminate().catch(() => {});
+    };
+    if (signal) {
+      if (signal.aborted) onAbort();
+      else signal.addEventListener("abort", onAbort, { once: true });
+    }
     armKillTimer();
     worker.on("message", (msg: WorkerToMain) => {
       switch (msg.type) {
@@ -197,6 +260,7 @@ const runWorkerForFile = async (
           }
           armKillTimer();
           if (options.bail && msg.result.status !== "passed") {
+            bailTerminated = true;
             worker.terminate().catch(() => {});
           }
           return;
@@ -247,18 +311,35 @@ const runWorkerForFile = async (
       }
     });
     worker.on("error", (err) => {
+      // An uncaught throw / unhandled rejection in the worker thread surfaces here; 'exit'
+      // follows. Stash the error so the exit handler can synthesize results for unfinished tests.
+      workerError = err;
       process.stderr.write(`[skeptic] worker error for ${file}: ${err.message}\n`);
     });
-    worker.on("exit", () => {
+    worker.on("exit", (code) => {
+      if (signal) signal.removeEventListener("abort", onAbort);
       if (killTimer) clearTimeout(killTimer);
       const remaining = entries.filter((e) => !finishedIds.has(e.id));
+      // Crash = errored or exited non-zero, with tests still unfinished, and NOT an intentional
+      // termination (hard-timeout kill, bail, or abort). A normal worker calls process.exit(0).
+      const crashed =
+        !workerTerminated &&
+        !bailTerminated &&
+        !aborted &&
+        remaining.length > 0 &&
+        (workerError !== null || code !== 0);
       resolve({
         file,
         results,
         remaining,
-        workerTerminated,
+        // Treat a crash like a termination so the retry path is skipped and the unfinished
+        // tests are handled (synthesized) by runFilePartition instead of silently dropped.
+        workerTerminated: workerTerminated || crashed,
         ...(killTimeoutMs !== undefined ? { killTimeoutMs } : {}),
         requeueAttempted: false,
+        crashed,
+        ...(workerError ? { crashError: (workerError as Error).message } : {}),
+        aborted,
       });
     });
   });
@@ -304,7 +385,7 @@ const runFilePartition = async (
   const fileResults = [...initial.results];
 
   const retryBudget = options.config.retries;
-  if (retryBudget > 0 && !initial.workerTerminated) {
+  if (retryBudget > 0 && !initial.workerTerminated && !initial.aborted) {
     const failedEntries = entries.filter((entry) => {
       const r = fileResults.find((x) => x.file === entry.file && x.name === entry.name);
       return r && r.status !== "passed";
@@ -324,12 +405,28 @@ const runFilePartition = async (
           (r) => r.file === entry.file && r.name === entry.name,
         );
         if (idx >= 0) fileResults[idx] = retried;
-        if (retried.status === "passed") break;
+        if (retried.status === "passed") {
+          // Failed first, then went green on retry — preserve the "was flaky" signal.
+          retried.flaky = true;
+          break;
+        }
       }
     }
   }
 
-  if (initial.workerTerminated && initial.remaining.length > 0) {
+  if (initial.crashed) {
+    // The worker died with tests still unfinished — synthesize an error result for each so the
+    // tests aren't silently dropped and the run exit code goes non-zero.
+    for (const entry of initial.remaining) {
+      fileResults.push(
+        buildSkippedResult(
+          file,
+          entry,
+          `worker crashed before this test completed${initial.crashError ? `: ${initial.crashError}` : ""}`,
+        ),
+      );
+    }
+  } else if (initial.workerTerminated && initial.remaining.length > 0) {
     const first = initial.remaining[0]!;
     fileResults.push(
       buildSkippedResult(
@@ -367,6 +464,7 @@ const runPartitionsInParallel = async (
 
   const worker = async (): Promise<void> => {
     while (true) {
+      if (options.signal?.aborted) return;
       const index = nextIndex;
       nextIndex += 1;
       const item = partitions[index];
@@ -405,12 +503,13 @@ export const executeRun = async (
   }
 
   const partitions = [...options.partition.entries()].filter(([, entries]) => entries.length > 0);
-  const concurrency = options.bail ? 1 : Math.max(1, options.concurrency ?? 1);
+  const concurrency = resolveConcurrency(options, partitions.length);
 
   if (concurrency > 1 && partitions.length > 1) {
     allResults.push(...await runPartitionsInParallel(partitions, options, concurrency));
   } else {
     for (const [file, entries] of partitions) {
+      if (options.signal?.aborted) break;
       const fileResults = await runFilePartition(file, entries, options);
       allResults.push(...fileResults);
       if (options.bail && allResults.some((r) => r.status !== "passed")) break;
@@ -419,8 +518,9 @@ export const executeRun = async (
 
   const summary: RunSummary = {
     total: allResults.length,
-    passed: allResults.filter((r) => r.status === "passed").length,
+    passed: allResults.filter((r) => r.status === "passed" && !r.skipped).length,
     failed: allResults.filter((r) => r.status !== "passed").length,
+    skipped: allResults.filter((r) => r.skipped === true).length,
     duration_ms: Math.round(performance.now() - start),
     tests: allResults,
   };

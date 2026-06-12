@@ -6,6 +6,7 @@ import type { StepDiagnostic } from "../executor/types.js";
 import { captureAriaSnapshot } from "../executor/aria-snapshot-capture.js";
 import { resolveElement } from "../executor/element-resolver.js";
 import { isAnnotatableRefEntry, type AriaRefEntry } from "../executor/aria-ref-types.js";
+import { detectBlankFrame } from "../executor/visual-settle.js";
 import {
   injectAnnotationOverlay,
   removeAnnotationOverlay,
@@ -68,7 +69,21 @@ export const takeScreenshot = async (
     // ever silently swallowed the write (e.g. against an in-memory page).
   });
   ctx.addScreenshot(filePath);
-  return { path: filePath, diagnostics: [] };
+
+  const diagnostics: StepDiagnostic[] = [];
+  const mode = ctx.artifactConfig.blankFrameDetection;
+  if (mode !== "off") {
+    const decision = detectBlankFrame(buffer);
+    if (decision.blank) {
+      const detail = `blank screenshot "${name}": ${decision.reasons.join("; ")}`;
+      if (mode === "fail") {
+        throw new Error(detail);
+      }
+      diagnostics.push({ kind: "blank-screenshot", message: detail, meta: decision.meta });
+    }
+  }
+
+  return { path: filePath, diagnostics };
 };
 
 export interface AnnotatePipelineOptions {

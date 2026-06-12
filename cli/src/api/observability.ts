@@ -163,12 +163,27 @@ export const buildObservabilityFixture = (
           ...(opts?.exclude ? { exclude: opts.exclude } : {}),
           ...(opts?.impacts ? { impacts: opts.impacts } : {}),
         });
-        if (audit.summary.violations > 0) {
+        const { summary } = audit;
+        // An audit where an engine errored and nothing was actually checked is NOT a pass —
+        // e.g. CSP blocks axe injection, leaving 0 violations + 0 passes + 0 incomplete.
+        // Surface it as a failure so a non-audit can't masquerade as success.
+        const enginesErrored = summary.enginesErrored ?? [];
+        const producedResults =
+          summary.violations > 0 || summary.passes > 0 || summary.incomplete > 0;
+        if (enginesErrored.length > 0 && !producedResults) {
+          const reasons = enginesErrored
+            .map((e) => `${e.engine}: ${e.reason}`)
+            .join("\n  - ");
+          throw new Error(
+            `[skeptic] accessibility audit could not run — no engine produced results:\n  - ${reasons}`,
+          );
+        }
+        if (summary.violations > 0) {
           const top = audit.violations
             .slice(0, 5)
             .map((v) => `${v.ruleId} (${v.impact}): ${v.help}`);
           throw new Error(
-            `[skeptic] ${audit.summary.violations} a11y violation(s):\n  - ${top.join("\n  - ")}`,
+            `[skeptic] ${summary.violations} a11y violation(s):\n  - ${top.join("\n  - ")}`,
           );
         }
       }),

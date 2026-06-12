@@ -37,7 +37,6 @@ export interface RunCommandOptions {
   shardSplit?: number;
   shardAll?: number;
   shardIndex?: number;
-  noTui?: boolean;
   trace?: boolean;
   observability?: boolean;
   fullPageScreenshot?: boolean;
@@ -48,11 +47,7 @@ export interface RunCommandOptions {
   list?: boolean;
   /** Tag filter — multiple `--tag foo --tag bar` accumulates. */
   tag?: string[];
-  /** Connect to an existing browser over CDP. */
-  connect?: string;
   env?: string[];
-  /** Best-effort post-run AI failure analysis. */
-  analyze?: boolean;
   /**
    * Internal flag used by `skeptic tui`: prefer Ink and inject the console
    * reporter even when config or CLI reporter flags only request file outputs.
@@ -98,7 +93,7 @@ export const parseVideoSize = (input: string): { width: number; height: number }
   return { width, height };
 };
 
-const buildWorkerConfig = (
+export const buildWorkerConfig = (
   opts: RunCommandOptions,
   defaults: ReturnType<typeof loadConfig>,
   envOverrides: Record<string, string>,
@@ -117,7 +112,10 @@ const buildWorkerConfig = (
 
   const workerConfig: WorkerStartConfig = {
     timeout: opts.timeout ?? defaults.browser.timeout,
-    hardTimeout: opts.hardTimeout ?? opts.timeout ?? defaults.browser.timeout,
+    // Soft per-action timeout and the hard per-test ceiling are INDEPENDENT. A soft
+    // `--timeout` must NOT silently become the hard kill ceiling — hardTimeout falls back to
+    // its own config default, never to the soft timeout. (Mirrors the per-test merge in worker.ts.)
+    hardTimeout: opts.hardTimeout ?? defaults.browser.timeout,
     outputDir: opts.output ?? defaults.output.dir ?? OUTPUT_DIR_DEFAULT,
     envOverrides,
     observability: {
@@ -146,14 +144,27 @@ const buildWorkerConfig = (
         (observabilityFlag ? "fail" : defaults.observability.blankFrameDetection ?? "warn"),
       writeSidecars: sidecarsActive,
     },
+    // Full-page failure.png on test failure. Driven by config (default true); honor an explicit
+    // `false` so `screenshotOnFailure: false` in skeptic.config suppresses the capture.
+    screenshotOnFailure: defaults.execution.screenshotOnFailure,
     video: opts.video ?? false,
     trace: opts.trace ?? false,
     headed: opts.headed ?? !defaults.browser.headless,
     browserEngine: defaults.browser.engine,
     viewport,
     retries: opts.retries ?? defaults.execution.retries,
-    parallel: opts.parallel ?? defaults.execution.parallel ?? 1,
   };
+
+  // Concurrency: only forward `parallel` when the user explicitly passed `--parallel`. Left
+  // undefined, the runner auto-picks min(specFileCount, ceil(cores/2)) so multi-file runs use
+  // the machine without oversubscribing. An explicit `--parallel` always wins.
+  if (typeof opts.parallel === "number") workerConfig.parallel = opts.parallel;
+
+  // `--visual-settle` / `--no-visual-settle` drive the pre-screenshot settle pipeline
+  // independently of `--observability`. When the flag is omitted (undefined) the worker falls
+  // back to observability.forceAll, preserving prior behavior. An explicit `false` disables
+  // settling even under `--observability`.
+  if (typeof opts.visualSettle === "boolean") workerConfig.visualSettle = opts.visualSettle;
 
   if (opts.url ?? defaults.url) {
     workerConfig.baseUrl = opts.url ?? defaults.url;
@@ -320,7 +331,7 @@ const shouldUseInkTui = (
   opts: RunCommandOptions,
   isCI: boolean,
 ): boolean => {
-  if (opts.noTui || opts.watch || opts.ci) return false;
+  if (opts.watch || opts.ci) return false;
   if (!opts.forceTui) return false;
   if (isCI) return false;
   if (process.env["SKEPTIC_DISABLE_INK_TUI"] === "1") return false;
@@ -331,6 +342,27 @@ const shouldUseInkTui = (
 
 const ensureConsoleReporter = (formats: string[]): string[] =>
   formats.includes("console") ? formats : ["console", ...formats];
+
+// `skeptic run` ALWAYS writes results.json — it's the core agent-loop contract (SKILL.md tells
+// agents to read results.json after a run). If the resolved reporter set doesn't already include
+// the json reporter, append it. Under the Ink TUI the json reporter is created `silent` so it
+// still writes the file without printing.
+export const ensureJsonReporter = (formats: string[]): string[] =>
+  formats.includes("json") ? formats : [...formats, "json"];
+
+/**
+ * Process exit code for a `run`. Interrupt (Ctrl-C) → 130; a run that discovered/executed zero
+ * tests → 1 (an empty suite must not read as success for CI/agents); otherwise 1 on any failure,
+ * else 0.
+ */
+export const resolveRunExitCode = (
+  interrupted: boolean,
+  summary: { total: number; failed: number },
+): number => {
+  if (interrupted) return 130;
+  if (summary.total === 0) return 1;
+  return summary.failed > 0 ? 1 : 0;
+};
 
 export const runRun = async (
   patterns: string[] | undefined,
@@ -351,17 +383,34 @@ export const runRun = async (
 
   if (opts.list) {
     const { manifests } = await listSpecs(effectivePatterns);
+    let discoveryErrors = 0;
+    let listedTests = 0;
     for (const m of manifests) {
       const rel = path.relative(process.cwd(), m.file);
       if (m.error) {
+        discoveryErrors += 1;
         logger.warn(`  ${chalk.red("✗")} ${rel} — ${m.error.message}`);
         continue;
       }
+      listedTests += m.tests.length;
       logger.raw(`  ${chalk.cyan(rel)} (${m.tests.length} test${m.tests.length === 1 ? "" : "s"})`);
       for (const t of m.tests) {
         const flag = t.skip ? chalk.yellow(" [skip]") : t.only ? chalk.green(" [only]") : "";
         logger.raw(`    ${chalk.dim(`#${t.ordinal}`)} ${t.name}${flag}`);
       }
+    }
+    // A `--list` that hit a discovery error (syntax error, top-level throw) or found nothing
+    // must exit non-zero so CI and agents don't treat a broken/empty suite as success.
+    if (discoveryErrors > 0) {
+      logger.error(
+        `${discoveryErrors} spec file${discoveryErrors === 1 ? "" : "s"} failed to load during discovery.`,
+      );
+      process.exitCode = 1;
+    } else if (listedTests === 0) {
+      logger.error(
+        `No tests found matching ${Array.isArray(effectivePatterns) ? effectivePatterns.join(", ") : effectivePatterns}`,
+      );
+      process.exitCode = 1;
     }
     return;
   }
@@ -371,43 +420,66 @@ export const runRun = async (
     process.exit(2);
   }
 
-  const configuredReporterFormats = opts.reporter ?? config.output.reporters;
+  const configuredReporterFormats = ensureJsonReporter(
+    opts.reporter ?? config.output.reporters,
+  );
   const reporterFormats = opts.forceTui
     ? ensureConsoleReporter(configuredReporterFormats)
     : configuredReporterFormats;
   const useInkTui = shouldUseInkTui(reporterFormats, opts, isCI);
-  const { reporters, inkReporter } = await createReporters(reporterFormats, outputDir, {
-    verbose: opts.verbose ?? config.output.verbose,
-    concurrency: opts.parallel ?? config.execution.parallel ?? 1,
-    notifications: config.notifications,
-    runUrl: resolveRunUrl(),
-    useInkTui,
-  });
 
   const workerConfig = buildWorkerConfig(opts, config, envOverrides);
   if (isCI) workerConfig.headed = false;
 
-  // Pre-warm the daemon from the main process so
-  // `process.argv[1]` resolves to `dist/skeptic.mjs`. Spawning from inside a
-  // worker_thread would resolve to `dist/worker.mjs` and the spawned daemon
-  // would hang on a parentPort message that never arrives. After this gate,
-  // the worker-side `connectDaemon` call hits the socket-connectable fast
-  // path and never spawns.
+  // PERF: run the daemon pre-warm (a child-process spawn + socket handshake — often the slowest
+  // fixed cost in a small run) concurrently with reporter setup (dynamic imports). The two are
+  // independent: pre-warm only needs the already-built `workerConfig`, and reporters never touch
+  // the daemon. `Promise.all` settles both before `runSpecs` launches workers that connect to the
+  // BrowserServer.
   //
-  // When pre-warm fails (spawn-timeout, version mismatch, etc.) we propagate
-  // `noDaemon: true` to workers so they actually fall back to fresh launches.
-  const prewarmed = await prewarmDaemonIfNeeded(process.argv, {
-    engine: workerConfig.browserEngine,
-    headed: workerConfig.headed,
-    cliVersion: __SKEPTIC_CLI_VERSION__,
-    noDaemon: opts.daemon === false,
-    ...(typeof opts.daemonIdleTimeout === "number"
-      ? { idleTimeoutSeconds: opts.daemonIdleTimeout }
-      : {}),
-  });
+  // Pre-warm MUST run from the main process so `process.argv[1]` resolves to `dist/skeptic.mjs`.
+  // Spawning from inside a worker_thread would resolve to `dist/worker.mjs` and the spawned
+  // daemon would hang on a parentPort message that never arrives. When pre-warm fails
+  // (spawn-timeout, version mismatch, etc.) it resolves `false` and we propagate `noDaemon: true`
+  // so workers fall back to fresh launches.
+  const [{ reporters, inkReporter }, prewarmed] = await Promise.all([
+    createReporters(reporterFormats, outputDir, {
+      verbose: opts.verbose ?? config.output.verbose,
+      concurrency: opts.parallel ?? config.execution.parallel ?? 1,
+      notifications: config.notifications,
+      runUrl: resolveRunUrl(),
+      useInkTui,
+    }),
+    prewarmDaemonIfNeeded(process.argv, {
+      engine: workerConfig.browserEngine,
+      headed: workerConfig.headed,
+      cliVersion: __SKEPTIC_CLI_VERSION__,
+      noDaemon: opts.daemon === false,
+      ...(typeof opts.daemonIdleTimeout === "number"
+        ? { idleTimeoutSeconds: opts.daemonIdleTimeout }
+        : {}),
+    }),
+  ]);
+
   if (!prewarmed && opts.daemon !== false) {
     workerConfig.noDaemon = true;
   }
+
+  // Ctrl-C handling for the non-TUI path: a single SIGINT aborts the run so in-flight workers
+  // are terminated and the reporters still fire onRunComplete (partial results.json is written).
+  // A second SIGINT force-exits. In TUI mode Ink consumes Ctrl-C as a keypress (raw mode), so
+  // this process-level handler stays dormant and `onAbort` drives the exit instead.
+  const abortController = new AbortController();
+  let interrupted = false;
+  const onInterrupt = (): void => {
+    if (interrupted) {
+      process.exit(130);
+    }
+    interrupted = true;
+    logger.warn("\nInterrupted — stopping workers and writing partial results…");
+    abortController.abort();
+  };
+  process.on("SIGINT", onInterrupt);
 
   const shardIndex = opts.shardIndex ?? Number(process.env["SKEPTIC_SHARD_INDEX"] ?? "");
   const runOptions = {
@@ -415,6 +487,7 @@ export const runRun = async (
     reporters,
     config: workerConfig,
     bail: opts.bail ?? config.execution.bail,
+    signal: abortController.signal,
     ...(opts.tag ? { tagFilter: opts.tag } : {}),
     ...(opts.shardSplit !== undefined
       ? {
@@ -451,66 +524,34 @@ export const runRun = async (
     logger.info(`${PRODUCT_NAME} — running ${chalk.cyan(Array.isArray(effectivePatterns) ? effectivePatterns.join(", ") : effectivePatterns)}`);
   }
 
-  const outcome = await runSpecs(runOptions);
+  const outcome = await runSpecs(runOptions).finally(() => {
+    process.removeListener("SIGINT", onInterrupt);
+  });
   if (tui) {
-    await new Promise((resolve) => setTimeout(resolve, 120));
-    tui.unmount();
+    if (interrupted) {
+      // Aborted mid-run — tear the TUI down immediately instead of waiting for `q`.
+      tui.unmount();
+    } else {
+      // Interactive run: keep the ResultsScreen mounted so the user can read per-failure detail
+      // and use its q/v/a keybindings. `onQuit` (pressing q) unmounts, which resolves
+      // waitUntilExit. The old 120ms-then-unmount made the ResultsScreen unreachable.
+      await tui.waitUntilExit();
+    }
     printRunSummary(outcome.summary);
   }
 
-  if (!opts.noTui) {
-    printArtifactPaths(outcome.summary, outputDir);
+  printArtifactPaths(outcome.summary, outputDir);
+
+  if (!interrupted && outcome.summary.total === 0) {
+    // Zero discovered/executed tests is a failure for `run`: CI and agents must not read an
+    // empty suite as success. results.json (total: 0) was still written by the json reporter.
+    logger.error(
+      `No tests found matching ${Array.isArray(effectivePatterns) ? effectivePatterns.join(", ") : effectivePatterns}`,
+    );
   }
+  process.exitCode = resolveRunExitCode(interrupted, outcome.summary);
 
-  // --analyze: best-effort post-run AI failure summary. AI client load is gated
-  // behind the flag so non-AI runs don't pay the SDK init cost.
-  if (opts.analyze && outcome.summary.failed > 0) {
-    try {
-      const { createAIClient, AIFeatureNotBuiltError } = await import("../ai/client-factory.js");
-      const { analyzeFailure } = await import("../ai/assertion-evaluator.js");
-      const aiClient = await createAIClient(config.ai);
-      if (!aiClient) {
-        throw new Error("[analyze] no AI client available — set GEMINI_API_KEY (or your provider equivalent)");
-      }
-      const failures = outcome.summary.tests.filter((t) => t.status !== "passed");
-      for (const test of failures) {
-        const failedStep = test.steps.find((s) => s.status !== "passed");
-        if (!failedStep?.error) continue;
-        try {
-          const screenshotBuf = failedStep.screenshot
-            ? fs.readFileSync(failedStep.screenshot)
-            : undefined;
-          if (!screenshotBuf) {
-            logger.info(chalk.dim(`[analyze] ${test.name}: ${failedStep.error}`));
-            continue;
-          }
-          const analysis = await analyzeFailure(
-            aiClient,
-            screenshotBuf,
-            failedStep.command,
-            failedStep.error,
-          );
-          logger.info(chalk.cyan(`\n  ${chalk.red("FAIL")} ${test.name}`));
-          logger.info(chalk.dim(`  ${analysis}`));
-        } catch (err) {
-          logger.warn(`[analyze] ${test.name}: ${err instanceof Error ? err.message : String(err)}`);
-        }
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      // AIFeatureNotBuiltError comes from slim-build gates — soft-fail with a clear note.
-      const code = (err as { name?: string } | undefined)?.name;
-      if (code === "AIFeatureNotBuiltError") {
-        logger.warn(`[analyze] ${message}`);
-      } else {
-        logger.warn(`[analyze] AI failure analysis skipped: ${message}`);
-      }
-    }
-  }
-
-  process.exitCode = outcome.summary.failed > 0 ? 1 : 0;
-
-  if (opts.watch && !isCI) {
+  if (opts.watch && !isCI && !interrupted) {
     const { startWatching } = await import("../runner/watch.js");
     const patternList = Array.isArray(effectivePatterns) ? effectivePatterns : [effectivePatterns];
     logger.info(chalk.dim("Watching for changes... (Ctrl+C to exit)"));

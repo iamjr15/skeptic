@@ -69,9 +69,11 @@ export class NetworkCollector implements Collector {
       const entry = this.entryByRequest.get(req);
       if (!entry) return;
       try {
-        const timing = req.timing();
-        const duration = timing.responseEnd - timing.startTime;
-        entry.duration = duration >= 0 ? Math.round(duration) : undefined;
+        // Playwright's `responseEnd` is already the duration: "milliseconds
+        // relative to startTime, -1 if not available" (startTime is epoch ms).
+        // Subtracting startTime would yield a large negative number.
+        const responseEnd = req.timing().responseEnd;
+        entry.duration = responseEnd >= 0 ? Math.round(responseEnd) : undefined;
       } catch {
         // timing throws if request never started; leave duration undefined
       }

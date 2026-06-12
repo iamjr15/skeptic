@@ -83,6 +83,7 @@ export class JsonReporter implements Reporter {
       total: summary.total,
       passed: summary.passed,
       failed: summary.failed,
+      skipped: summary.skipped,
       duration_ms: summary.duration_ms,
       tests: testsWithSummary,
     };

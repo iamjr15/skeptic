@@ -1,5 +1,4 @@
 import type { Page, Locator } from "playwright";
-import type { AIClient, AIProvider } from "../ai/ai-client.js";
 import type { Collector, CollectorName } from "../observability/types.js";
 import type { AriaRefEntry } from "./aria-ref-types.js";
 import type { ArtifactRuntimeConfig } from "./types.js";
@@ -20,8 +19,6 @@ export class ExecutionContext {
   lastElement: Locator | null = null;
   readonly testDir: string;
   readonly sourceDir: string;
-  readonly aiClient?: AIClient;
-  readonly aiProvider?: AIProvider;
   readonly defaultTimeout: number;
   activeTimeout: number;
   readonly collectors: Map<CollectorName, Collector>;
@@ -56,8 +53,6 @@ export class ExecutionContext {
     baseUrl: string,
     testDir?: string,
     sourceDir?: string,
-    aiClient?: AIClient,
-    aiProvider?: AIProvider,
     defaultTimeout: number = 30_000,
     collectors: Collector[] = [],
     artifactConfig: ArtifactRuntimeConfig = DEFAULT_ARTIFACT_CONFIG,
@@ -66,8 +61,6 @@ export class ExecutionContext {
     this.baseUrl = baseUrl;
     this.testDir = testDir ?? ".";
     this.sourceDir = sourceDir ?? process.cwd();
-    this.aiClient = aiClient;
-    this.aiProvider = aiProvider;
     this.defaultTimeout = defaultTimeout;
     this.activeTimeout = defaultTimeout;
     this.collectors = new Map(collectors.map((c) => [c.name, c]));

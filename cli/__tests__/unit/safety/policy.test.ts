@@ -30,6 +30,32 @@ describe("safety policy", () => {
     expect(isUrlAllowed("https://example.org", ["https://example.com/app"])).toBe(false);
   });
 
+  it("denies non-http(s) schemes by default when an allowlist is active", () => {
+    // Regression: a domain allowlist must not be a free pass for file:// /
+    // chrome:// / data: — those would otherwise bypass the allowlist entirely.
+    expect(isUrlAllowed("file:///etc/passwd", ["example.com"])).toBe(false);
+    expect(isUrlAllowed("chrome://settings", ["example.com"])).toBe(false);
+    expect(isUrlAllowed("data:text/html,<h1>x</h1>", ["example.com"])).toBe(false);
+    // A bare hostname entry never authorizes a non-http scheme.
+    expect(isUrlAllowed("file:///etc/passwd", ["*.example.com", "example.com"])).toBe(false);
+  });
+
+  it("still allows non-http(s) schemes when no allowlist is configured", () => {
+    expect(isUrlAllowed("file:///etc/passwd", [])).toBe(true);
+    expect(isUrlAllowed("chrome://settings", [])).toBe(true);
+  });
+
+  it("permits a non-http scheme only when explicitly allowlisted (or '*')", () => {
+    expect(isUrlAllowed("file:///etc/passwd", ["*"])).toBe(true);
+    expect(isUrlAllowed("file:///etc/passwd", ["file://"])).toBe(true);
+    expect(isUrlAllowed("file:///etc/passwd", ["file:"])).toBe(true);
+    expect(isUrlAllowed("chrome://settings", ["chrome://settings"])).toBe(true);
+    // Explicit scheme entry must still match the host when one is pinned.
+    expect(isUrlAllowed("chrome://flags", ["chrome://settings"])).toBe(false);
+    // An https entry does not authorize a file URL.
+    expect(isUrlAllowed("file:///etc/passwd", ["https://example.com"])).toBe(false);
+  });
+
   it("throws with an explicit allowedDomains message for blocked URLs", () => {
     expect(() => assertUrlAllowed("https://blocked.example", ["allowed.example"])).toThrow(
       /safety\.allowedDomains blocked/,

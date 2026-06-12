@@ -45,6 +45,18 @@ export interface WorkerStartConfig {
     blankFrameDetection: "off" | "warn" | "fail";
     writeSidecars: boolean;
   };
+  /**
+   * When a test fails, capture a full-page `failure.png` into the test's artifact dir and
+   * attach its path to the failing step. Defaults to `true` when omitted (mirrors the config
+   * default `execution.screenshotOnFailure`). Set to `false` to suppress.
+   */
+  screenshotOnFailure?: boolean;
+  /**
+   * Drives the pre-screenshot visual-settle pipeline (networkidle + double-RAF) independently
+   * of `--observability`. When omitted, the worker falls back to `observability.forceAll` so
+   * existing behavior is preserved. The CLI `--visual-settle` flag should set this.
+   */
+  visualSettle?: boolean;
   video: boolean;
   trace: boolean;
   headed: boolean;
@@ -59,8 +71,12 @@ export interface WorkerStartConfig {
   device?: string;
   cookies?: { enabled: boolean; browser?: string };
   retries: number;
-  /** Number of spec-file workers the main runner may execute concurrently. */
-  parallel: number;
+  /**
+   * Number of spec-file workers the main runner may execute concurrently. Optional: when the
+   * user does NOT pass `--parallel`, leave this `undefined` so the runner auto-picks a safe
+   * default from `os.availableParallelism()`. An explicit value always wins.
+   */
+  parallel?: number;
   shardId?: number;
   /**
    * `--no-daemon` opt-out. When true, the worker launches a fresh browser.

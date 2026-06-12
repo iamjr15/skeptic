@@ -141,18 +141,6 @@ const NotificationsSchema = z.object({
   webhook: WebhookNotificationSchema.optional(),
 });
 
-/** AI configuration. */
-const AIConfigSchema = z.object({
-  provider: z.enum(["gemini", "openai", "anthropic"]).default("gemini"),
-  apiKey: z.string().optional(),
-  model: z.string().optional(),
-  maxRequestsPerMinute: z.number().default(55),
-  baseBranch: z.string().default("main"),
-  excludePaths: z
-    .array(z.string())
-    .default(["*.env*", "secrets/", "*.key", "*.pem"]),
-});
-
 /** Top-level skeptic.config.yaml schema. */
 export const skepticConfigSchema = z.object({
   url: z.string().optional(),
@@ -161,7 +149,6 @@ export const skepticConfigSchema = z.object({
   auth: AuthConfigSchema.default({}),
   execution: ExecutionConfigSchema.default({}),
   output: OutputConfigSchema.default({}),
-  ai: AIConfigSchema.default({}),
   observability: ObservabilityConfigSchema.default({}),
   safety: SafetyConfigSchema.default({}),
   notifications: NotificationsSchema.optional(),
@@ -173,7 +160,6 @@ export type BrowserConfig = z.infer<typeof BrowserConfigSchema>;
 export type AuthConfig = z.infer<typeof AuthConfigSchema>;
 export type ExecutionConfig = z.infer<typeof ExecutionConfigSchema>;
 export type OutputConfig = z.infer<typeof OutputConfigSchema>;
-export type AIConfig = z.infer<typeof AIConfigSchema>;
 export type ObservabilityConfig = z.infer<typeof ObservabilityConfigSchema>;
 export type SafetyConfig = z.infer<typeof SafetyConfigSchema>;
 export type SlackNotificationConfig = z.infer<typeof SlackNotificationSchema>;

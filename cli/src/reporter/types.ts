@@ -4,6 +4,9 @@ export interface RunSummary {
   total: number;
   passed: number;
   failed: number;
+  /** Tests declared `test.skip(...)` whose body never ran. Excluded from `passed`/`failed`
+   *  so `total === passed + failed + skipped`. */
+  skipped: number;
   duration_ms: number;
   tests: TestResult[];
 }

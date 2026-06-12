@@ -69,31 +69,11 @@ const shouldRedact = (paramName: string): boolean => {
 };
 
 /**
- * Returns the URL with sensitive query-param values replaced by `***`.
- * Preserves the original key, fragment, host, path, and any non-sensitive query params.
- *
- * URLs without a `?` are returned unchanged. Non-HTTP(S) schemes (`data:`, `blob:`,
- * `mailto:`, etc.) are returned unchanged — they don't carry conventional query strings.
+ * Redact sensitive values inside an `&`-joined `key=value` param string (a query string or
+ * an OAuth-style fragment). Returns the rebuilt string and whether anything changed.
  */
-export const redactUrl = (url: string): string => {
-  // Fast paths
-  if (typeof url !== "string" || url.length === 0) return url;
-  if (!url.includes("?")) return url;
-  if (url.startsWith("data:") || url.startsWith("blob:")) return url;
-
-  // Split off fragment first so we don't lose it
-  const fragmentIdx = url.indexOf("#");
-  const fragment = fragmentIdx >= 0 ? url.slice(fragmentIdx) : "";
-  const beforeFragment = fragmentIdx >= 0 ? url.slice(0, fragmentIdx) : url;
-
-  const queryIdx = beforeFragment.indexOf("?");
-  if (queryIdx < 0) return url;
-  const prefix = beforeFragment.slice(0, queryIdx);
-  const queryString = beforeFragment.slice(queryIdx + 1);
-
-  if (queryString.length === 0) return url;
-
-  const parts = queryString.split("&");
+const redactParamString = (paramString: string): { result: string; mutated: boolean } => {
+  const parts = paramString.split("&");
   let mutated = false;
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i]!;
@@ -114,9 +94,62 @@ export const redactUrl = (url: string): string => {
       mutated = true;
     }
   }
+  return { result: parts.join("&"), mutated };
+};
+
+/**
+ * Returns the URL with sensitive values replaced by `***`, in BOTH the query string and the
+ * URL fragment. Preserves the original key, host, path, and any non-sensitive params.
+ *
+ * The fragment is scrubbed because OAuth implicit-flow callbacks carry credentials there
+ * (`#access_token=…&token_type=bearer`); the fragment is treated as a param string only when
+ * it contains `=` (so plain anchors like `#section` are untouched).
+ *
+ * URLs with neither a `?` query nor a `key=value` fragment are returned unchanged. Non-HTTP(S)
+ * schemes (`data:`, `blob:`) are returned unchanged — they don't carry conventional params.
+ */
+export const redactUrl = (url: string): string => {
+  // Fast paths
+  if (typeof url !== "string" || url.length === 0) return url;
+  if (url.startsWith("data:") || url.startsWith("blob:")) return url;
+
+  // Split off fragment first so we don't lose it.
+  const fragmentIdx = url.indexOf("#");
+  const beforeFragment = fragmentIdx >= 0 ? url.slice(0, fragmentIdx) : url;
+  const fragment = fragmentIdx >= 0 ? url.slice(fragmentIdx + 1) : "";
+
+  const queryIdx = beforeFragment.indexOf("?");
+  const fragmentHasParams = fragment.includes("=");
+  if (queryIdx < 0 && !fragmentHasParams) return url;
+
+  let mutated = false;
+
+  // --- query string ---
+  let rebuiltBeforeFragment = beforeFragment;
+  if (queryIdx >= 0) {
+    const prefix = beforeFragment.slice(0, queryIdx);
+    const queryString = beforeFragment.slice(queryIdx + 1);
+    if (queryString.length > 0) {
+      const r = redactParamString(queryString);
+      if (r.mutated) {
+        rebuiltBeforeFragment = `${prefix}?${r.result}`;
+        mutated = true;
+      }
+    }
+  }
+
+  // --- fragment (OAuth implicit-flow tokens) ---
+  let rebuiltFragment = fragmentIdx >= 0 ? `#${fragment}` : "";
+  if (fragmentHasParams) {
+    const r = redactParamString(fragment);
+    if (r.mutated) {
+      rebuiltFragment = `#${r.result}`;
+      mutated = true;
+    }
+  }
 
   if (!mutated) return url;
-  return `${prefix}?${parts.join("&")}${fragment}`;
+  return `${rebuiltBeforeFragment}${rebuiltFragment}`;
 };
 
 const CONSOLE_TEXT_LIMIT = 4 * 1024;
@@ -142,8 +175,13 @@ const CREDENTIAL_KEYS = [
   "private[_-]?key",
   "session[_-]?id",
 ];
+// Matches `key=value`, `key: value`, and quoted JSON-body forms `"key":"value"` /
+// `'key':'value'`. Groups: (1) optional key quote, (2) key, (3) separator incl. spaces,
+// (4) optional value quote, (5) value. The back-references (\1, \4) keep open/close quotes
+// balanced so we don't straddle adjacent JSON fields. The value class stops at quotes,
+// whitespace, and JSON/query delimiters so only the secret is masked.
 const CREDENTIAL_KV_PATTERN = new RegExp(
-  String.raw`\b(${CREDENTIAL_KEYS.join("|")})\b\s*[:=]\s*("?)([^\s"&,;}]+)\2`,
+  String.raw`(["']?)\b(${CREDENTIAL_KEYS.join("|")})\b\1(\s*[:=]\s*)(["']?)([^\s"'&,;}]+)\4`,
   "gi",
 );
 
@@ -167,9 +205,13 @@ export const redactConsoleText = (text: string): string => {
   let out = text;
   out = out.replace(JWT_PATTERN, REDACTED_TEXT);
   out = out.replace(BEARER_PATTERN, `Bearer ${REDACTED_TEXT}`);
-  out = out.replace(CREDENTIAL_KV_PATTERN, (_match, key: string, quote: string) => {
-    return `${key}${quote ? "=" + quote : "="}${REDACTED_TEXT}${quote}`;
-  });
+  out = out.replace(
+    CREDENTIAL_KV_PATTERN,
+    (_match, keyQuote: string, key: string, sep: string, valueQuote: string) =>
+      // Preserve the original key wrapping, separator, and value-quote style so JSON stays
+      // well-formed (`"password":"[REDACTED]"`) and `k=v` stays `k=[REDACTED]`.
+      `${keyQuote}${key}${keyQuote}${sep}${valueQuote}${REDACTED_TEXT}${valueQuote}`,
+  );
   out = out.replace(EMAIL_PATTERN, (_match, domain: string) => `[EMAIL]@${domain}`);
   out = out.replace(URL_IN_TEXT, (match) => redactUrl(match));
 

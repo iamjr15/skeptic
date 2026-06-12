@@ -5,14 +5,24 @@ import { CLI_NAME, PRODUCT_NAME } from "./constants.js";
 // runner's transitive deps. Type-only imports stay at the top — they're
 // erased at build time and add zero runtime cost.
 import type { RunCommandOptions } from "./commands/run.js";
-import type { GenerateCommandOptions } from "./commands/generate.js";
 import type { AddGitHubActionOptions, AddSkillOptions } from "./commands/add.js";
 import { setLogLevel } from "./utils/logger.js";
 import type { LogLevel } from "./utils/logger.js";
 
-function parsePositiveInt(value: string): number {
+export function parsePositiveInt(value: string): number {
   if (!/^[1-9]\d*$/.test(value)) {
     throw new InvalidArgumentError(`expected a positive integer, got "${value}"`);
+  }
+  return Number(value);
+}
+
+// Accepts 0 — used for counters where zero is a meaningful value (retries: no
+// retries; idle timeout: disabled). Bare `parseInt` silently yields NaN on junk
+// input (e.g. `--retries abc`), which then poisons downstream arithmetic; this
+// fails loudly instead.
+export function parseNonNegativeInt(value: string): number {
+  if (!/^\d+$/.test(value)) {
+    throw new InvalidArgumentError(`expected a non-negative integer, got "${value}"`);
   }
   return Number(value);
 }
@@ -49,9 +59,9 @@ const addRunOptions = (
     .option("--verbose", "verbose output")
     .option("--ci", "force CI mode (headless, no prompts)")
     .option("--bail", "stop on first failure")
-    .option("--retries <n>", "retry failed tests N times", parseInt)
-    .option("--timeout <ms>", "soft per-action default timeout in ms", parseInt)
-    .option("--hard-timeout <ms>", "hard per-test ceiling in ms", parseInt)
+    .option("--retries <n>", "retry failed tests N times", parseNonNegativeInt)
+    .option("--timeout <ms>", "soft per-action default timeout in ms", parsePositiveInt)
+    .option("--hard-timeout <ms>", "hard per-test ceiling in ms", parsePositiveInt)
     .option("--device <id>", "device profile for viewport emulation")
     .option("--reporter <format...>", "reporter format(s): console, json, junit, html")
     .option("--output <dir>", "output directory for reports")
@@ -95,14 +105,12 @@ const addRunOptions = (
     )
     .option("--list", "discover tests without running them")
     .option("--tag <tag...>", "filter tests by tag (declared via test.use({ tags }))")
-    .option("--connect <url>", "connect to a running browser via CDP (B2)")
     .option("--env <KEY=VALUE...>", "set environment variables")
-    .option("--analyze", "use AI to analyze test failures (best-effort post-run)")
     .option("--no-daemon", "bypass the persistent BrowserServer daemon")
     .option(
       "--daemon-idle-timeout <seconds>",
       "auto-stop the daemon after N seconds idle (default 300; 0 disables)",
-      parseInt,
+      parseNonNegativeInt,
     );
 };
 
@@ -171,28 +179,6 @@ Examples:
     await runRun(specs.length > 0 ? specs : undefined, { ...cmdOpts, forceTui: true });
   });
 
-program
-  .command("generate")
-  .description("Generate TypeScript tests using AI")
-  .option("--diff", "generate from git diff")
-  .option("--target <mode>", "diff scope: changes, unstaged, branch", "changes")
-  .option("-u, --url <url>", "base URL for generated tests")
-  .option("-m, --message <description>", "generate from a text description")
-  .option("-o, --output <dir>", "output directory for generated tests")
-  .option("--save", "save to .skeptic/generated/ with timestamp")
-  .option("--model <model>", "AI model to use (overrides ai.model in config)")
-  .option("-c, --config <path>", "path to config file")
-  .option(
-    "--guidance <domains>",
-    "comma-separated domain guidance to attach (e.g. animation,accessibility)",
-  )
-  .option("--no-coverage", "skip the coverage analysis injected into AI prompts")
-  .option("-y, --yes", "skip interactive review, auto-approve")
-  .action(async (cmdOpts: GenerateCommandOptions) => {
-    const { runGenerate } = await import("./commands/generate.js");
-    await runGenerate(cmdOpts);
-  });
-
 const addCmd = program
   .command("add")
   .description("Add integrations and scaffolding");
@@ -202,11 +188,6 @@ addCmd
   .description("Generate a GitHub Actions workflow for E2E tests")
   .option("--dev-command <cmd>", "dev server start command", "npm run dev")
   .option("--dev-url <url>", "dev server URL", "http://localhost:3000")
-  .option("--ai", "enable AI features in workflow")
-  .option(
-    "--provider <name>",
-    "AI provider: gemini, openai, or anthropic (overrides ai.provider in config)",
-  )
   .option("-c, --config <path>", "path to config file")
   .action(async (cmdOpts: AddGitHubActionOptions) => {
     const { runAddGitHubAction } = await import("./commands/add.js");
@@ -271,19 +252,6 @@ program
   });
 
 program
-  .command("mcp")
-  .description("Start MCP server for AI agent integration (stdio)")
-  .action(async () => {
-    if (__SKEPTIC_FEATURE_MCP__) {
-      const { runMcp } = await import("./commands/mcp.js");
-      await runMcp();
-    } else {
-      console.error("skeptic mcp: not built into this binary");
-      process.exit(1);
-    }
-  });
-
-program
   .command("doctor")
   .description("Diagnose skeptic setup, browser installs, optional engines, daemon state, and agent DX")
   .option("--json", "emit machine-readable JSON")
@@ -302,7 +270,7 @@ program
   .option("--headed", "run browser in headed mode")
   .option("--device <id>", "device profile for viewport emulation")
   .option("--output <dir>", "output directory for reports")
-  .option("--wait <ms>", "extra wait after navigation before capture", parseInt)
+  .option("--wait <ms>", "extra wait after navigation before capture", parseNonNegativeInt)
   .option("--wait-until <strategy>", "navigation wait strategy: load, domcontentloaded, networkidle, or commit", parseWaitUntil)
   .option("--full-page", "capture full-page screenshots")
   .option("--video", "record video of the observation")
@@ -312,24 +280,11 @@ program
   .option("--no-trace", "disable Playwright trace")
   .option("--cookies", "enable browser cookie extraction")
   .option("--cookies-from <browser>", "extract cookies from specific browser only")
-  .option("--timeout <ms>", "default timeout in ms", parseInt)
+  .option("--timeout <ms>", "default timeout in ms", parsePositiveInt)
   .option("--no-tui", "suppress live console progress")
   .action(async (url: string, cmdOpts: import("./commands/observe.js").ObserveCommandOptions) => {
     const { runObserve } = await import("./commands/observe.js");
     await runObserve(url, cmdOpts);
-  });
-
-program
-  .command("acp")
-  .description("Start ACP agent server for IDE integration (stdio)")
-  .action(async () => {
-    if (__SKEPTIC_FEATURE_ACP__) {
-      const { runAcp } = await import("./commands/acp.js");
-      await runAcp();
-    } else {
-      console.error("skeptic acp: not built into this binary");
-      process.exit(1);
-    }
   });
 
 program
@@ -342,7 +297,7 @@ program
   .option("--json", "emit machine-readable JSON")
   .option("--device <id>", "device profile (e.g. iphone_15)")
   .option("--headed", "show the browser")
-  .option("--wait <ms>", "extra settle before snapshot (default 1500)")
+  .option("--wait <ms>", "extra settle in ms after navigation before snapshot (default 0; the adaptive networkidle settle runs regardless)")
   .option("--connect <url>", "CDP auto-discover and attach (host:port or ws URL)")
   .option("--with-playwright-hints", "also emit Playwright snippet per ref")
   .option("--annotated", "capture an annotated PNG with numbered badges over each ref")
@@ -367,7 +322,7 @@ daemonCmd
   .option(
     "--daemon-idle-timeout <seconds>",
     "auto-stop after N idle seconds (default 300; 0 disables)",
-    parseInt,
+    parseNonNegativeInt,
   )
   .action(
     async (cmdOpts: { engine?: string; headed?: boolean; daemonIdleTimeout?: number }) => {
@@ -395,11 +350,169 @@ daemonCmd
 daemonCmd
   .command("logs")
   .description("Tail the daemon log file at ~/.skeptic/daemon.log")
-  .option("-n, --lines <n>", "show last N lines (default 200)", parseInt)
+  .option("-n, --lines <n>", "show last N lines (default 200)", parsePositiveInt)
   .action(async (cmdOpts: { lines?: number }) => {
     const { runDaemonLogs } = await import("./commands/daemon.js");
     await runDaemonLogs(cmdOpts);
   });
+
+// Hidden: the interactive-session daemon (the dedicated headed slot). Not for
+// manual use — auto-spawned by the browser-session verbs via ensureSessionDaemon.
+program
+  .command("session-daemon", { hidden: true })
+  .description("(internal) interactive browser-session daemon — auto-spawned by session verbs")
+  .option("--engine <engine>", "browser engine", "chromium")
+  .option("--headed", "run headed (default)")
+  .option("--headless", "run headless")
+  .option("--idle-timeout <seconds>", "daemon idle shutdown", parseNonNegativeInt)
+  .option("--session-idle <seconds>", "per-session idle reap", parseNonNegativeInt)
+  .action(async (cmdOpts: import("./commands/session-daemon-cmd.js").SessionDaemonCmdOptions) => {
+    const { runSessionDaemon } = await import("./commands/session-daemon-cmd.js");
+    await runSessionDaemon(cmdOpts);
+  });
+
+// ── Browser-session interaction verbs ────────────────────────────────────────
+// Persistent daemon-held session: refs from `skeptic snapshot` survive into the
+// next `skeptic click @eN` because the session lives in the session daemon.
+type SessionVerbOpts = import("./commands/browser-verbs.js").BrowserVerbOptions;
+
+const addSessionOpts = (command: Command): Command =>
+  command
+    .option("--session <name>", "isolated session name", "default")
+    .option("--json", "machine-readable JSON output")
+    .option("--platform <platform>", "web (default) | android (drives a device/emulator via adb)")
+    .option("--headed", "run the session browser headed (default; web only)")
+    .option("--headless", "run the session browser headless (web only)");
+
+addSessionOpts(
+  program.command("open").description("Open a URL in a persistent browser session").argument("<url>", "URL to open"),
+)
+  .option("--wait-until <s>", "navigation wait: load, domcontentloaded, networkidle, commit", parseWaitUntil)
+  .action(async (url: string, opts: import("./commands/browser-verbs.js").OpenVerbOptions) => {
+    const { runOpen } = await import("./commands/browser-verbs.js");
+    await runOpen(url, opts);
+  });
+
+addSessionOpts(
+  program.command("snapshot").description("Snapshot the open session's page — mints @eN refs + selectorHints"),
+)
+  .option("-i, --interactive", "filter to interactive refs")
+  .option("-c, --compact", "interactive + minimal ancestors")
+  .action(async (opts: import("./commands/browser-verbs.js").SnapshotVerbOptions) => {
+    const { runSnapshot } = await import("./commands/browser-verbs.js");
+    await runSnapshot(opts);
+  });
+
+addSessionOpts(
+  program.command("click").description("Click an element (@eN ref or selector)").argument("<target>", "@eN or selector"),
+).action(async (target: string, opts: SessionVerbOpts) => {
+  const { runClick } = await import("./commands/browser-verbs.js");
+  await runClick(target, opts);
+});
+
+addSessionOpts(
+  program.command("fill").description("Fill an input (clears first)").argument("<target>", "@eN or selector").argument("<text>", "text"),
+).action(async (target: string, text: string, opts: SessionVerbOpts) => {
+  const { runFill } = await import("./commands/browser-verbs.js");
+  await runFill(target, text, opts);
+});
+
+addSessionOpts(
+  program.command("type").description("Type into an element (no clear)").argument("<target>", "@eN or selector").argument("<text>", "text"),
+).action(async (target: string, text: string, opts: SessionVerbOpts) => {
+  const { runType } = await import("./commands/browser-verbs.js");
+  await runType(target, text, opts);
+});
+
+addSessionOpts(
+  program.command("press").description("Press a key on an element").argument("<target>", "@eN or selector").argument("<key>", 'e.g. "Enter"'),
+).action(async (target: string, key: string, opts: SessionVerbOpts) => {
+  const { runPress } = await import("./commands/browser-verbs.js");
+  await runPress(target, key, opts);
+});
+
+addSessionOpts(
+  program.command("hover").description("Hover an element").argument("<target>", "@eN or selector"),
+).action(async (target: string, opts: SessionVerbOpts) => {
+  const { runHover } = await import("./commands/browser-verbs.js");
+  await runHover(target, opts);
+});
+
+addSessionOpts(
+  program.command("check").description("Check a checkbox").argument("<target>", "@eN or selector"),
+).action(async (target: string, opts: SessionVerbOpts) => {
+  const { runCheck } = await import("./commands/browser-verbs.js");
+  await runCheck(target, opts);
+});
+
+addSessionOpts(
+  program.command("uncheck").description("Uncheck a checkbox").argument("<target>", "@eN or selector"),
+).action(async (target: string, opts: SessionVerbOpts) => {
+  const { runUncheck } = await import("./commands/browser-verbs.js");
+  await runUncheck(target, opts);
+});
+
+addSessionOpts(
+  program.command("select").description("Select an option").argument("<target>", "@eN or selector").argument("<value>", "option value"),
+).action(async (target: string, value: string, opts: SessionVerbOpts) => {
+  const { runSelect } = await import("./commands/browser-verbs.js");
+  await runSelect(target, value, opts);
+});
+
+addSessionOpts(
+  program.command("get").description("Read text|box|url|title from the session").argument("<query>", "text | box | url | title").argument("[target]", "@eN or selector"),
+).action(async (query: string, target: string | undefined, opts: SessionVerbOpts) => {
+  const { runGet } = await import("./commands/browser-verbs.js");
+  await runGet(query, target, opts);
+});
+
+addSessionOpts(
+  program.command("screenshot").description("Capture a screenshot of the session (returns a file path)"),
+)
+  .option("--name <name>", "artifact name", "screenshot")
+  .option("--full", "full-page capture")
+  .option("--annotate", "numbered badges over interactive refs")
+  .action(async (opts: import("./commands/browser-verbs.js").ScreenshotVerbOptions) => {
+    const { runScreenshot } = await import("./commands/browser-verbs.js");
+    await runScreenshot(opts);
+  });
+
+addSessionOpts(
+  program.command("console").description("Read the session's console messages (or --errors only)"),
+)
+  .option("--errors", "only uncaught errors / console.error")
+  .action(async (opts: import("./commands/browser-verbs.js").ConsoleVerbOptions) => {
+    const { runConsole } = await import("./commands/browser-verbs.js");
+    await runConsole(opts);
+  });
+
+addSessionOpts(
+  program.command("wait").description("Wait for a duration (--ms) or a selector"),
+)
+  .option("--ms <n>", "milliseconds to wait", parseNonNegativeInt)
+  .option("--selector <sel>", "wait for a selector")
+  .option("--state <state>", "visible | hidden | attached | detached")
+  .option("--timeout-ms <n>", "wait timeout", parseNonNegativeInt)
+  .action(async (opts: import("./commands/browser-verbs.js").WaitVerbOptions) => {
+    const { runWait } = await import("./commands/browser-verbs.js");
+    await runWait(opts);
+  });
+
+addSessionOpts(
+  program.command("close").description("Close the session (--all closes every session)"),
+)
+  .option("--all", "close all sessions")
+  .action(async (opts: import("./commands/browser-verbs.js").CloseVerbOptions) => {
+    const { runClose } = await import("./commands/browser-verbs.js");
+    await runClose(opts);
+  });
+
+addSessionOpts(program.command("list").description("List open browser sessions")).action(
+  async (opts: SessionVerbOpts) => {
+    const { runList } = await import("./commands/browser-verbs.js");
+    await runList(opts);
+  },
+);
 
 // Re-export `commandUsesBrowser` so existing callers (and the
 // `auto-spawn-discipline` unit test) keep working. The implementation lives
@@ -437,10 +550,6 @@ export type {
   NetworkAssertOpts,
   ConsoleAssertOpts,
   AxeAuditOpts,
-  AiFixture,
-  AiAssertOpts,
-  AiDefectsOpts,
-  AiExtractOpts,
 } from "./api/index.js";
 
 // Re-export types for other teammates to consume
@@ -450,7 +559,6 @@ export type {
   AuthConfig,
   ExecutionConfig,
   OutputConfig,
-  AIConfig,
   SafetyConfig,
 } from "./config/schema.js";
 export type { DeviceProfile, DeviceCategory } from "./config/device-profiles.js";

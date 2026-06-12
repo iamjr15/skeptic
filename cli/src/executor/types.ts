@@ -1,6 +1,5 @@
 import type { Page } from "playwright";
 import type { ExecutionContext } from "./context.js";
-import type { AIClient, AIProvider } from "../ai/ai-client.js";
 import type { CollectorName } from "../observability/types.js";
 import type { ObservabilityRuntimeConfig } from "../observability/registry.js";
 import type { VisualSettleConfig } from "./visual-settle.js";
@@ -97,6 +96,18 @@ export interface TestResult {
   metrics?: Record<string, unknown>;
   /** Zero-based shard index this test ran in. Set when EngineOptions.shardId is present. */
   shardId?: number;
+  /**
+   * True when the test was declared `test.skip(...)` and its body never ran. The overall
+   * `status` stays `"passed"` so existing reporters (which treat anything but `"passed"` as a
+   * failure) don't regress, but this flag lets summary/reporting layers count skips separately
+   * instead of folding them into the pass count.
+   */
+  skipped?: boolean;
+  /**
+   * True when the test failed at least once and only went green after a retry. The final
+   * `status` is `"passed"`; this flag preserves the "was flaky" signal so reports can surface it.
+   */
+  flaky?: boolean;
   /** All on-disk artifacts produced by this test. Always present; empty object when no artifacts captured. */
   artifacts: TestArtifacts;
 }
@@ -151,8 +162,6 @@ export interface EngineOptions {
   video?: boolean;
   /** Override video recording size; defaults to viewport. Closes the Playwright 800-cap default. */
   videoSize?: { width: number; height: number };
-  aiClient?: AIClient;
-  aiProvider?: AIProvider;
   trace?: boolean;
   observability?: ObservabilityRuntimeConfig;
   /** Resolved by the engine and assigned to `ExecutionContext.artifactConfig`. */

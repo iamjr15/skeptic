@@ -70,6 +70,17 @@ export const getVersionPath = (): string => path.join(getDaemonDir(), "daemon.ve
 export const getEnginePath = (): string => path.join(getDaemonDir(), "daemon.engine");
 export const getLogPath = (): string => path.join(getDaemonDir(), "daemon.log");
 
+// Interactive-session daemon (the dedicated headed slot — separate process and
+// socket from the headless test daemon above, so the two never clobber each other).
+export const getSessionSocketPath = (): string => path.join(getDaemonDir(), "session.sock");
+export const getSessionPidPath = (): string => path.join(getDaemonDir(), "session.pid");
+export const getSessionVersionPath = (): string => path.join(getDaemonDir(), "session.version");
+export const getSessionEnginePath = (): string => path.join(getDaemonDir(), "session.engine");
+export const getSessionLogPath = (): string => path.join(getDaemonDir(), "session.log");
+/** Per-session artifact dir (screenshots, etc.) under the daemon dir. */
+export const getSessionArtifactDir = (name: string): string =>
+  path.join(getDaemonDir(), "sessions", name.replace(/[^a-zA-Z0-9_.-]/g, "_") || "default");
+
 /**
  * Ensure the daemon dir exists with `0700` permissions. The directory is the
  * primary access boundary — only the user's own UID can `connect()` to a
@@ -179,8 +190,11 @@ export interface SocketServerHandle {
 export const startSocketServer = async (
   socketPath: string,
   handler: DaemonRpcHandler,
-  opts: { onAccept?: () => void; onClose?: () => void } = {},
+  opts: { onAccept?: () => void; onClose?: () => void; maxLineBytes?: number } = {},
 ): Promise<SocketServerHandle> => {
+  // The control plane defaults to the small 8 KB cap; the interactive-session
+  // daemon raises it (large `fill`/`type` payloads) via opts.maxLineBytes.
+  const maxLineBytes = opts.maxLineBytes ?? MAX_LINE_BYTES;
   const ipcPath = resolveIpcPath(socketPath);
   const server = net.createServer((conn) => {
     let buf = Buffer.alloc(0);
@@ -191,13 +205,13 @@ export const startSocketServer = async (
       while (true) {
         const nl = buf.indexOf(0x0a);
         if (nl < 0) {
-          if (buf.length > MAX_LINE_BYTES) {
+          if (buf.length > maxLineBytes) {
             dropFrame = true;
             buf = Buffer.alloc(0);
           }
           break;
         }
-        if (nl > MAX_LINE_BYTES) {
+        if (nl > maxLineBytes) {
           // Single physical line exceeds the cap — reject and continue with
           // any trailing bytes after the newline.
           buf = buf.subarray(nl + 1);

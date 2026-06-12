@@ -216,13 +216,31 @@ export const startDaemon = async (opts: DaemonStartOptions): Promise<DaemonHandl
     return shutdownInFlight;
   };
 
+  // The control socket never sees the Playwright WebSocket traffic — a `skeptic
+  // run` connects once via `browser.getEndpoint` then drives the BrowserServer
+  // directly over WS for the whole run. So the idle timer must not shut the
+  // BrowserServer down while any client still holds a connection: when it fires
+  // with active clients, re-arm and re-check next interval instead of killing
+  // an in-flight run. `state.clients` is incremented by `browser.getEndpoint`
+  // (rpc.ts) and decremented by the `browser.release` handler below.
   const idle = new IdleTimer(opts.idleTimeoutSeconds ?? 300, () => {
+    if (state.clients > 0) {
+      idle.arm();
+      return;
+    }
     void shutdown("idle-timeout");
   });
 
   const rpcHandler: DaemonRpcHandler = (req, ctx) => {
     ctx.onActivity();
     idle.reset();
+    // `browser.release` is the client's disconnect signal (client.ts). It isn't
+    // a dispatch control-plane method; we decrement the active-client count here
+    // so the idle timer can reclaim the BrowserServer once every run has ended.
+    if (req.method === "browser.release") {
+      state.decClients();
+      return Promise.resolve({ result: { ok: true } });
+    }
     return dispatch(req, state, () => {
       ctx.close();
       void shutdown("rpc-shutdown");

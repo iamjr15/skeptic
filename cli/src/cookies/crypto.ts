@@ -1,4 +1,4 @@
-import { pbkdf2Sync, createDecipheriv } from "node:crypto";
+import { pbkdf2Sync, createDecipheriv, createHash } from "node:crypto";
 import { execSync } from "node:child_process";
 
 const CHROMIUM_SALT = Buffer.from("saltysalt");
@@ -22,10 +22,18 @@ export function deriveChromiumKey(password: string): Buffer {
  * Decrypt a Chromium encrypted_value.
  * Chromium prefixes encrypted values with "v10" (macOS) or "v11" (Linux).
  * The actual ciphertext starts at byte 3.
+ *
+ * Since Chrome M127 (mid-2024), Chromium on macOS/Linux prepends a 32-byte
+ * SHA-256 hash of the cookie's host_key to the plaintext BEFORE encryption.
+ * Pass `hostKey` so the prefix can be detected and stripped; without it the
+ * decrypted value would carry 32 bytes of binary garbage. Older Chrome has no
+ * such prefix, so the strip is conditional on a hash match (never corrupts
+ * pre-M127 values).
  */
 export function decryptChromiumValue(
   encryptedValue: Buffer,
   key: Buffer,
+  hostKey?: string,
 ): string {
   if (encryptedValue.length <= 3) return "";
 
@@ -38,10 +46,18 @@ export function decryptChromiumValue(
   const ciphertext = encryptedValue.subarray(3);
   try {
     const decipher = createDecipheriv("aes-128-cbc", key, CHROMIUM_IV);
-    const decrypted = Buffer.concat([
+    let decrypted = Buffer.concat([
       decipher.update(ciphertext),
       decipher.final(),
     ]);
+
+    if (hostKey && decrypted.length >= 32) {
+      const expected = createHash("sha256").update(hostKey).digest();
+      if (decrypted.subarray(0, 32).equals(expected)) {
+        decrypted = decrypted.subarray(32);
+      }
+    }
+
     return decrypted.toString("utf-8");
   } catch {
     return "";

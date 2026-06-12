@@ -45,6 +45,32 @@ describe("redactConsoleText", () => {
     expect(out.endsWith("…")).toBe(true);
   });
 
+  it("masks JSON-body credentials with quoted keys and values", () => {
+    const input = `Request body: {"username":"alice","password":"hunter2","token":"sk-LIVE-9931"}`;
+    const out = redactConsoleText(input);
+    expect(out).not.toContain("hunter2");
+    expect(out).not.toContain("sk-LIVE-9931");
+    // The JSON stays well-formed: key and quotes preserved, only the value masked.
+    expect(out).toContain(`"password":"[REDACTED]"`);
+    expect(out).toContain(`"token":"[REDACTED]"`);
+    // Non-secret fields are untouched.
+    expect(out).toContain(`"username":"alice"`);
+  });
+
+  it("masks single-quoted credential values", () => {
+    const out = redactConsoleText(`config secret='top-secret-value'`);
+    expect(out).not.toContain("top-secret-value");
+    expect(out).toContain(`secret='[REDACTED]'`);
+  });
+
+  it("masks OAuth tokens carried in a URL fragment", () => {
+    const input = "Redirected to https://app.example.com/cb#access_token=ABC123XYZ&token_type=bearer";
+    const out = redactConsoleText(input);
+    expect(out).not.toContain("ABC123XYZ");
+    expect(out).toContain("access_token=");
+    expect(out).toMatch(/access_token=(\*\*\*|\[REDACTED\])/);
+  });
+
   it("returns clean strings unchanged", () => {
     const input = "Hello world, no secrets here.";
     expect(redactConsoleText(input)).toBe(input);
