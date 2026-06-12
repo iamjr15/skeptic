@@ -10,7 +10,12 @@ Full audit report and detailed checklist: `plans/sota-readiness-plan.md`.
 - [ ] Fix .gitignore coverage/ pattern hiding ast-extraction.test.ts from CI
 - [ ] SECURITY.md; fix ws vuln; dependabot
 
-## STATUS (verified green: 105 test files, 797 passing, 1 skipped; tsc clean; build clean)
+## STATUS (verified green: 105 test files, 798 passing, 1 skipped; tsc clean; build clean)
+
+### Android follow-ups — DONE & LIVE-VERIFIED (2026-06-12)
+- **`skeptic scaffold --platform android`**: opens an app package via the adb session, snapshots, and emits a `device`-fixture spec skeleton (discovered selectorHints as commented `device.click(...)` + a starter `expect(snap.has(...))`). Live: scaffolded a runnable spec from `app.fieldwork.android` (3 elements) that then ran GREEN via `skeptic run --platform android` — full scaffold→run round-trip proven. `--platform`/`--target` flags added; shared discovery via the DriverSession abstraction.
+- **Rich reporter rendering of mobile metrics**: the html + console reporters now render `mobilePerformance`/`mobileAccessibility`/`mobileNetwork` (were results.json-only). Console: `perf: 658 frames (12.92% janky, p90 53ms) · a11y: 0 issues · net: 8.6MB in (degraded)`. HTML: Device Performance / Accessibility / Network cards. Hardened both reporters' web-network guards (`net && net.issues`) as defense-in-depth. +1 html-reporter unit test.
+- **Genuinely environment-blocked (cannot complete on this box):** iOS simulator driver (`--platform ios-sim`, needs Xcode + `idb` + a Simulator — none installed) and the skill-evals harness (needs a sandbox running recursive `claude -p`/`codex exec` agents that mutate `~/.claude`). Both fully designed in plans/velvety-scribbling-ullman.md; build where they can be run+verified.
 
 ### `skeptic run --platform android` (spec path) — DONE & LIVE-VERIFIED (2026-06-12)
 The web/mobile co-equal "same specs" vision is now real: the SAME `test`/`expect`, runner

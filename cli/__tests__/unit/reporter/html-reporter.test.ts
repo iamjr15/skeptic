@@ -66,6 +66,40 @@ describe("HtmlReporter", () => {
     expect(html).toContain("<style>");
   });
 
+  it("renders the Android device-evidence metric cards (perf/a11y/network)", () => {
+    const reporter = new HtmlReporter(tmpDir);
+    const test: TestResult = {
+      name: "android smoke",
+      file: "tests/m.spec.ts",
+      status: "passed",
+      duration_ms: 100,
+      steps: [],
+      artifacts: {},
+      metrics: {
+        mobilePerformance: {
+          platform: "android",
+          launch: { totalTimeMs: 2116, waitTimeMs: 13 },
+          frames: { totalFrames: 537, jankyFrames: 14, jankyPercent: 2.61, percentiles: { p50: 16, p90: 18, p95: 18, p99: 31 }, missedVsync: 0, deadlineMissed: 14 },
+          memory: { totalPssKb: 112368, totalRssKb: 199132 },
+        },
+        mobileAccessibility: {
+          platform: "android",
+          issues: [{ rule: "unlabeled-clickable", impact: "serious", className: "ImageButton", bounds: { x1: 0, y1: 0, x2: 1, y2: 1 }, detail: "no label" }],
+          summary: { issues: 1, checked: 5, minTouchTargetPx: 126, note: "structural only" },
+        },
+        mobileNetwork: { platform: "android", degraded: true, totals: { rxBytes: 1765338, txBytes: 3151693 }, requests: [], note: "degraded" },
+      },
+    };
+    reporter.onRunComplete({ total: 1, passed: 1, failed: 0, duration_ms: 100, tests: [test] });
+    const html = fs.readFileSync(path.join(tmpDir, "report.html"), "utf-8");
+    expect(html).toContain("Device Performance");
+    expect(html).toContain("537 (2.61% janky)");
+    expect(html).toContain("Device Accessibility");
+    expect(html).toContain("unlabeled-clickable");
+    expect(html).toContain("Device Network");
+    expect(html).toMatch(/degraded/i);
+  });
+
   it("includes test names and step counts in the report", () => {
     const reporter = new HtmlReporter(tmpDir);
     reporter.onRunComplete(makeSummary());

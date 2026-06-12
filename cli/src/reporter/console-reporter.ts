@@ -5,6 +5,9 @@ import type {
   AccessibilitySnapshot,
   NetworkSnapshot,
   PerformanceSnapshot,
+  MobilePerformanceSnapshot,
+  MobileAccessibilitySnapshot,
+  MobileNetworkSnapshot,
 } from "../observability/types.js";
 
 export class ConsoleReporter implements Reporter {
@@ -165,7 +168,7 @@ function formatMetricsLine(metrics: Record<string, unknown> | undefined): string
   }
 
   const net = metrics.network as NetworkSnapshot | undefined;
-  if (net) {
+  if (net && net.issues) {
     const issueCount =
       net.issues.failedRequests.length +
       net.issues.networkFailures.length +
@@ -177,6 +180,16 @@ function formatMetricsLine(metrics: Record<string, unknown> | undefined): string
 
   const a11y = metrics.accessibility as AccessibilitySnapshot | undefined;
   if (a11y) parts.push(`a11y: ${a11y.summary.violations} violations`);
+
+  // Mobile (Android) device evidence.
+  const mperf = metrics.mobilePerformance as MobilePerformanceSnapshot | undefined;
+  if (mperf?.frames) {
+    parts.push(`perf: ${mperf.frames.totalFrames} frames (${mperf.frames.jankyPercent}% janky, p90 ${mperf.frames.percentiles.p90}ms)`);
+  }
+  const ma11y = metrics.mobileAccessibility as MobileAccessibilitySnapshot | undefined;
+  if (ma11y) parts.push(`a11y: ${ma11y.summary.issues} issues`);
+  const mnet = metrics.mobileNetwork as MobileNetworkSnapshot | undefined;
+  if (mnet?.totals) parts.push(`net: ${(mnet.totals.rxBytes / 1024 / 1024).toFixed(1)}MB in (degraded)`);
 
   if (parts.length === 0) return null;
   return `  ${chalk.dim("Metrics:")} ${chalk.dim(parts.join(" · "))}`;

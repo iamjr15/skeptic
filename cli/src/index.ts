@@ -246,14 +246,16 @@ program
 
 program
   .command("scaffold")
-  .description("Generate a TypeScript spec skeleton from a live page (deterministic, no AI)")
-  .argument("<url>", "URL to scaffold a spec from")
+  .description("Generate a TypeScript spec skeleton from a live page or app (deterministic, no AI)")
+  .argument("<target>", "URL (web) or app package / deep link (--platform android)")
   .option("-o, --output <dir>", "output directory", "tests")
   .option("--name <name>", "base name for the spec file")
   .option("--headed", "show the browser")
-  .action(async (url: string, cmdOpts: import("./commands/scaffold.js").ScaffoldCommandOptions) => {
+  .option("--platform <platform>", "web (default) | android — scaffold a `device`-fixture spec from an app", parsePlatform)
+  .option("--target <serial>", "device/emulator serial for --platform android")
+  .action(async (target: string, cmdOpts: import("./commands/scaffold.js").ScaffoldCommandOptions) => {
     const { runScaffold } = await import("./commands/scaffold.js");
-    await runScaffold(url, cmdOpts);
+    await runScaffold(target, cmdOpts);
   });
 
 const addCmd = program

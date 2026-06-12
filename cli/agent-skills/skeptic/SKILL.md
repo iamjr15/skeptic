@@ -137,6 +137,7 @@ Rules:
 
 The same `test`/`expect`, runner, and `results.json` drive Android — run with
 `skeptic run <spec> --platform android` (`--target <serial>` to pick a device).
+Scaffold a starting spec with `skeptic scaffold <package> --platform android`.
 Specs get a **`device`** fixture instead of `page` (uiautomator refs, not
 Playwright locators):
 

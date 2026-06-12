@@ -11,45 +11,95 @@ export interface ScaffoldCommandOptions {
   output?: string;
   name?: string;
   headed?: boolean;
+  /** `--platform android` scaffolds a `device`-fixture spec against an app package. */
+  platform?: "web" | "android";
+  /** Device/emulator serial for --platform android. */
+  target?: string;
+}
+
+interface DiscoveredRef {
+  ref: string;
+  role: string;
+  name: string;
+  selectorHint: string;
 }
 
 /**
- * Deterministic spec generator (no LLM). Opens the URL, snapshots its interactive
- * elements, and writes a `tests/<slug>.spec.ts` skeleton the host agent fills in
- * with real assertions. Replaces the removed AI `generate` command.
+ * Deterministic spec generator (no LLM). Opens the target (URL on web, a package
+ * name / deep link on android), snapshots its interactive elements, and writes a
+ * `tests/<slug>.spec.ts` skeleton the host agent fills in with real assertions.
+ * Replaces the removed AI `generate` command.
  */
-export const runScaffold = async (url: string, opts: ScaffoldCommandOptions): Promise<void> => {
+export const runScaffold = async (target: string, opts: ScaffoldCommandOptions): Promise<void> => {
   const outDir = path.resolve(process.cwd(), opts.output ?? "tests");
   fs.mkdirSync(outDir, { recursive: true });
 
-  const pw = await loadPlaywright();
-  const browser = await pw.chromium.launch({ headless: !opts.headed });
-  const driver = PlaywrightDriver.fromBrowser(browser, true);
-  let title = "";
-  let refs: Array<{ ref: string; role: string; name: string; selectorHint: string }> = [];
+  const android = opts.platform === "android";
+  const { title, refs } = android
+    ? await discoverAndroid(target, opts, outDir)
+    : await discoverWeb(target, opts);
 
-  try {
-    const session = await driver.newSession();
-    await session.open(url, { waitUntil: "load" });
-    title = await session.title();
-    const capture = await session.snapshot({ viewport: true, includeCursorInteractive: true, extractLinkHrefs: true });
-    refs = renderSnapshot(capture, { interactive: true }).refs.slice(0, 12);
-    await session.close();
-  } finally {
-    await driver.close();
-  }
-
-  const base = opts.name ?? title ?? new URL(url).hostname;
+  const base = opts.name ?? title ?? (android ? target : new URL(target).hostname);
   const slug = uniqueSlug(base || "scaffold", outDir);
   const file = path.join(outDir, `${slug}.spec.ts`);
-  fs.writeFileSync(file, buildSpec({ url, title, slug, refs }), "utf-8");
+  const spec = android
+    ? buildDeviceSpec({ target, title, slug, refs })
+    : buildSpec({ url: target, title, slug, refs });
+  fs.writeFileSync(file, spec, "utf-8");
 
+  const runHint = android
+    ? `skeptic run ${path.relative(process.cwd(), file)} --platform android`
+    : `skeptic run ${path.relative(process.cwd(), file)}`;
   logger.success(`Scaffolded ${chalk.cyan(path.relative(process.cwd(), file))}`);
   logger.info(
     chalk.dim(
-      `Discovered ${refs.length} interactive element(s). Fill in the commented interactions and assertions, then \`skeptic run ${path.relative(process.cwd(), file)}\`.`,
+      `Discovered ${refs.length} interactive element(s). Fill in the commented interactions and assertions, then \`${runHint}\`.`,
     ),
   );
+};
+
+const discoverWeb = async (
+  url: string,
+  opts: ScaffoldCommandOptions,
+): Promise<{ title: string; refs: DiscoveredRef[] }> => {
+  const pw = await loadPlaywright();
+  const browser = await pw.chromium.launch({ headless: !opts.headed });
+  const driver = PlaywrightDriver.fromBrowser(browser, true);
+  try {
+    const session = await driver.newSession();
+    await session.open(url, { waitUntil: "load" });
+    const title = await session.title();
+    const capture = await session.snapshot({ viewport: true, includeCursorInteractive: true, extractLinkHrefs: true });
+    const refs = renderSnapshot(capture, { interactive: true }).refs.slice(0, 12);
+    await session.close();
+    return { title, refs };
+  } finally {
+    await driver.close();
+  }
+};
+
+const discoverAndroid = async (
+  target: string,
+  opts: ScaffoldCommandOptions,
+  outDir: string,
+): Promise<{ title: string; refs: DiscoveredRef[] }> => {
+  const { createAdb, listDevices } = await import("../driver/mobile/adb.js");
+  const { AndroidAdbDriverSession } = await import("../driver/mobile/adb-session.js");
+  let serial = opts.target;
+  if (!serial) {
+    const devices = (await listDevices().catch(() => [])).filter((d) => d.state === "device");
+    if (devices.length === 0) {
+      throw new Error("[android] no device/emulator found. Start one (or pass --target <serial>); `skeptic devices` lists them.");
+    }
+    serial = devices[0]!.serial;
+  }
+  const session = new AndroidAdbDriverSession(createAdb({ serial }), serial, outDir);
+  await session.open(target);
+  const title = await session.title();
+  const capture = await session.snapshot();
+  const refs = renderSnapshot(capture, { interactive: true }).refs.slice(0, 12);
+  await session.close();
+  return { title, refs };
 };
 
 const titleRegex = (title: string): string => {
@@ -58,6 +108,41 @@ const titleRegex = (title: string): string => {
   // Escape for a forgiving substring match.
   const escaped = trimmed.slice(0, 40).replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
   return `/${escaped}/`;
+};
+
+const buildDeviceSpec = (input: {
+  target: string;
+  title: string;
+  slug: string;
+  refs: DiscoveredRef[];
+}): string => {
+  const interactions = input.refs.length
+    ? input.refs
+        .map((r) => {
+          const label = `${r.role}${r.name ? ` "${r.name}"` : ""}`;
+          const target = r.selectorHint || `@${r.ref}`;
+          return `  // ${label}\n  // await device.click(${JSON.stringify(target)});`;
+        })
+        .join("\n")
+    : "  // (no interactive elements discovered — add your own selectorHints)";
+
+  const firstHint = input.refs.find((r) => r.selectorHint)?.selectorHint;
+  return `import { test, expect } from "skeptic-cli";
+
+// Scaffolded by \`skeptic scaffold ${input.target} --platform android\`. Fill in the
+// real interactions + assertions, then run with
+// \`skeptic run tests/${input.slug}.spec.ts --platform android\`.
+test(${JSON.stringify(`${input.title || input.slug} smoke`)}, async ({ device }) => {
+  await device.open(${JSON.stringify(input.target)});
+  const snap = await device.snapshot();
+
+  // Discovered interactive elements (uncomment + adapt; re-snapshot after each screen change):
+${interactions}
+
+  ${firstHint ? `expect(snap.has(${JSON.stringify(firstHint)})).toBe(true);` : "// expect(snap.has(\"text=...\")).toBe(true);"}
+  await device.screenshot(${JSON.stringify(input.slug)});
+});
+`;
 };
 
 const buildSpec = (input: {

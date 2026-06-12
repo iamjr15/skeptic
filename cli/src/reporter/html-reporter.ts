@@ -8,6 +8,9 @@ import type {
   ConsoleSnapshot,
   NetworkSnapshot,
   PerformanceSnapshot,
+  MobilePerformanceSnapshot,
+  MobileAccessibilitySnapshot,
+  MobileNetworkSnapshot,
 } from "../observability/types.js";
 import { logger } from "../utils/logger.js";
 
@@ -426,6 +429,44 @@ function buildMetricsSection(metrics: Record<string, unknown> | undefined): stri
         : "";
     cards.push(
       `<div class="metric-card"><h4>Accessibility</h4><p>${esc(a11y.standard)} — ${a11y.summary.violations} violation(s), ${a11y.summary.passes} passes (${engines})</p>${violationList}</div>`,
+    );
+  }
+
+  // Mobile (Android) device evidence — distinct shapes from the web metrics above.
+  const mperf = metrics["mobilePerformance"] as MobilePerformanceSnapshot | undefined;
+  if (mperf) {
+    const rows: string[] = [];
+    if (mperf.frames) {
+      rows.push(`<tr><td class="label">Frames</td><td>${mperf.frames.totalFrames} (${mperf.frames.jankyPercent}% janky)</td></tr>`);
+      rows.push(`<tr><td class="label">Frame time</td><td>p50 ${mperf.frames.percentiles.p50}ms · p90 ${mperf.frames.percentiles.p90}ms · p99 ${mperf.frames.percentiles.p99}ms</td></tr>`);
+      if (mperf.frames.missedVsync > 0) rows.push(`<tr><td class="label">Missed vsync</td><td>${mperf.frames.missedVsync}</td></tr>`);
+    }
+    if (mperf.memory) rows.push(`<tr><td class="label">Memory (PSS)</td><td>${Math.round(mperf.memory.totalPssKb / 1024)} MB</td></tr>`);
+    if (mperf.launch.totalTimeMs !== null) rows.push(`<tr><td class="label">Launch</td><td>${mperf.launch.totalTimeMs}ms</td></tr>`);
+    if (rows.length > 0) {
+      cards.push(`<div class="metric-card"><h4>Device Performance</h4><table>${rows.join("")}</table></div>`);
+    }
+  }
+
+  const ma11y = metrics["mobileAccessibility"] as MobileAccessibilitySnapshot | undefined;
+  if (ma11y) {
+    const top = ma11y.issues
+      .slice(0, 5)
+      .map((i) => `<li>[${esc(i.impact)}] ${esc(i.rule)} — ${esc(i.className)}</li>`)
+      .join("");
+    const more = ma11y.issues.length > 5 ? `<p>(and ${ma11y.issues.length - 5} more)</p>` : "";
+    cards.push(
+      `<div class="metric-card"><h4>Device Accessibility</h4><p>${ma11y.summary.issues} issue(s) across ${ma11y.summary.checked} interactive node(s) — structural heuristics only</p>${top ? `<ul class="issue-list">${top}</ul>${more}` : ""}</div>`,
+    );
+  }
+
+  const mnet = metrics["mobileNetwork"] as MobileNetworkSnapshot | undefined;
+  if (mnet) {
+    const totals = mnet.totals
+      ? `${(mnet.totals.rxBytes / 1024 / 1024).toFixed(1)} MB in · ${(mnet.totals.txBytes / 1024 / 1024).toFixed(1)} MB out`
+      : "no per-uid totals";
+    cards.push(
+      `<div class="metric-card"><h4>Device Network <em>(degraded)</em></h4><p>${totals}</p><p class="dim">Per-uid byte totals only — per-request capture needs a proxy.</p></div>`,
     );
   }
 
