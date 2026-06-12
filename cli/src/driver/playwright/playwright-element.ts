@@ -56,4 +56,20 @@ export class PlaywrightDriverElement implements DriverElement {
   textContent(): Promise<string | null> {
     return this.locator.textContent();
   }
+
+  isVisible(): Promise<boolean> {
+    return this.locator.isVisible();
+  }
+
+  isEnabled(): Promise<boolean> {
+    return this.locator.isEnabled();
+  }
+
+  isChecked(): Promise<boolean> {
+    return this.locator.isChecked();
+  }
+
+  inputValue(): Promise<string> {
+    return this.locator.inputValue();
+  }
 }

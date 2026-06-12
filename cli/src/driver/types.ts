@@ -49,6 +49,12 @@ export interface DriverElement {
   waitFor(opts?: DriverElementWaitOptions): Promise<void>;
   boundingBox(): Promise<Box | null>;
   textContent(): Promise<string | null>;
+  /** State queries for `skeptic is …` / `skeptic get value`. Mobile honors what the
+   *  uiautomator node exposes and throws a structured error for the rest. */
+  isVisible(): Promise<boolean>;
+  isEnabled(): Promise<boolean>;
+  isChecked(): Promise<boolean>;
+  inputValue(): Promise<string>;
 }
 
 /**

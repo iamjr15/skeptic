@@ -12,8 +12,8 @@ export interface RunnerOptions {
   bail?: boolean;
   /** Tag filter — when set, only tests whose `test.use({ tags })` includes one of these run. */
   tagFilter?: string[];
-  /** Name filter — when set, only tests whose registered `test(name, …)` matches one of these run.
-   *  Used by MCP/ACP run_test to honor "narrow by test name" without running unrelated tests. */
+  /** Name filter — when set, only tests whose registered `test(name, …)` CONTAINS one of these
+   *  substrings run. Wired to the `run -t/--grep <substring>` flag. */
   nameFilter?: string[];
   /** Sharding — `--shard-split N` + the active index `1..N`. `--shard-all` is treated as
    *  N copies of the same allowlist (each shard gets every test). */
@@ -49,9 +49,11 @@ const filterByTags = (entry: ManifestEntry, tagFilter: string[] | undefined): bo
   return tagFilter.some((t) => tags.includes(t));
 };
 
+// Substring match (case-sensitive), matching the `-t/--grep` convention of vitest/playwright:
+// a test runs if its registered name CONTAINS any of the filter strings.
 const filterByName = (entry: ManifestEntry, nameFilter: string[] | undefined): boolean => {
   if (!nameFilter || nameFilter.length === 0) return true;
-  return nameFilter.includes(entry.name);
+  return nameFilter.some((needle) => entry.name.includes(needle));
 };
 
 const applyOnly = (entries: ManifestEntry[]): ManifestEntry[] => {
@@ -59,7 +61,7 @@ const applyOnly = (entries: ManifestEntry[]): ManifestEntry[] => {
   return onlys.length > 0 ? onlys : entries;
 };
 
-const filterEntries = (
+export const filterEntries = (
   entries: ManifestEntry[],
   tagFilter: string[] | undefined,
   nameFilter: string[] | undefined,

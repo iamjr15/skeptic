@@ -65,6 +65,26 @@ function parsePlatform(value: string): "web" | "android" {
   throw new InvalidArgumentError(`unknown platform "${value}"; expected one of web or android`);
 }
 
+// Signed integer for viewport-pan deltas (dx/dy may be negative). NOT `parseInt`
+// as an argParser — Commander passes (value, previous), so the second arg would
+// be misread as a radix.
+function parseSignedInt(value: string): number {
+  const n = Number(value);
+  if (!Number.isInteger(n)) {
+    throw new InvalidArgumentError(`expected an integer, got "${value}"`);
+  }
+  return n;
+}
+
+// `skeptic is <state> …` — the boolean element-state queries. Validated at the
+// CLI so a typo errors instead of reaching the daemon as an unsupported query.
+function parseIsState(value: string): "visible" | "enabled" | "checked" {
+  if (value === "visible" || value === "enabled" || value === "checked") {
+    return value;
+  }
+  throw new InvalidArgumentError(`unknown state "${value}"; expected one of visible, enabled, checked`);
+}
+
 const SHARD_MAX = 64;
 function parseShardCount(value: string): number {
   const n = parsePositiveInt(value);
@@ -135,6 +155,7 @@ const addRunOptions = (
     )
     .option("--list", "discover tests without running them")
     .option("--tag <tag...>", "filter tests by tag (declared via test.use({ tags }))")
+    .option("-t, --grep <substring>", "run only tests whose name contains this substring")
     .option("--env <KEY=VALUE...>", "set environment variables")
     .option("--no-daemon", "bypass the persistent BrowserServer daemon")
     .option(
@@ -518,11 +539,28 @@ addSessionOpts(
 });
 
 addSessionOpts(
-  program.command("get").description("Read text|box|url|title from the session").argument("<query>", "text | box | url | title").argument("[target]", "@eN or selector"),
+  program.command("get").description("Read text|value|box|url|title from the session").argument("<query>", "text | value | box | url | title").argument("[target]", "@eN or selector"),
 ).action(async (query: string, target: string | undefined, opts: SessionVerbOpts) => {
   const { runGet } = await import("./commands/browser-verbs.js");
   await runGet(query, target, opts);
 });
+
+addSessionOpts(
+  program.command("is").description("Query a boolean element state").argument("<state>", "visible | enabled | checked", parseIsState).argument("<target>", "@eN or selector"),
+).action(async (state: string, target: string, opts: SessionVerbOpts) => {
+  const { runGet } = await import("./commands/browser-verbs.js");
+  await runGet(state, target, opts);
+});
+
+addSessionOpts(
+  program.command("scroll").description("Scroll an element into view (<@ref>) or pan the viewport (--dx/--dy)").argument("[target]", "@eN or selector"),
+)
+  .option("--dx <n>", "horizontal viewport pan (px)", parseSignedInt)
+  .option("--dy <n>", "vertical viewport pan (px)", parseSignedInt)
+  .action(async (target: string | undefined, opts: import("./commands/browser-verbs.js").ScrollVerbOptions) => {
+    const { runScroll } = await import("./commands/browser-verbs.js");
+    await runScroll(target, opts);
+  });
 
 addSessionOpts(
   program.command("screenshot").description("Capture a screenshot of the session (returns a file path)"),

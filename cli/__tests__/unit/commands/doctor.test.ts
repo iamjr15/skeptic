@@ -35,6 +35,8 @@ describe("doctor command", () => {
       expect(report.cwd).toBe(cwd);
       expect(report.checks.some((check) => check.id === "config" && check.status === "pass")).toBe(true);
       expect(report.checks.some((check) => check.id === "home-dir" && check.status === "pass")).toBe(true);
+      expect(report.checks.some((check) => check.id === "daemon")).toBe(true);
+      expect(report.checks.some((check) => check.id === "session-daemon")).toBe(true);
       expect(report.checks.some((check) => check.id === "playwright-launch")).toBe(false);
       expect(report.summary.fail).toBeGreaterThanOrEqual(0);
     } finally {

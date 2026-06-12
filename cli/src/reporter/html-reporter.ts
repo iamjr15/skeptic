@@ -296,6 +296,14 @@ function buildArtifactsPanel(test: TestResult, outputDir: string): string {
     );
   }
 
+  // HAR card — HTTP archive of all network traffic, captured under --har. Linked relative to
+  // the report like the other artifacts; openable in Playwright/DevTools HAR viewers.
+  if (a.har) {
+    cards.push(
+      `<div class="artifact-card"><h4>HAR (network archive)</h4><a href="${esc(reportHref(outputDir, a.har))}">Open HAR archive</a></div>`,
+    );
+  }
+
   // Perf-trace markdown sidecar
   if (a.perfTrace) {
     cards.push(

@@ -85,7 +85,8 @@ export const renderSnapshot = (
   return { yaml, refs, stats };
 };
 
-const formatNumber = (value: number): string => new Intl.NumberFormat("en-US").format(value);
+/** Shared by the snapshot renderer and `inspect`'s stats footer (byte-identical). */
+export const formatNumber = (value: number): string => new Intl.NumberFormat("en-US").format(value);
 
 /**
  * Human-readable snapshot block: YAML tree + per-ref selectorHint/`/url` table +

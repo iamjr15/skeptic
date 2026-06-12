@@ -48,6 +48,8 @@ export interface RunCommandOptions {
   list?: boolean;
   /** Tag filter — multiple `--tag foo --tag bar` accumulates. */
   tag?: string[];
+  /** `-t/--grep <substring>` — run only tests whose name contains this substring. */
+  grep?: string;
   env?: string[];
   /**
    * Internal flag used by `skeptic tui`: prefer Ink and inject the console
@@ -498,6 +500,12 @@ export const runRun = async (
   // exceeds the shard count is left as-is on purpose: it produces a legitimately-empty slice that
   // the exit-code logic below treats as success, not the misleading "No tests found" failure.
   const resolvedShardIndex = Number.isFinite(shardIndex) && shardIndex > 0 ? shardIndex : 1;
+  // Tag each result with its shard so the junit/webhook reporters and the TUI can
+  // label `[shard N]`. Only the partitioning flags make this a sharded run; without
+  // them the index is meaningless and must stay undefined.
+  if (opts.shardSplit !== undefined || opts.shardAll !== undefined) {
+    workerConfig.shardId = resolvedShardIndex;
+  }
   const runOptions = {
     patterns: effectivePatterns,
     reporters,
@@ -505,6 +513,7 @@ export const runRun = async (
     bail: opts.bail ?? config.execution.bail,
     signal: abortController.signal,
     ...(opts.tag ? { tagFilter: opts.tag } : {}),
+    ...(opts.grep ? { nameFilter: [opts.grep] } : {}),
     ...(opts.shardSplit !== undefined
       ? { shardSplit: { count: opts.shardSplit, index: resolvedShardIndex } }
       : {}),

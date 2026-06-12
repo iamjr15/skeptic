@@ -10,7 +10,15 @@ Full audit report and detailed checklist: `plans/sota-readiness-plan.md`.
 - [ ] Fix .gitignore coverage/ pattern hiding ast-extraction.test.ts from CI
 - [ ] SECURITY.md; fix ws vuln; dependabot
 
-## STATUS (verified green: 102 test files, 767 passing, 1 skipped; tsc clean; build clean)
+## STATUS (verified green: 103 test files, 778 passing, 1 skipped; tsc clean; build clean)
+
+### Small-P3-cleanups bucket — DONE & verified (2026-06-12)
+Hybrid (3 parallel leaf agents + lead-owned entangled CLI core) → build+tsc+full-suite green (778 pass).
+- **Done:** `shardId` now populated so reporters/TUI label `[shard N]` · `scroll` verb (element scroll-into-view via `@ref`, viewport pan via `--dx/--dy`) · broadened query surface — new `is visible|enabled|checked` + `get value` (driver seam gained `isVisible/isEnabled/isChecked/inputValue`; web full, Android best-effort for visible/enabled + structured-unsupported for checked/value) · `-t/--grep <substring>` run flag (wired the orphaned `nameFilter`, switched it from exact→substring to match vitest/playwright; +6 unit tests) · HAR card in report.html (leaf agent) · doctor session-daemon visibility + removed dead `getSessionLogPath` (leaf agent) · inspect/snapshot-render `formatNumber` dedup (shared; footer dedup left documented — has byte-significant divergences + no byte-test).
+- **Two audit findings were WRONG (caught by verifying-by-running, not trusting the audit):**
+  - `--features` already works — `bin/skeptic.ts:16` prints the build-time feature map as a fast-path and exits. The audit critic missed the bin entry. Reverted the redundant index.ts handler I'd added (it would've produced a divergent second output).
+  - **Regression fixed:** the prior batch removed `fast-xml-parser` as "unused", but `src/driver/mobile/uiautomator-parse.ts` imports it at runtime. Root cause: the aliased bash `grep` function uses `-I` (skip binary files) and that .ts file reads as binary (non-ASCII unicode-wall chars), so every `grep` over it returns a false negative. Restored to devDeps + `tsup` noExternal (now inlined into dist, verified), corrected the CHANGELOG. Saved a memory ([[bash-grep-false-negatives]]) — use the Grep tool / `/usr/bin/grep`, never the bash `grep`, for any "is this unused?" decision.
+- **Mobile honesty:** Android `is checked`/`get value` reject with structured `[adbQuery:*_unsupported]` errors (NativeNode doesn't retain those attrs) rather than lying.
 
 ### Audit-driven pending-work batch — DONE & verified (2026-06-12)
 Code-verified audit (10 agents) → 8-agent file-partitioned fix → build+tsc+full-suite green (767 pass).

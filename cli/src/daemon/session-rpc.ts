@@ -118,7 +118,13 @@ export async function dispatchSession(
           const el = await resolveTarget(s, p);
           if (query === "text") return { value: await el.textContent() };
           if (query === "box") return { value: await el.boundingBox() };
-          throw new Error(`unsupported query "${query}" (supported: text, box, url, title)`);
+          if (query === "visible") return { value: await el.isVisible() };
+          if (query === "enabled") return { value: await el.isEnabled() };
+          if (query === "checked") return { value: await el.isChecked() };
+          if (query === "value") return { value: await el.inputValue() };
+          throw new Error(
+            `unsupported query "${query}" (supported: text, value, box, visible, enabled, checked, url, title)`,
+          );
         });
         return ok(result);
       }

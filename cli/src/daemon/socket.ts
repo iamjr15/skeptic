@@ -76,7 +76,6 @@ export const getSessionSocketPath = (): string => path.join(getDaemonDir(), "ses
 export const getSessionPidPath = (): string => path.join(getDaemonDir(), "session.pid");
 export const getSessionVersionPath = (): string => path.join(getDaemonDir(), "session.version");
 export const getSessionEnginePath = (): string => path.join(getDaemonDir(), "session.engine");
-export const getSessionLogPath = (): string => path.join(getDaemonDir(), "session.log");
 /** Per-session artifact dir (screenshots, etc.) under the daemon dir. */
 export const getSessionArtifactDir = (name: string): string =>
   path.join(getDaemonDir(), "sessions", name.replace(/[^a-zA-Z0-9_.-]/g, "_") || "default");

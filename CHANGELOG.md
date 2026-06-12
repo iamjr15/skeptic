@@ -58,8 +58,9 @@ skeptic is now **agent-native**: a skill, a CLI, and a daemon. The built-in
   `ai.extract`) were removed.
 - Orphaned dependencies for the deleted subsystems were dropped:
   `@modelcontextprotocol/sdk`, `@agentclientprotocol/sdk`,
-  `@google/generative-ai`, `@faker-js/faker`, `fast-xml-parser`, and
-  `oxc-resolver`.
+  `@google/generative-ai`, `@faker-js/faker`, and `oxc-resolver`.
+  (`fast-xml-parser` was later re-introduced by the Android adb driver to parse
+  uiautomator dumps, so it remains a bundled dependency.)
 
 > Note: `skeptic inspect --connect <url>` (CDP auto-discovery and attach for
 > page inspection) is unrelated to the removed AI attach flow and remains

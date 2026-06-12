@@ -13,7 +13,7 @@ import { ExecutionContext } from "../executor/context.js";
 import { snapshot, type SnapshotOptions, type SnapshotStats } from "../api/snapshot.js";
 import type { AnnotationMapEntry } from "../api/screenshot.js";
 import type { AriaRefEntry } from "../executor/aria-ref-types.js";
-import { buildSelectorHint } from "./snapshot-render.js";
+import { buildSelectorHint, formatNumber } from "./snapshot-render.js";
 
 export interface InspectCommandOptions {
   interactive?: boolean;
@@ -256,6 +256,15 @@ const buildPlaywrightHint = (entry: AriaRefEntry): string | undefined => {
   return `page.getByRole(${JSON.stringify(entry.role)}${namePart})${nthPart}`;
 };
 
+// inspect deliberately does NOT route through snapshot-render's monolithic
+// (yaml -> ref-table -> footer) `formatSnapshotText`: its output diverges in three
+// byte-significant ways that renderer can't reproduce — `--with-playwright-hints`
+// interleaves a `playwrightHint:` line per ref, `--annotated` emits the Annotations
+// ladder BETWEEN the ref table and the footer, and the ref table is gated on the
+// full captured-ref count (`tree.refs.size`) rather than only the rendered refs.
+// `buildSelectorHint` and `formatNumber` are the pieces genuinely shared. Don't
+// fold the stats footer into the shared renderer without first making it
+// composable — it would change inspect's output.
 const emitYaml = (
   tree: RenderedTree,
   opts: InspectCommandOptions,
@@ -354,7 +363,6 @@ const emitJson = (
   process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
 };
 
-const formatNumber = (value: number): string => new Intl.NumberFormat("en-US").format(value);
 
 /**
  * CDP discovery: try `/json/version` → `/json/list` → direct `/devtools/browser`

@@ -91,6 +91,35 @@ describe("dispatchSession", () => {
     expect(resp.result).toEqual({ value: "Go" });
   });
 
+  it("session.query visible/enabled/checked/value read the element state", async () => {
+    const el = {
+      isVisible: vi.fn(async () => true),
+      isEnabled: vi.fn(async () => false),
+      isChecked: vi.fn(async () => true),
+      inputValue: vi.fn(async () => "typed"),
+    };
+    const session = makeSession({ resolveRef: vi.fn(async () => el) as never });
+    const { reg } = makeRegistry({ open: true, session });
+    const q = (query: string) => dispatchSession({ method: "session.query", params: { query, ref: "e1" } }, reg);
+    expect((await q("visible")).result).toEqual({ value: true });
+    expect((await q("enabled")).result).toEqual({ value: false });
+    expect((await q("checked")).result).toEqual({ value: true });
+    expect((await q("value")).result).toEqual({ value: "typed" });
+  });
+
+  it("session.query rejects an unsupported query", async () => {
+    const { reg } = makeRegistry({ open: true });
+    const resp = await dispatchSession({ method: "session.query", params: { query: "bogus", ref: "e1" } }, reg);
+    expect(resp.error).toMatch(/unsupported query "bogus"/);
+  });
+
+  it("session.act scroll pans the viewport (no ref)", async () => {
+    const { reg, session } = makeRegistry({ open: true });
+    const resp = await dispatchSession({ method: "session.act", params: { verb: "scroll", dx: 0, dy: 200 } }, reg);
+    expect(session.scroll).toHaveBeenCalledWith({ dx: 0, dy: 200 });
+    expect(resp.result).toMatchObject({ ok: true, verb: "scroll" });
+  });
+
   it("session.observe errors filters console to error messages", async () => {
     const { reg } = makeRegistry({ open: true });
     const resp = await dispatchSession({ method: "session.observe", params: { collector: "errors" } }, reg);

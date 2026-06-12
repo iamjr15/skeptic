@@ -76,6 +76,9 @@ export default defineConfig({
     "ink",
     "ink-spinner",
     "@axe-core/playwright",
+    // Parses uiautomator XML dumps in the Android driver (src/driver/mobile);
+    // bundled so the published dist is self-contained without a runtime dep.
+    "fast-xml-parser",
   ],
 
   esbuildOptions(options) {

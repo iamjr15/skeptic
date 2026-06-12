@@ -88,6 +88,30 @@ export class AndroidAdbDriverElement implements DriverElement {
     return Promise.resolve(null); // text comes from the snapshot, not a per-node read
   }
 
+  isVisible(): Promise<boolean> {
+    // uiautomator only dumps on-screen nodes; a node with positive area is visible.
+    const b = this.node.bounds;
+    return Promise.resolve(b.x2 > b.x1 && b.y2 > b.y1);
+  }
+
+  isEnabled(): Promise<boolean> {
+    return Promise.resolve(this.node.enabled);
+  }
+
+  isChecked(): Promise<boolean> {
+    // The parsed NativeNode doesn't retain the `checked` attribute; read the
+    // checkbox/switch state from the next `skeptic snapshot` instead.
+    return Promise.reject(
+      new Error("[adbQuery:checked_unsupported] checked state isn't tracked by the Android driver; re-snapshot to read it"),
+    );
+  }
+
+  inputValue(): Promise<string> {
+    return Promise.reject(
+      new Error("[adbQuery:value_unsupported] per-field value reads aren't supported on Android; read the field text from `skeptic snapshot`"),
+    );
+  }
+
   private async clearField(): Promise<void> {
     // Move the caret to the end, then backspace a bounded number of times so
     // multi-char values are fully cleared before fill() types the new value.

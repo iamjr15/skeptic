@@ -139,6 +139,22 @@ export const runGet = (query: string, target: string | undefined, opts: BrowserV
     (d) => `${JSON.stringify((d as { value: unknown }).value)}\n`,
   );
 
+export interface ScrollVerbOptions extends BrowserVerbOptions {
+  dx?: number;
+  dy?: number;
+}
+/** `scroll <@ref|selector>` scrolls that element into view; `scroll --dy N [--dx N]`
+ *  (no target) pans the viewport. Both map onto existing session.act verbs. */
+export const runScroll = (target: string | undefined, opts: ScrollVerbOptions): Promise<void> => {
+  if (target) return actVerb("scrollIntoView", "scrolled into view")(target, {}, opts);
+  return dispatch(
+    "session.act",
+    sessionParams(opts, { verb: "scroll", dx: opts.dx ?? 0, dy: opts.dy ?? 0 }),
+    opts,
+    () => `scrolled by (${opts.dx ?? 0}, ${opts.dy ?? 0})\n`,
+  );
+};
+
 export interface ConsoleVerbOptions extends BrowserVerbOptions {
   errors?: boolean;
 }

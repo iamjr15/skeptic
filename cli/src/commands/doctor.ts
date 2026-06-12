@@ -12,6 +12,10 @@ import {
   getEnginePath,
   getLogPath,
   getPidPath,
+  getSessionEnginePath,
+  getSessionPidPath,
+  getSessionSocketPath,
+  getSessionVersionPath,
   getSocketPath,
   getVersionPath,
 } from "../daemon/socket.js";
@@ -303,6 +307,34 @@ export const collectDoctorReport = async (
       logPath: getLogPath(),
       version: readFirstLine(getVersionPath()),
       engine: readFirstLine(getEnginePath()),
+    },
+  );
+
+  // The interactive-session daemon is a separate headed slot from the headless
+  // test daemon above; report it independently so an attached inspect session is
+  // visible even when the test daemon is down.
+  const sessionPidPath = getSessionPidPath();
+  const sessionPidRaw = readFirstLine(sessionPidPath);
+  const sessionPid = sessionPidRaw ? Number(sessionPidRaw) : null;
+  const sessionDaemonAlive =
+    sessionPid !== null && Number.isFinite(sessionPid) && isPidAlive(sessionPid);
+  push(
+    checks,
+    "session-daemon",
+    sessionDaemonAlive ? "pass" : sessionPidRaw ? "warn" : "info",
+    "Session Daemon",
+    sessionDaemonAlive
+      ? `running at PID ${sessionPid}`
+      : sessionPidRaw
+        ? `stale or inaccessible PID sidecar at ${sessionPidPath}`
+        : "not running",
+    {
+      socketPath: getSessionSocketPath(),
+      pidPath: sessionPidPath,
+      versionPath: getSessionVersionPath(),
+      enginePath: getSessionEnginePath(),
+      version: readFirstLine(getSessionVersionPath()),
+      engine: readFirstLine(getSessionEnginePath()),
     },
   );
 

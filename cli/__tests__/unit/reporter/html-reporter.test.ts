@@ -195,6 +195,36 @@ describe("HtmlReporter", () => {
     expect(html).toContain("performance-trace.md");
   });
 
+  it("renders a HAR (network archive) link relative to the report when artifacts.har is set", () => {
+    const harPath = path.join(tmpDir, "test-0", "search-test.har");
+    const test: TestResult = {
+      ...makeTest("Har Test", "tests/har.spec.ts", "passed"),
+      artifacts: { har: harPath },
+    };
+    const reporter = new HtmlReporter(tmpDir);
+    reporter.onRunComplete({
+      total: 1,
+      passed: 1,
+      failed: 0,
+      duration_ms: 1500,
+      tests: [test],
+    });
+
+    const html = fs.readFileSync(path.join(tmpDir, "report.html"), "utf-8");
+    expect(html).toContain("HAR (network archive)");
+    expect(html).toContain('href="test-0/search-test.har"');
+    // The absolute on-disk path must NOT appear as the href.
+    expect(html).not.toContain(`href="${harPath}"`);
+  });
+
+  it("omits the HAR card when artifacts.har is absent", () => {
+    const reporter = new HtmlReporter(tmpDir);
+    reporter.onRunComplete(makeSummary());
+
+    const html = fs.readFileSync(path.join(tmpDir, "report.html"), "utf-8");
+    expect(html).not.toContain("HAR (network archive)");
+  });
+
   it("uses contextual alt text on screenshots, not 'failure screenshot' on passing tests", () => {
     const screenshotPath = path.join(tmpDir, "homepage.png");
     fs.writeFileSync(screenshotPath, Buffer.alloc(64 * 1024, 1));
