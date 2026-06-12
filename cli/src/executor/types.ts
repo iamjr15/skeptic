@@ -58,6 +58,8 @@ export interface TestArtifacts {
   /** WebM video plus its true (recorded) dimensions. No `durationMs` — Playwright's Video
    *  class exposes only `path()/saveAs()/delete()`. */
   video?: { path: string; width: number; height: number };
+  /** HAR (HTTP archive) of network traffic, captured under `--har`. */
+  har?: string;
   /** Per-step screenshot files captured during the run, in order. Mirrors `ctx.screenshots`. */
   screenshots?: string[];
   /** Markdown sidecar emitted under `--observability-write-sidecars`. */
@@ -77,6 +79,23 @@ export interface TestArtifacts {
   accessibilityAudit?: string;
   /** Per-test full Accessibility JSON sidecar. Written whenever an a11y snapshot exists. */
   accessibilityJson?: string;
+}
+
+/** A resolvable element present on the page at a failure point — deterministic
+ *  self-healing input: the agent picks the right selectorHint to patch the spec. */
+export interface HealingCandidate {
+  ref: string;
+  role: string;
+  name: string;
+  selectorHint: string;
+}
+
+/** Captured when a test fails while its page is still live: the live URL plus the
+ *  interactive elements (with stable selectorHints) the agent can heal against. */
+export interface HealingInfo {
+  url: string;
+  yaml: string;
+  candidates: HealingCandidate[];
 }
 
 export interface TestResult {
@@ -108,6 +127,9 @@ export interface TestResult {
    * `status` is `"passed"`; this flag preserves the "was flaky" signal so reports can surface it.
    */
   flaky?: boolean;
+  /** Present when a failed test's page was still live: a fresh snapshot + selectorHint
+   *  candidates the agent can use to heal the broken locator. */
+  healing?: HealingInfo;
   /** All on-disk artifacts produced by this test. Always present; empty object when no artifacts captured. */
   artifacts: TestArtifacts;
 }

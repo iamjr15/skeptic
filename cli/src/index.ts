@@ -90,6 +90,7 @@ const addRunOptions = (
 
   return withCommonOptions
     .option("--trace", "record Playwright trace for each test")
+    .option("--har", "capture a HAR (HTTP archive) of network traffic per test")
     .option(
       "--observability",
       "enable the full observability bundle: settle + fullPage + perf+net+console+a11y(auto) + sidecar md",
@@ -177,6 +178,18 @@ Examples:
   .action(async (specs: string[], cmdOpts: RunCommandOptions) => {
     const { runRun } = await import("./commands/run.js");
     await runRun(specs.length > 0 ? specs : undefined, { ...cmdOpts, forceTui: true });
+  });
+
+program
+  .command("mail")
+  .description("Start a local SMTP sink and print the one-time code from a verification email")
+  .option("--to <address>", "only match emails addressed to this recipient (substring)")
+  .option("--port <n>", "SMTP listen port (point the app's SMTP here)", parsePositiveInt, 2525)
+  .option("--timeout <ms>", "how long to wait for the email", parsePositiveInt, 60_000)
+  .option("--json", "machine-readable output (includes full message)")
+  .action(async (cmdOpts: import("./commands/mail.js").MailCommandOptions) => {
+    const { runMail } = await import("./commands/mail.js");
+    await runMail(cmdOpts);
   });
 
 program

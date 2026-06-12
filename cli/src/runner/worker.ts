@@ -1,5 +1,6 @@
 import { isMainThread, parentPort, workerData } from "node:worker_threads";
 import { mkdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -25,9 +26,12 @@ import { AccessibilityCollector } from "../observability/collectors/accessibilit
 import type { Collector, CollectorName } from "../observability/types.js";
 import type {
   ArtifactRuntimeConfig,
+  HealingInfo,
   StepResult,
   TestResult,
 } from "../executor/types.js";
+import { captureAriaSnapshot } from "../executor/aria-snapshot-capture.js";
+import { renderSnapshot } from "../commands/snapshot-render.js";
 import { writeSidecars } from "../executor/sidecars.js";
 import { DEFAULT_ARTIFACT_CONFIG } from "../executor/context.js";
 import { OBSERVABILITY_SETTLE_PROFILE, DISABLED_SETTLE } from "../executor/visual-settle.js";
@@ -123,6 +127,33 @@ const captureFailureScreenshot = async (
   }
 };
 
+/** On failure, snapshot the live page's interactive elements + stable
+ *  selectorHints so the agent can heal the broken locator. Best-effort. */
+const captureHealing = async (page: Page): Promise<HealingInfo | undefined> => {
+  if (!page || page.isClosed()) return undefined;
+  try {
+    const capture = await captureAriaSnapshot(page, "body", {
+      viewport: true,
+      includeCursorInteractive: true,
+      extractLinkHrefs: true,
+    });
+    const rendered = renderSnapshot(capture, { interactive: true });
+    if (rendered.refs.length === 0) return undefined;
+    return {
+      url: page.url(),
+      yaml: rendered.yaml,
+      candidates: rendered.refs.slice(0, 25).map((r) => ({
+        ref: r.ref,
+        role: r.role,
+        name: r.name,
+        selectorHint: r.selectorHint,
+      })),
+    };
+  } catch {
+    return undefined;
+  }
+};
+
 const runOneTest = async (
   test: RegisteredTest,
   registry: FileRegistry,
@@ -170,12 +201,14 @@ const runOneTest = async (
   // Base URL so relative `page.goto('/x')` resolves; mirrors the ExecutionContext.baseUrl below.
   const resolvedUrl = config.baseUrl ?? merged.url;
 
+  const harPath = path.join(testDir, `${safeName}.har`);
   const context: BrowserContext = await browser.newContext({
     viewport,
     ...(resolvedUrl ? { baseURL: resolvedUrl } : {}),
     ...(deviceProfile?.dpr ? { deviceScaleFactor: deviceProfile.dpr } : {}),
     ...(deviceProfile?.userAgent ? { userAgent: deviceProfile.userAgent } : {}),
     ...(config.video ? { recordVideo: { dir: testDir, size: videoSize } } : {}),
+    ...(config.har ? { recordHar: { path: harPath, content: "embed" } } : {}),
   });
 
   // Cookie extraction (opt-in). Mirrors the legacy engine: gated behind the build feature flag,
@@ -361,6 +394,8 @@ const runOneTest = async (
     testError = err instanceof Error ? err.message : String(err);
     // Capture before teardown closes the context — the page is still live here.
     failureScreenshot = await captureFailureScreenshot(page, testDir, config);
+    const healing = await captureHealing(page);
+    if (healing) result.healing = healing;
   } finally {
     if (ceilingTimer) clearTimeout(ceilingTimer);
   }
@@ -482,6 +517,15 @@ const runOneTest = async (
   }
 
   await context.close().catch(() => {});
+
+  // HAR is flushed to disk by `context.close()`; attach it once the file exists.
+  if (config.har) {
+    try {
+      if (existsSync(harPath)) result.artifacts.har = harPath;
+    } catch {
+      /* best-effort */
+    }
+  }
 
   result.duration_ms = Math.round(performance.now() - start);
   if (testError) {

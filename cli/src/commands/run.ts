@@ -38,6 +38,7 @@ export interface RunCommandOptions {
   shardAll?: number;
   shardIndex?: number;
   trace?: boolean;
+  har?: boolean;
   observability?: boolean;
   fullPageScreenshot?: boolean;
   visualSettle?: boolean;
@@ -149,6 +150,7 @@ export const buildWorkerConfig = (
     screenshotOnFailure: defaults.execution.screenshotOnFailure,
     video: opts.video ?? false,
     trace: opts.trace ?? false,
+    har: opts.har ?? false,
     headed: opts.headed ?? !defaults.browser.headless,
     browserEngine: defaults.browser.engine,
     viewport,

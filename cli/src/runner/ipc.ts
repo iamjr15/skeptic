@@ -59,6 +59,8 @@ export interface WorkerStartConfig {
   visualSettle?: boolean;
   video: boolean;
   trace: boolean;
+  /** Capture a HAR (HTTP archive) of all network traffic to `<test>.har`. */
+  har?: boolean;
   headed: boolean;
   browserEngine: "chromium" | "firefox" | "webkit";
   viewport?: { width: number; height: number };
