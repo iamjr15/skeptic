@@ -170,7 +170,7 @@ export const formatPerfTraceMarkdown = (
   }
 
   const net = input.network;
-  if (net) {
+  if (net && net.issues) {
     parts.push("## Network", "");
     parts.push(`${net.requests.length} request(s) captured.`);
     parts.push("");

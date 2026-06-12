@@ -10,6 +10,7 @@ export type {
   FileRegistry,
 } from "./test.js";
 export type { SkepticFixture, ActionEvent } from "./fixture.js";
+export type { DeviceApi, DeviceSnapshot, DeviceRef } from "./device-fixture.js";
 export type { SnapshotTree, SnapshotOptions, ByRoleOptions } from "./snapshot.js";
 export type { ScreenshotOptions, ScreenshotResult } from "./screenshot.js";
 export type {

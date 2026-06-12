@@ -63,6 +63,14 @@ export interface WorkerStartConfig {
   har?: boolean;
   headed: boolean;
   browserEngine: "chromium" | "firefox" | "webkit";
+  /**
+   * Execution platform. "web" (default) runs the Playwright page path; "android"
+   * drives an `adb` device session and passes the spec a `device` fixture instead
+   * of a `page`. The runner/discovery/reporting/evidence pipeline is shared.
+   */
+  platform?: "web" | "android";
+  /** Device/emulator serial for `--platform android` (defaults to the only attached device). */
+  target?: string;
   viewport?: { width: number; height: number };
   /**
    * CLI `--video-size <WxH>` override. Wins over `test.use({ videoSize })`

@@ -193,7 +193,17 @@ export class AndroidAdbDriverSession implements DriverSession {
       .filter(Boolean)
       .slice(-200)
       .map((line) => ({ type: logcatLevel(line), text: line, timestamp: Date.now() }));
-    return { messages, summary: { total: messages.length, errorCount: messages.filter((m) => m.type === "error").length } };
+    // Shape-compatible with the web ConsoleSnapshot.summary so shared reporters render it.
+    return {
+      messages,
+      summary: {
+        total: messages.length,
+        errorCount: messages.filter((m) => m.type === "error").length,
+        warningCount: messages.filter((m) => m.type === "warning").length,
+        infoCount: messages.filter((m) => m.type === "info").length,
+        redactionDisabled: false,
+      },
+    };
   }
 
   private async collectAccessibility(): Promise<unknown> {

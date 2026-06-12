@@ -363,7 +363,7 @@ function buildMetricsSection(metrics: Record<string, unknown> | undefined): stri
   }
 
   const net = metrics["network"] as NetworkSnapshot | undefined;
-  if (net) {
+  if (net && net.issues) {
     const issues: string[] = [];
     if (net.issues.failedRequests.length > 0) {
       issues.push(

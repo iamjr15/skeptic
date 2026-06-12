@@ -133,6 +133,36 @@ Rules:
 - Do not paste CLI `@eN` refs into specs. Use `selectorHint` from `inspect`, or `tree.byRef("eN")` only for refs from the same in-test `snapshot(page)` call.
 - Add `screenshot("name")` for states that would help debug a failure.
 
+### Android specs
+
+The same `test`/`expect`, runner, and `results.json` drive Android — run with
+`skeptic run <spec> --platform android` (`--target <serial>` to pick a device).
+Specs get a **`device`** fixture instead of `page` (uiautomator refs, not
+Playwright locators):
+
+```ts
+import { test, expect } from "skeptic-cli";
+
+test("sessions screen loads", async ({ device }) => {
+  await device.open("app.fieldwork.android");      // package or scheme:// deep link
+  let snap = await device.snapshot();              // refs + selectorHints
+  if (snap.has("text=OK")) {                       // dismiss a dialog if present
+    await device.click("text=OK");
+    snap = await device.snapshot();                // re-snapshot after the change
+  }
+  expect(snap.has("Search sessions")).toBe(true);  // match selectorHint / name / role:name
+  await device.screenshot("sessions");
+});
+```
+
+- Targets accept an `@eN` ref from the **last** `device.snapshot()` or a
+  selectorHint (`res=`/`desc=`/`text=`). Re-`snapshot()` after every screen change.
+- `device.is("visible"|"enabled"|"checked", target)` and `device.get("text"|"value", target)`
+  read state; `device.scroll("@e5")` (into view) or `device.scroll({ dy: 600 })` (pan).
+- The run auto-attaches mobile evidence to `results.json`: `console` (logcat),
+  `mobilePerformance` (gfxinfo/meminfo/launch), `mobileAccessibility`, `mobileNetwork`.
+- Using `page` in an android spec (or `device` in a web spec) throws a clear error.
+
 ## Observability Checks
 
 Use `--observability` for real QA evidence. In specs, assert the signals that match the risk:

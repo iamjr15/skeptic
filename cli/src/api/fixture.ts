@@ -23,9 +23,13 @@ import {
   wrapPageWithCursor,
 } from "./page-proxy.js";
 import { friendlyLabel, PERSISTENT_LABEL_ACTIONS } from "./labels.js";
+import { unavailable, type DeviceApi } from "./device-fixture.js";
 
 export interface SkepticFixture {
   page: Page;
+  /** The Android device API under `--platform android`. On web it throws if touched
+   *  (web specs use `page`); on android `page`/`snapshot`/`observability` throw instead. */
+  device: DeviceApi;
   ctx: ExecutionContext;
   /** Wraps a fixture-method body in the abort-aware boundary. Re-checks ctx.abortReason
    *  before each await, surfaces a clean error after a hard-timeout, and emits a
@@ -164,6 +168,7 @@ export const buildFixture = (
 
   return {
     page: exposedPage,
+    device: unavailable("device", "android"),
     ctx,
     runAction,
     snapshot: fixtureSnapshot,

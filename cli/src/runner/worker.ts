@@ -558,6 +558,178 @@ const runOneTest = async (
   return result;
 };
 
+const resolveAndroidSerial = async (config: WorkerStartConfig): Promise<string> => {
+  if (config.target) return config.target;
+  const { listDevices } = await import("../driver/mobile/adb.js");
+  const devices = (await listDevices().catch(() => [])).filter((d) => d.state === "device");
+  if (devices.length === 0) {
+    throw new Error(
+      "[android] no device/emulator found. Start one (or pass --target <serial>); `skeptic devices` lists them.",
+    );
+  }
+  return devices[0]!.serial;
+};
+
+/**
+ * Android counterpart to runOneTest: drives an `adb` DriverSession + the `device`
+ * fixture instead of a Playwright page. Shares the runner's hook/hard-timeout/result
+ * skeleton verbatim; only the platform-specific bits differ (no browser/video/trace;
+ * evidence comes from the mobile collectors via session.collectEvidence).
+ */
+const runOneTestAndroid = async (
+  test: RegisteredTest,
+  registry: FileRegistry,
+  config: WorkerStartConfig,
+): Promise<TestResult> => {
+  const start = performance.now();
+  for (const [key, value] of Object.entries(config.envOverrides)) process.env[key] = value;
+
+  const safeName = sanitizeName(test.name || `test-${test.ordinal}`);
+  const testDir = path.join(config.outputDir, `${fileSlug(registry.file)}-${safeName}-${test.ordinal}`);
+  await mkdir(testDir, { recursive: true });
+  const merged = { ...registry.fileUse, ...test.use };
+  const effectiveTimeout = merged.timeout ?? config.timeout;
+  const effectiveHardTimeout = merged.hardTimeout ?? config.hardTimeout;
+
+  const { createAdb } = await import("../driver/mobile/adb.js");
+  const { AndroidAdbDriverSession } = await import("../driver/mobile/adb-session.js");
+  const { buildDeviceFixture, unavailable } = await import("../api/device-fixture.js");
+  const serial = await resolveAndroidSerial(config);
+  const session = new AndroidAdbDriverSession(createAdb({ serial }), serial, testDir);
+
+  const artifactConfig: ArtifactRuntimeConfig = {
+    fullPageScreenshots: false,
+    visualSettle: DISABLED_SETTLE,
+    blankFrameDetection: "off",
+    writeSidecars: false,
+  };
+  const ctx = new ExecutionContext(
+    unavailable("page", "android") as unknown as Page,
+    config.baseUrl ?? merged.url ?? "",
+    testDir,
+    path.dirname(registry.file),
+    effectiveTimeout,
+    [],
+    artifactConfig,
+  );
+
+  const stepResults: StepResult[] = [];
+  const onAction = (event: ActionEvent): void => {
+    if (event.status === "completed") {
+      stepResults.push({ command: event.label, args: {}, status: "passed", duration_ms: event.durationMs ?? 0 });
+    } else if (event.status === "failed") {
+      stepResults.push({ command: event.label, args: {}, status: "failed", duration_ms: event.durationMs ?? 0, error: event.error });
+    }
+    post({
+      type: "test:action",
+      testId: test.id,
+      label: event.label,
+      status: event.status,
+      ...(event.durationMs !== undefined ? { durationMs: event.durationMs } : {}),
+      ...(event.error !== undefined ? { error: event.error } : {}),
+    });
+  };
+
+  const fixture = buildDeviceFixture(session, ctx, { onAction });
+
+  const result: TestResult = {
+    name: test.name,
+    file: registry.file,
+    testIndex: test.ordinal,
+    status: "passed",
+    duration_ms: 0,
+    steps: stepResults,
+    artifacts: {},
+    ...(config.shardId !== undefined ? { shardId: config.shardId } : {}),
+  };
+
+  let ceilingTimer: NodeJS.Timeout | undefined;
+  const ceiling = new Promise<"hard-timeout">((resolve) => {
+    ceilingTimer = setTimeout(() => {
+      ctx.abortReason = `test timeout exceeded (${effectiveHardTimeout}ms)`;
+      resolve("hard-timeout");
+    }, effectiveHardTimeout);
+  });
+
+  let testError: string | undefined;
+  let failureScreenshot: string | undefined;
+  try {
+    for (const hook of registry.beforeEach) {
+      await fixture.runAction("beforeEach", () => Promise.resolve(hook.fn(fixture)));
+    }
+    const outcome = await Promise.race([
+      Promise.resolve(test.skip ? undefined : registry.tests[test.ordinal]?.fn(fixture)).then(() => "ok" as const),
+      ceiling,
+    ]);
+    if (outcome === "hard-timeout") {
+      result.status = "failed";
+      testError = ctx.abortReason ?? `test timeout exceeded (${effectiveHardTimeout}ms)`;
+    }
+  } catch (err) {
+    result.status = "failed";
+    testError = err instanceof Error ? err.message : String(err);
+    failureScreenshot = await session.screenshot(`failure-${safeName}`).then((s) => s.path).catch(() => undefined);
+  } finally {
+    if (ceilingTimer) clearTimeout(ceilingTimer);
+  }
+  if (failureScreenshot) ctx.addScreenshot(failureScreenshot);
+
+  ctx.inTeardown = true;
+  try {
+    for (const hook of registry.afterEach) {
+      try {
+        await fixture.runAction("afterEach", () => Promise.resolve(hook.fn(fixture)));
+      } catch (err) {
+        post({ type: "log", level: "warn", message: `[skeptic] afterEach failed: ${err instanceof Error ? err.message : String(err)}` });
+      }
+    }
+  } finally {
+    ctx.inTeardown = false;
+  }
+
+  // Mobile evidence → metrics. `console` stays under its key (shape-compatible with
+  // the web ConsoleSnapshot); perf/a11y/network are namespaced `mobile*` so the
+  // web reporters (which read the web shapes under `performance`/`network`/
+  // `accessibility`) never mis-interpret the platform-distinct mobile snapshots.
+  // results.json (json reporter) serializes them all. Skip when aborted or skipped.
+  const metricsMap: Record<string, unknown> = {};
+  if (ctx.abortReason === null && !test.skip) {
+    try {
+      const ev = await session.collectEvidence();
+      if (ev["console"]) metricsMap["console"] = ev["console"];
+      if (ev["performance"]) metricsMap["mobilePerformance"] = ev["performance"];
+      if (ev["accessibility"]) metricsMap["mobileAccessibility"] = ev["accessibility"];
+      if (ev["network"]) metricsMap["mobileNetwork"] = ev["network"];
+    } catch (err) {
+      post({ type: "log", level: "warn", message: `[skeptic] device evidence failed: ${err instanceof Error ? err.message : String(err)}` });
+    }
+  }
+  if (Object.keys(metricsMap).length > 0) result.metrics = metricsMap;
+  if (ctx.screenshots.length > 0) result.artifacts.screenshots = [...ctx.screenshots];
+
+  await session.close().catch(() => {});
+
+  result.duration_ms = Math.round(performance.now() - start);
+  if (testError) {
+    result.status = "failed";
+    result.steps.push({
+      command: "test",
+      args: { name: test.name },
+      status: "failed",
+      duration_ms: result.duration_ms,
+      error: testError,
+      ...(failureScreenshot ? { screenshot: failureScreenshot } : {}),
+    });
+  } else if (test.skip) {
+    result.status = "passed";
+    result.skipped = true;
+    result.steps.push({ command: "test", args: { name: test.name }, status: "skipped", duration_ms: 0 });
+  } else {
+    result.steps.push({ command: "test", args: { name: test.name }, status: "passed", duration_ms: result.duration_ms });
+  }
+  return result;
+};
+
 const handleExecute = async (start: WorkerStartMessage): Promise<void> => {
   let registry: FileRegistry | null = null;
   try {
@@ -574,6 +746,52 @@ const handleExecute = async (start: WorkerStartMessage): Promise<void> => {
 
   const allowSet = new Set(start.allowlist);
   const finished: string[] = [];
+
+  // Android path: drive an adb device session instead of a browser. The
+  // discovery/IPC/reporting pipeline above and below is shared verbatim.
+  if (start.config.platform === "android") {
+    try {
+      for (const test of registry.tests) {
+        if (!allowSet.has(test.id)) continue;
+        post({
+          type: "test:start",
+          testId: test.id,
+          ordinal: test.ordinal,
+          name: test.name,
+          file: registry.file,
+          ...(start.config.shardId !== undefined ? { shardId: start.config.shardId } : {}),
+        });
+        let result: TestResult;
+        try {
+          result = await runOneTestAndroid(test, registry, start.config);
+        } catch (err) {
+          result = {
+            name: test.name,
+            file: registry.file,
+            status: "failed",
+            duration_ms: 0,
+            steps: [
+              {
+                command: "test",
+                args: { name: test.name },
+                status: "error",
+                duration_ms: 0,
+                error: err instanceof Error ? err.message : String(err),
+              },
+            ],
+            artifacts: {},
+            ...(start.config.shardId !== undefined ? { shardId: start.config.shardId } : {}),
+          };
+        }
+        finished.push(test.id);
+        post({ type: "test:complete", testId: test.id, ordinal: test.ordinal, result });
+      }
+    } finally {
+      post({ type: "file:complete", file: registry.file, finished });
+      process.exit(0);
+    }
+    return;
+  }
 
   let pw: Awaited<ReturnType<typeof loadPlaywright>>;
   try {

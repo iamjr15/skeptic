@@ -112,6 +112,8 @@ const addRunOptions = (
     .option("--timeout <ms>", "soft per-action default timeout in ms", parsePositiveInt)
     .option("--hard-timeout <ms>", "hard per-test ceiling in ms", parsePositiveInt)
     .option("--device <id>", "device profile for viewport emulation")
+    .option("--platform <platform>", "web (default) | android — drive an adb device, passing specs a `device` fixture", parsePlatform)
+    .option("--target <serial>", "device/emulator serial for --platform android (defaults to the only attached device)")
     .option("--reporter <format...>", "reporter format(s): console, json, junit, html")
     .option("--output <dir>", "output directory for reports")
     .option("--cookies", "enable browser cookie extraction (opt-in)")

@@ -10,7 +10,31 @@ Full audit report and detailed checklist: `plans/sota-readiness-plan.md`.
 - [ ] Fix .gitignore coverage/ pattern hiding ast-extraction.test.ts from CI
 - [ ] SECURITY.md; fix ws vuln; dependabot
 
-## STATUS (verified green: 104 test files, 791 passing, 1 skipped; tsc clean; build clean)
+## STATUS (verified green: 105 test files, 797 passing, 1 skipped; tsc clean; build clean)
+
+### `skeptic run --platform android` (spec path) — DONE & LIVE-VERIFIED (2026-06-12)
+The web/mobile co-equal "same specs" vision is now real: the SAME `test`/`expect`, runner
+(discovery/workers/IPC/sharding/reporting), and `results.json` drive Android. Verified
+end-to-end against `app.fieldwork.android` on emulator-5554 — a passing spec exits 0, a
+failing assertion exits 1 with a real failure screenshot, and the full mobile evidence
+bundle lands in results.json.
+- **New `device` fixture** (`src/api/device-fixture.ts`, `DeviceApi`): specs get `device`
+  (uiautomator snapshot→ref→act) instead of `page`. `open/snapshot/click/fill/type/press/
+  hover/check/uncheck/select/scroll/screenshot/is/get/wait`; `snapshot()` returns refs +
+  `has(query)`/`ref(query)` matchers (selectorHint / name / role:name). Targets accept
+  `@eN` or a selectorHint. Web-only fields (`page`/`snapshot`/`observability`) throw a
+  clear error under android, and vice-versa (`device` on web) — via a throwing Proxy.
+- **Worker android branch** (`runOneTestAndroid`): mirrors `runOneTest`'s hook/hard-timeout/
+  result skeleton verbatim but drives an `AndroidAdbDriverSession` (no browser/video/trace);
+  evidence comes from `session.collectEvidence()`. Mobile metrics are namespaced
+  (`mobilePerformance`/`mobileAccessibility`/`mobileNetwork`; `console` stays compatible) so
+  web reporters never mis-read the platform-distinct shapes; hardened html/perf-trace
+  reporters against non-web network shapes too.
+- **Flags:** `run --platform android` + `--target <serial>` (validated, threaded through
+  WorkerStartConfig); browser pre-warm skipped for android. SKILL.md "Android specs"
+  section + 6 device-fixture unit tests. No web regression (797 pass).
+- **Follow-up (not blocking):** `skeptic scaffold --platform android` (emit a device-spec
+  skeleton); richer reporter rendering of the mobile metrics (currently in results.json).
 
 ### Mobile parity collectors — DONE & LIVE-VERIFIED on a real emulator (2026-06-12)
 Emulator-5554 (Android 16) running the real `app.fieldwork.android` app. The previously

@@ -24,6 +24,10 @@ export interface RunCommandOptions {
   timeout?: number;
   hardTimeout?: number;
   device?: string;
+  /** `--platform android` drives an adb device instead of a browser. */
+  platform?: "web" | "android";
+  /** `--target <serial>` selects the device/emulator for --platform android. */
+  target?: string;
   reporter?: string[];
   output?: string;
   cookies?: boolean;
@@ -190,6 +194,10 @@ export const buildWorkerConfig = (
   if (opts.daemon === false) workerConfig.noDaemon = true;
   if (typeof opts.daemonIdleTimeout === "number") {
     workerConfig.daemonIdleTimeoutSeconds = opts.daemonIdleTimeout;
+  }
+  if (opts.platform === "android") {
+    workerConfig.platform = "android";
+    if (opts.target) workerConfig.target = opts.target;
   }
   return workerConfig;
 };
@@ -464,16 +472,22 @@ export const runRun = async (
       runUrl: resolveRunUrl(),
       useInkTui,
     }),
-    prewarmDaemonIfNeeded(process.argv, {
-      engine: workerConfig.browserEngine,
-      headed: workerConfig.headed,
-      cliVersion: __SKEPTIC_CLI_VERSION__,
-      noDaemon: opts.daemon === false,
-      ...(typeof opts.daemonIdleTimeout === "number"
-        ? { idleTimeoutSeconds: opts.daemonIdleTimeout }
-        : {}),
-    }),
+    // The Android path uses no browser, so skip the BrowserServer pre-warm entirely.
+    opts.platform === "android"
+      ? Promise.resolve(false)
+      : prewarmDaemonIfNeeded(process.argv, {
+          engine: workerConfig.browserEngine,
+          headed: workerConfig.headed,
+          cliVersion: __SKEPTIC_CLI_VERSION__,
+          noDaemon: opts.daemon === false,
+          ...(typeof opts.daemonIdleTimeout === "number"
+            ? { idleTimeoutSeconds: opts.daemonIdleTimeout }
+            : {}),
+        }),
   ]);
+
+  // Android runs never touch the browser daemon; keep workers off the connect path.
+  if (opts.platform === "android") workerConfig.noDaemon = true;
 
   if (!prewarmed && opts.daemon !== false) {
     workerConfig.noDaemon = true;
