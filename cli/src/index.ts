@@ -179,6 +179,18 @@ Examples:
     await runRun(specs.length > 0 ? specs : undefined, { ...cmdOpts, forceTui: true });
   });
 
+program
+  .command("scaffold")
+  .description("Generate a TypeScript spec skeleton from a live page (deterministic, no AI)")
+  .argument("<url>", "URL to scaffold a spec from")
+  .option("-o, --output <dir>", "output directory", "tests")
+  .option("--name <name>", "base name for the spec file")
+  .option("--headed", "show the browser")
+  .action(async (url: string, cmdOpts: import("./commands/scaffold.js").ScaffoldCommandOptions) => {
+    const { runScaffold } = await import("./commands/scaffold.js");
+    await runScaffold(url, cmdOpts);
+  });
+
 const addCmd = program
   .command("add")
   .description("Add integrations and scaffolding");

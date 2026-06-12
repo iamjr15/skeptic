@@ -27,9 +27,19 @@ Remaining LARGE builds — **fully planned, execution deferred by owner ("plan o
   1. [x] **Foundation: `Driver`/`DriverSession` abstraction — DONE & verified.** src/driver/ (types + PlaywrightDriver/Session/Element + barrel); additive (zero existing-file changes); 10 new tests (8 unit + 2 real-browser smoke proving open→snapshot→resolveRef→click + ref invalidation). Suite 717 passing, tsc clean. Assumptions validated via /research (Playwright aria-ref CONFIRMED, idb CONFIRMED-WITH-CAVEAT).
   2. [x] **Change A: CLI interaction verbs + daemon-held sessions — DONE & verified.** SessionRegistry + session-rpc dispatch + headed session daemon + client + 18 verb commands (open/snapshot/click/fill/type/press/hover/check/uncheck/select/get/screenshot/console/wait/list/close) + shared snapshot-render. Real e2e: @eN refs persist across separate CLI processes (open→snapshot→click), stale-ref detection works. SKILL.md/README/AGENTS rewritten (MCP/AI removed). Suite 736 passing, startup 90ms. 2 real bugs found+fixed in verification (registry create-race, headed-handshake UX).
   3. [~] Change B: Mobile drivers — **Android adb driver BUILT & unit-verified.** src/driver/mobile/ (adb wrapper, uiautomator XML→CaptureResult parser, AndroidAdbDriverSession+element, AdbDriver factory, selectorHint resolver). 11 unit tests incl. a real emulator-captured Settings fixture; parser produces clean clickable rows with res= hints + tap coords; dump retry-loop handles the "null root" transient. `--platform android` wired through daemon/registry/verbs (folds into engine identity). SKILL.md mobile section added (RN/Compose/Flutter caveats, unicode wall). Suite 747 passing, startup 100ms. **Verification:** parser validated against a REAL uiautomator dump captured from the emulator (13 clean clickable rows, res= hints, tap coords); 11 unit tests cover parse/role/hint/nth/off-viewport/tap-coords/resolve/unicode-reject/dump-retry. The dump retry-loop confirmed against the real "null root node" transient (capture succeeded on attempt 5). Full live verb-loop on this box was blocked by the degraded headless-swiftshader emulator's unbounded dump latency under disk pressure — an environment artifact, not a code issue (a healthy device/CI emulator runs ~1-3s/dump per the research). iOS sim (simctl+idb) deferred — idb not installed here.
-- [ ] Adjacent: deterministic `skeptic scaffold` (recover import-graph/route-resolver from git)
-- [ ] P2 worker-reuse single-compile (deferred — complex)
-- [ ] git hygiene: untrack internal plans/tasks/.claude at commit time
+- [x] **Deterministic `skeptic scaffold <url>` — DONE & verified** (opens page via the Driver, snapshots interactive refs, emits a tests/<slug>.spec.ts skeleton; no LLM; real-browser integration test). Replaces the removed `generate`.
+- [x] git hygiene: untracked personal `.claude` runtime state at commit time.
+- [x] **Pushed to main** (f577364) + scaffold/hardening follow-up.
+- [x] Mobile dump-hardening: bounded dump budget (~30s) → fails fast with an actionable diagnostic instead of hanging on an unresponsive device.
+
+### Environment-blocked here (need a different machine/setup — NOT built blind)
+- [ ] iOS simulator driver (`--platform ios-sim`, simctl + idb): **no simctl/idb/simulator on this box** — fully designed in plans/velvety-scribbling-ullman.md; build it where it can be run+verified (full Xcode + `brew install idb-companion`).
+- [ ] Skill-evals harness (real `claude -p`/`codex exec` scored on skill compliance): CLIs exist but it needs installing the new skill into a sandbox + recursive agent runs that modify `~/.claude` — do in a dedicated setup.
+
+### Remaining (verifiable, but risky/large — pick deliberately)
+- [ ] P2 worker-reuse single-compile (deep runner surgery; ~6-11s on big suites; flakiness risk).
+- [ ] Phase-4 differentiators: self-healing-as-agent-loop, email/OTP + dynamic data, HAR export. New features.
+- [x] P10 flat compact render — already implemented (compactTree drops structural noise).
 
 ## Phase 1 — Agent-native restructure + fix the agent loop
 - [x] Delete src/mcp/, commands/mcp.ts, commands/acp.ts, acp-prompt-parser **(DONE — build green, 599 tests pass, bundle 2.33MB→1.74MB; salvage of session/path-containment deferred to verb bundle)**
