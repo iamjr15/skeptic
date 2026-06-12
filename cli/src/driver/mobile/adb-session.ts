@@ -98,7 +98,16 @@ export class AndroidAdbDriverSession implements DriverSession {
     return new AndroidAdbDriverElement(this.adb, node);
   }
 
-  async screenshot(name: string, _opts?: ScreenshotOptions): Promise<ScreenshotResult> {
+  async screenshot(name: string, opts?: ScreenshotOptions): Promise<ScreenshotResult> {
+    // A device screencap is inherently full-screen, so `fullPage` is a no-op here.
+    // `annotate` (numbered-badge overlay) is a web-only pipeline; fail loudly
+    // rather than silently returning an un-annotated PNG that looks correct.
+    if (opts?.annotate) {
+      throw new Error(
+        "[adbScreenshot:annotate_unsupported] [android] annotated screenshots are not supported on the mobile driver yet; " +
+          "use the web driver or take a plain screenshot (a device screencap is always full-screen, so --full is implied).",
+      );
+    }
     const png = await this.adb.bytes(["exec-out", "screencap", "-p"]);
     fs.mkdirSync(this.artifactDir, { recursive: true });
     const file = path.join(this.artifactDir, `${name.replace(/[^a-zA-Z0-9_-]/g, "_")}.png`);

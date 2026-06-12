@@ -8,6 +8,34 @@ While skeptic is pre-1.0 (`0.x`), minor versions may carry breaking changes.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-05-07
+
+### Fixed
+
+- **Cookie decryption (Chrome M127+).** Chromium ≥ M127 prepends a 32-byte
+  SHA-256 hash of the cookie's `host_key` to the plaintext before encryption.
+  Decryption now detects and strips that prefix (conditional on a hash match,
+  so pre-M127 values are never corrupted) instead of returning 32 bytes of
+  binary garbage.
+- **Page-error capture.** The console collector now listens for the Playwright
+  `pageerror` event (uncaught exceptions / unhandled rejections), which is
+  surfaced separately from `console` — so genuine runtime errors are no longer
+  silently dropped from observability output.
+- **Network request duration.** Request duration is now derived from
+  Playwright's `responseEnd` resource-timing value, with a guard that leaves
+  the duration undefined when timing is uninitialized (`responseEnd < 0`) or
+  the request never started, instead of emitting a bogus value.
+
+### Security
+
+- Ran `npm audit fix` (non-force) to clear dev-tooling advisories: the critical
+  Vitest UI arbitrary file read/execute (GHSA-5xrq-8626-4rwp), the
+  `brace-expansion` ReDoS/DoS (GHSA-jxxr-4gwj-5jf2), and the `ws` uninitialized
+  memory disclosure (GHSA-58qx-3vcg-4xpx). `npm audit` now reports zero
+  vulnerabilities.
+
+## [0.2.0] - 2026-05-07
+
 ### Removed — BREAKING
 
 skeptic is now **agent-native**: a skill, a CLI, and a daemon. The built-in
@@ -43,28 +71,6 @@ skeptic is now **agent-native**: a skill, a CLI, and a daemon. The built-in
   Intelligence comes from the host coding agent; skeptic is the deterministic
   execution and evidence layer it drives through the bundled skill and CLI.
 
-### Fixed
-
-- **Cookie decryption (Chrome M127+).** Chromium ≥ M127 prepends a 32-byte
-  SHA-256 hash of the cookie's `host_key` to the plaintext before encryption.
-  Decryption now detects and strips that prefix (conditional on a hash match,
-  so pre-M127 values are never corrupted) instead of returning 32 bytes of
-  binary garbage.
-- **Page-error capture.** The console collector now listens for the Playwright
-  `pageerror` event (uncaught exceptions / unhandled rejections), which is
-  surfaced separately from `console` — so genuine runtime errors are no longer
-  silently dropped from observability output.
-- **Network request duration.** Request duration is now derived from
-  Playwright's `responseEnd` resource-timing value, with a guard that leaves
-  the duration undefined when timing is uninitialized (`responseEnd < 0`) or
-  the request never started, instead of emitting a bogus value.
-
-### Security
-
-- Ran `npm audit fix` (non-force) to clear dev-tooling advisories: the critical
-  Vitest UI arbitrary file read/execute (GHSA-5xrq-8626-4rwp), the
-  `brace-expansion` ReDoS/DoS (GHSA-jxxr-4gwj-5jf2), and the `ws` uninitialized
-  memory disclosure (GHSA-58qx-3vcg-4xpx). `npm audit` now reports zero
-  vulnerabilities.
-
-[Unreleased]: https://github.com/iamjr15/skeptic/commits/main
+[Unreleased]: https://github.com/iamjr15/skeptic/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/iamjr15/skeptic/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/iamjr15/skeptic/releases/tag/v0.2.0

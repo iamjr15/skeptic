@@ -30,9 +30,6 @@ const LABELS: Record<string, string> = {
   "observability.expectNoConsoleErrors": "Reading console messages",
   "observability.expectAccessible": "Running accessibility audit",
   "observability.snapshot": "Snapshotting observability metrics",
-  "ai.assert": "Running AI assertion",
-  "ai.assertNoDefects": "Running AI defect scan",
-  "ai.extract": "Extracting via AI",
   test: "Running test",
 
   // Page Proxy synthetic actions — kept distinct from fixture method names so a
@@ -72,9 +69,6 @@ export const PERSISTENT_LABEL_ACTIONS: ReadonlySet<string> = new Set([
   "observability.expectNoNetworkErrors",
   "observability.expectNoConsoleErrors",
   "observability.snapshot",
-  "ai.assert",
-  "ai.assertNoDefects",
-  "ai.extract",
   "screenshot.annotated",
   "snapshot",
   "settle",

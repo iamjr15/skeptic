@@ -14,6 +14,12 @@ const KEYCODES: Record<string, string> = {
   ArrowRight: "KEYCODE_DPAD_RIGHT",
 };
 
+// Upper bound on backspaces issued to clear a focused field. NativeNode carries
+// no text length, so we size the clear to a generous cap that covers realistic
+// inputs (URLs, emails, long passwords); surplus backspaces on an emptied field
+// are harmless no-ops.
+const CLEAR_MAX_CHARS = 128;
+
 /**
  * An action target backed by a parsed uiautomator node. Unlike the web Locator
  * (lazy, auto-waiting), this is a coordinate snapshot: actions tap/swipe at the
@@ -83,12 +89,15 @@ export class AndroidAdbDriverElement implements DriverElement {
   }
 
   private async clearField(): Promise<void> {
-    // Select-all + delete is the most reliable cross-keyboard clear.
-    await this.adb.text(["shell", "input", "keyevent", "KEYCODE_MOVE_END"]);
-    for (let i = 0; i < 200; i++) {
-      // bounded; most fields are short
-    }
-    await this.adb.text(["shell", "input", "keyevent", "--longpress", "KEYCODE_DEL"]).catch(() => {});
+    // Move the caret to the end, then backspace a bounded number of times so
+    // multi-char values are fully cleared before fill() types the new value.
+    // There is no portable select-all keyevent across IMEs, and `input keyevent`
+    // accepts a batch of keycodes, so one MOVE_END + N×DEL call is the most
+    // reliable cross-keyboard clear without an unbounded loop or busy-wait.
+    const deletes = Array.from({ length: CLEAR_MAX_CHARS }, () => "KEYCODE_DEL");
+    await this.adb
+      .text(["shell", "input", "keyevent", "KEYCODE_MOVE_END", ...deletes])
+      .catch(() => {});
   }
 
   private async typeAscii(text: string): Promise<void> {

@@ -33,6 +33,10 @@ export interface RunnerOptions {
 
 export interface RunnerOutcome extends RunnerExecuteOutcome {
   manifests: FileManifest[];
+  /** Tests that survived the tag/name filter, counted BEFORE sharding partitioned them.
+   *  Lets `run` tell a legitimately-empty shard slice (this > 0) from a genuinely empty or
+   *  filtered-to-nothing suite (this === 0) when deciding the exit code. */
+  discoveredCount: number;
 }
 
 export interface ListOutcome {
@@ -120,6 +124,7 @@ export const runSpecs = async (options: RunnerOptions): Promise<RunnerOutcome> =
   if (options.listOnly) {
     return {
       manifests,
+      discoveredCount: filtered.length,
       results: [],
       summary: {
         total: filtered.length,
@@ -146,7 +151,7 @@ export const runSpecs = async (options: RunnerOptions): Promise<RunnerOutcome> =
     ...(options.killGraceMs !== undefined ? { killGraceMs: options.killGraceMs } : {}),
   };
   const outcome = await executeRun(executeOptions);
-  return { ...outcome, manifests };
+  return { ...outcome, manifests, discoveredCount: filtered.length };
 };
 
 export const listSpecs = async (

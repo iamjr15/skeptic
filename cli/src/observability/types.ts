@@ -74,6 +74,16 @@ export interface ConsoleMessage {
   text: string;
   location?: { url?: string; lineNumber?: number; columnNumber?: number };
   timestamp: number;
+  /**
+   * Marks synthesized evidence entries that did NOT arrive via the page's
+   * `console` event: a JS dialog skeptic captured then auto-dismissed
+   * (`"dialog"`, recorded at warning level), or a renderer process crash
+   * (`"crash"`, recorded at error level). Absent for ordinary console/pageerror
+   * messages so existing consumers stay unaffected.
+   */
+  kind?: "dialog" | "crash";
+  /** Present only when `kind === "dialog"` — the dialog's type and default value. */
+  dialog?: { type: string; defaultValue?: string };
 }
 
 export interface ConsoleSnapshot {

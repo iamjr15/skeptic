@@ -6,8 +6,6 @@ import * as path from "node:path";
 import { execFile } from "node:child_process";
 import { performance } from "node:perf_hooks";
 import { promisify } from "node:util";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
 const execFileAsync = promisify(execFile);
 const root = path.resolve(new URL("..", import.meta.url).pathname);
@@ -35,6 +33,13 @@ for (let i = 2; i < process.argv.length; i += 1) {
 const iterations = Math.max(1, Number(args.get("iterations") ?? 2));
 const externalUrl = args.get("url") ?? "";
 const timeoutMs = Math.max(5_000, Number(args.get("timeout") ?? 45_000));
+// Per-verb warm-latency ceiling (ms) for the skeptic session path. The plan
+// targets ~220-250ms warm open/snapshot/click/screenshot; the run FAILS
+// (non-zero exit) when any warm verb median exceeds this budget.
+const warmBudgetMs = Math.max(1, Number(args.get("warm-budget") ?? 250));
+// The interactive session daemon runs headed by default (its dedicated slot);
+// `--session-headless` is an escape hatch for display-less CI.
+const sessionHeadless = args.get("session-headless") === "true";
 
 const ensureDir = (dir) => fs.mkdirSync(dir, { recursive: true });
 
@@ -50,6 +55,42 @@ const tryParseJson = (value) => {
     return null;
   }
 };
+
+const readPidFile = (file) => {
+  try {
+    const pid = Number.parseInt(fs.readFileSync(file, "utf8").trim(), 10);
+    return Number.isFinite(pid) && pid > 0 ? pid : null;
+  } catch {
+    return null;
+  }
+};
+
+const readTextFile = (file) => {
+  try {
+    return fs.readFileSync(file, "utf8");
+  } catch {
+    return "";
+  }
+};
+
+// The session verbs print `{ success, data }` under `--json`; pull refs / paths
+// from that envelope. Snapshot refs are `{ ref: "eN", role, name, ... }`.
+const snapshotRefs = (jsonStdout) => {
+  const refs = tryParseJson(jsonStdout)?.data?.refs;
+  return Array.isArray(refs) ? refs : [];
+};
+
+const pickClickableRef = (jsonStdout) => {
+  const refs = snapshotRefs(jsonStdout);
+  if (refs.length === 0) return null;
+  const interactive = refs.find(
+    (r) => /button/i.test(r.role ?? "") || /run check/i.test(r.name ?? ""),
+  );
+  const chosen = interactive ?? refs[0];
+  return chosen?.ref ? `@${chosen.ref}` : null;
+};
+
+const extractScreenshotPath = (jsonStdout) => tryParseJson(jsonStdout)?.data?.path ?? null;
 
 const commandExists = async (cmd) => {
   try {
@@ -149,13 +190,6 @@ const copyDiscoveredArtifacts = (result, destDir, prefix) => {
   }
   return copied;
 };
-
-const redactLargeToolPayloads = (value) => JSON.parse(JSON.stringify(value, (_key, nested) => {
-  if (typeof nested === "string" && nested.length > 4000) {
-    return `[${nested.length} chars omitted]`;
-  }
-  return nested;
-}));
 
 const createFixtureServer = async () => {
   const server = http.createServer((req, res) => {
@@ -287,77 +321,159 @@ const runSkepticInspect = async (url, targetDir) => {
   return runs;
 };
 
-const runSkepticMcp = async (url, targetDir) => {
-  const dir = path.join(targetDir, "skeptic-mcp");
+const summarizeSessionErrors = (steps) =>
+  steps
+    .filter((r) => !r.ok)
+    .map((r) => ({ label: r.label, error: r.error ?? null, stderr: (r.stderr ?? "").slice(0, 1000) }));
+
+// Drive the real CLI session verbs as separate short-lived processes against a
+// warm daemon-held browser: open → snapshot → click → screenshot → close. This
+// is the agent-native path that replaced the removed MCP client. The first full
+// pass pays the cold daemon-spawn + browser-launch cost and is DISCARDED; warm
+// passes feed the per-verb latency budget gate. We also prove the interactive
+// headed session daemon (session.sock) is a distinct process from the headless
+// test daemon (daemon.sock).
+const runSkepticSession = async (url, targetDir) => {
+  const dir = path.join(targetDir, "skeptic-session");
   const copiedDir = path.join(dir, "copied-artifacts");
   ensureDir(dir);
   ensureDir(copiedDir);
-  const runs = [];
-  for (let i = 0; i < iterations; i += 1) {
-    const start = performance.now();
-    const transport = new StdioClientTransport({
-      command: "node",
-      args: [dist, "mcp"],
-      cwd: root,
-      env: process.env,
-    });
-    const client = new Client({ name: "skeptic-benchmark", version: "0.0.0" });
-    try {
-      await client.connect(transport);
-      const opened = await client.callTool({
-        name: "browser_open",
-        arguments: { url, waitUntil: "domcontentloaded", snapshot: true },
-      });
-      await client.callTool({
-        name: "browser_playwright",
-        arguments: {
-          code: "await page.getByRole('button', { name: /run check/i }).click().catch(() => {}); return await page.title();",
-          snapshotAfter: true,
-        },
-      }).catch(() => null);
-      const screenshot = await client.callTool({
-        name: "browser_screenshot",
-        arguments: { mode: "annotated", fullPage: false },
-      }).catch(() => null);
-      const perf = await client.callTool({ name: "browser_performance_metrics", arguments: {} });
-      const a11y = await client.callTool({ name: "browser_accessibility_audit", arguments: {} });
-      await client.callTool({ name: "browser_close", arguments: {} }).catch(() => null);
-      const payload = redactLargeToolPayloads({ opened, screenshot, perf, a11y });
-      const payloadPath = path.join(dir, `${String(i + 1).padStart(2, "0")}-skeptic.mcp.json`);
-      writeText(payloadPath, JSON.stringify(payload, null, 2));
-      const copiedArtifacts = copyDiscoveredArtifacts(
-        { stdout: JSON.stringify(payload), stderr: "" },
-        copiedDir,
-        String(i + 1).padStart(2, "0"),
-      );
-      const snap = opened.structuredContent?.snapshot ?? {};
-      runs.push({
-        label: "skeptic.mcp",
-        ok: true,
-        durationMs: Math.round(performance.now() - start),
-        quality: {
-          refs: snap.refs?.length ?? 0,
-          stats: snap.stats ?? null,
-          hasPerfTrace: Boolean(perf.structuredContent?.reportPath),
-          a11yViolations: a11y.structuredContent?.summary?.violations ?? null,
-          hasSafeResultFiles: true,
-          hasAnnotatedScreenshot: Boolean(screenshot?.structuredContent?.path),
-          copiedArtifacts: copiedArtifacts.length,
-        },
-        artifactDir: dir,
-      });
-    } catch (err) {
-      runs.push({
-        label: "skeptic.mcp",
-        ok: false,
-        durationMs: Math.round(performance.now() - start),
-        error: err.message,
-      });
-    } finally {
-      await client.close().catch(() => null);
+
+  // Isolated daemon home so session.sock / daemon.sock land in a known,
+  // inspectable place and a benchmark run never clobbers the user's real
+  // ~/.skeptic daemons.
+  const daemonHome = path.join(dir, "daemon-home");
+  ensureDir(daemonHome);
+  const env = { SKEPTIC_DAEMON_DIR: daemonHome };
+
+  const sessionName = "bench";
+  const headedFlag = sessionHeadless ? "--headless" : "--headed";
+  const sessionFlags = ["--session", sessionName, headedFlag, "--json"];
+
+  const verbLatencies = { open: [], snapshot: [], click: [], screenshot: [] };
+  const warmRuns = [];
+  let coldTotalMs = null;
+  let lastRef = null;
+
+  // pass 0 is the cold warmup (daemon spawn + browser launch) and is discarded;
+  // passes 1..iterations are warm and measured per verb.
+  for (let pass = 0; pass <= iterations; pass += 1) {
+    const cold = pass === 0;
+    const passDir = path.join(dir, cold ? "cold" : `warm-${pass}`);
+    ensureDir(passDir);
+
+    const open = await runCommand("skeptic.session.open", "node", [
+      dist, "open", url, ...sessionFlags, "--wait-until", "networkidle",
+    ], { env });
+    const snapshot = await runCommand("skeptic.session.snapshot", "node", [
+      dist, "snapshot", "-i", ...sessionFlags,
+    ], { env });
+    const ref = pickClickableRef(snapshot.stdout) ?? lastRef ?? "@e1";
+    lastRef = ref;
+    const click = await runCommand("skeptic.session.click", "node", [
+      dist, "click", ref, ...sessionFlags,
+    ], { env });
+    const screenshot = await runCommand("skeptic.session.screenshot", "node", [
+      dist, "screenshot", "--annotate", ...sessionFlags,
+    ], { env });
+
+    const steps = [open, snapshot, click, screenshot];
+    steps.forEach((result, index) => persistCommand(passDir, index + 1, result));
+
+    const shotPath = extractScreenshotPath(screenshot.stdout);
+    if (shotPath) copyFileIfPresent(shotPath, copiedDir, cold ? "cold" : `warm-${pass}`);
+
+    const totalMs = steps.reduce((sum, r) => sum + r.durationMs, 0);
+    if (cold) {
+      coldTotalMs = totalMs;
+      continue;
     }
+    if (open.ok) verbLatencies.open.push(open.durationMs);
+    if (snapshot.ok) verbLatencies.snapshot.push(snapshot.durationMs);
+    if (click.ok) verbLatencies.click.push(click.durationMs);
+    if (screenshot.ok) verbLatencies.screenshot.push(screenshot.durationMs);
+    warmRuns.push({
+      label: "skeptic.session",
+      ok: steps.every((r) => r.ok),
+      durationMs: totalMs,
+      quality: {
+        ref,
+        refs: snapshotRefs(snapshot.stdout).length,
+        verbMs: {
+          open: open.durationMs,
+          snapshot: snapshot.durationMs,
+          click: click.durationMs,
+          screenshot: screenshot.durationMs,
+        },
+        screenshot: shotPath ? path.basename(shotPath) : null,
+      },
+      errors: summarizeSessionErrors(steps),
+      artifactDir: passDir,
+    });
   }
-  return runs;
+
+  // Spawn the headless test daemon in the SAME daemon home so we can prove it is
+  // a distinct process/socket from the interactive session daemon. `inspect`
+  // without `--no-daemon` auto-spawns the persistent headless BrowserServer.
+  const headlessProbe = await runCommand("skeptic.session.headless-daemon-probe", "node", [
+    dist, "inspect", url, "--json", "--wait", "200",
+  ], { env });
+  persistCommand(dir, 90, headlessProbe);
+
+  const sessionSocketPath = path.join(daemonHome, "session.sock");
+  const daemonSocketPath = path.join(daemonHome, "daemon.sock");
+  const sessionPid = readPidFile(path.join(daemonHome, "session.pid"));
+  const daemonPid = readPidFile(path.join(daemonHome, "daemon.pid"));
+  const sessionSocketExists = fs.existsSync(sessionSocketPath);
+  const daemonSocketExists = fs.existsSync(daemonSocketPath);
+  const isolation = {
+    sessionSocketPath,
+    daemonSocketPath,
+    sessionSocketExists,
+    daemonSocketExists,
+    sessionPid,
+    daemonPid,
+    sessionHeaded: /headed/.test(readTextFile(path.join(daemonHome, "session.engine"))),
+    distinctSockets: sessionSocketPath !== daemonSocketPath && sessionSocketExists && daemonSocketExists,
+    distinctProcesses: Boolean(sessionPid && daemonPid && sessionPid !== daemonPid),
+  };
+
+  // Tear down both daemons we spawned (isolated home, but stay tidy).
+  await runCommand("skeptic.session.close", "node", [dist, "close", "--all", "--json"], { env });
+  await runCommand("skeptic.daemon.stop", "node", [dist, "daemon", "stop"], { env });
+
+  const verbMedians = {
+    open: median(verbLatencies.open),
+    snapshot: median(verbLatencies.snapshot),
+    click: median(verbLatencies.click),
+    screenshot: median(verbLatencies.screenshot),
+  };
+  const orderedMedians = [verbMedians.open, verbMedians.snapshot, verbMedians.click, verbMedians.screenshot];
+  const maxMedianMs = orderedMedians.every((v) => v !== null) ? Math.max(...orderedMedians) : null;
+  const warm = {
+    budgetMs: warmBudgetMs,
+    ...verbMedians,
+    coldTotalMs,
+    maxMedianMs,
+    withinBudget: maxMedianMs !== null && maxMedianMs <= warmBudgetMs,
+    samples: verbLatencies,
+  };
+
+  writeText(path.join(dir, "session-summary.json"), JSON.stringify({ warm, isolation }, null, 2));
+
+  console.log(
+    `  skeptic.session warm medians (ms): ` +
+      `open=${warm.open ?? "n/a"} snapshot=${warm.snapshot ?? "n/a"} ` +
+      `click=${warm.click ?? "n/a"} screenshot=${warm.screenshot ?? "n/a"} ` +
+      `| budget=${warmBudgetMs} within=${warm.withinBudget}`,
+  );
+  console.log(
+    `  daemon isolation: session.sock pid=${isolation.sessionPid ?? "n/a"} ` +
+      `vs daemon.sock pid=${isolation.daemonPid ?? "n/a"} ` +
+      `distinct=${isolation.distinctSockets && isolation.distinctProcesses}`,
+  );
+
+  return { runs: warmRuns, warm, isolation };
 };
 
 const runExpectCli = async (url, targetDir) => {
@@ -527,6 +643,39 @@ const writeArtifacts = async (report) => {
       );
     }
     lines.push("");
+    const session = target.tools["skeptic.session"];
+    if (session?.warm) {
+      const w = session.warm;
+      lines.push(`### skeptic warm-latency (budget ${w.budgetMs}ms, first cold call discarded)`);
+      lines.push("");
+      lines.push("| Verb | Warm median ms |");
+      lines.push("|---|---:|");
+      for (const verb of ["open", "snapshot", "click", "screenshot"]) {
+        lines.push(`| ${verb} | ${w[verb] ?? "n/a"} |`);
+      }
+      lines.push("");
+      lines.push(`Cold open+snapshot+click+screenshot total: ${w.coldTotalMs ?? "n/a"}ms`);
+      lines.push(
+        `Within budget: ${w.withinBudget ? "yes" : "NO"}` +
+          (w.maxMedianMs !== null ? ` (max warm median ${w.maxMedianMs}ms)` : " (no successful warm samples)"),
+      );
+      lines.push("");
+    }
+    const iso = session?.isolation;
+    if (iso) {
+      lines.push("### daemon isolation (interactive headed session vs headless test daemon)");
+      lines.push("");
+      lines.push(
+        `- session daemon: \`${iso.sessionSocketPath}\` ` +
+          `(exists: ${iso.sessionSocketExists}, pid: ${iso.sessionPid ?? "n/a"}, ${iso.sessionHeaded ? "headed" : "headless"})`,
+      );
+      lines.push(
+        `- test daemon: \`${iso.daemonSocketPath}\` ` +
+          `(exists: ${iso.daemonSocketExists}, pid: ${iso.daemonPid ?? "n/a"})`,
+      );
+      lines.push(`- distinct sockets: ${iso.distinctSockets ? "yes" : "NO"}; distinct processes: ${iso.distinctProcesses ? "yes" : "NO"}`);
+      lines.push("");
+    }
   }
   fs.writeFileSync(mdPath, lines.join("\n"), "utf-8");
   return { jsonPath, mdPath };
@@ -536,33 +685,69 @@ const runTarget = async (name, url) => {
   console.log(`Benchmarking ${name}: ${url}`);
   const targetDir = path.join(artifactsRoot, name);
   ensureDir(targetDir);
+  const inspect = summarizeRuns(await runSkepticInspect(url, targetDir));
+  const session = await runSkepticSession(url, targetDir);
   return {
     name,
     url,
     artifactDir: targetDir,
     tools: {
-      "skeptic.inspect": summarizeRuns(await runSkepticInspect(url, targetDir)),
-      "skeptic.mcp": summarizeRuns(await runSkepticMcp(url, targetDir)),
+      "skeptic.inspect": inspect,
+      "skeptic.session": { ...summarizeRuns(session.runs), warm: session.warm, isolation: session.isolation },
       expect: summarizeRuns(await runExpectCli(url, targetDir)),
       "agent-browser": summarizeRuns(await runAgentBrowser(url, targetDir)),
     },
   };
 };
 
+// Gate the run on the two hard invariants the plan asks for: warm latency stays
+// within budget, and the interactive headed session daemon is a distinct
+// process/socket from the headless test daemon.
+const evaluateVerdict = (targets) => {
+  const failures = [];
+  for (const target of targets) {
+    const session = target.tools["skeptic.session"];
+    if (!session) continue;
+    const w = session.warm;
+    if (w && !w.withinBudget) {
+      failures.push(
+        w.maxMedianMs === null
+          ? `${target.name}: skeptic session path produced no successful warm samples`
+          : `${target.name}: warm latency ${w.maxMedianMs}ms exceeds budget ${w.budgetMs}ms`,
+      );
+    }
+    const iso = session.isolation;
+    if (iso && (!iso.distinctSockets || !iso.distinctProcesses)) {
+      failures.push(`${target.name}: session daemon not isolated from headless test daemon (session.sock vs daemon.sock)`);
+    }
+  }
+  return failures;
+};
+
 const fixture = await createFixtureServer();
 try {
   const targets = [await runTarget("local-fixture", fixture.url)];
   if (externalUrl) targets.push(await runTarget("external-url", externalUrl));
+  const failures = evaluateVerdict(targets);
   const report = {
     generatedAt: new Date().toISOString(),
     host: `${os.platform()}-${os.arch()}`,
     node: process.version,
     iterations,
+    warmBudgetMs,
+    verdict: { ok: failures.length === 0, failures },
     targets,
   };
   const paths = await writeArtifacts(report);
   console.log(`Wrote ${paths.jsonPath}`);
   console.log(`Wrote ${paths.mdPath}`);
+  if (failures.length > 0) {
+    console.error("Benchmark gate FAILED:");
+    for (const failure of failures) console.error(`  - ${failure}`);
+    process.exitCode = 1;
+  } else {
+    console.log(`Benchmark gate passed (warm latency within ${warmBudgetMs}ms; daemon isolation verified).`);
+  }
 } finally {
   await new Promise((resolve) => fixture.server.close(resolve));
 }

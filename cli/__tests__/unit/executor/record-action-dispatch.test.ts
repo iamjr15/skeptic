@@ -41,7 +41,6 @@ describe("recordAction dispatch contract", () => {
       "screenshot",
       "snapshot",
       "settle",
-      "ai.assert",
       "test",
       "beforeEach",
       "afterEach",

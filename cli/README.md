@@ -121,7 +121,6 @@ The fixture exposes:
 | `screenshot` | PNG screenshots, including annotated numbered-ref captures |
 | `settle` | Network-idle settle helper |
 | `observability` | Performance, network, console, and accessibility assertions |
-| `ai` | Vision-backed assertions, defect checks, and text extraction |
 | `ctx` | Per-test execution context and artifact paths |
 
 `expect` is re-exported from Playwright Test, so matchers like
@@ -332,7 +331,7 @@ contexts and are not sent to Skeptic services.
 
 ```bash
 skeptic add github-action
-skeptic add github-action --ai --provider openai
+skeptic add github-action --dev-command "npm run dev" --dev-url http://localhost:3000
 ```
 
 The generated workflow installs dependencies, installs Chromium, starts your dev
@@ -371,8 +370,7 @@ skeptic daemon stop
 ```
 
 `skeptic doctor` checks config, output directories, browser installs, optional
-accessibility/cookie engines, daemon state, cookie profiles, and AI provider
-setup.
+accessibility/cookie engines, daemon state, and cookie profiles.
 
 ## License
 

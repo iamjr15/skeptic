@@ -78,7 +78,6 @@ Rules for generated or hand-written specs:
 | `screenshot(name, opts?)` | PNG capture with optional ref annotations |
 | `settle()` | Best-effort network-idle settle |
 | `observability` | Performance, network, console, and accessibility assertions |
-| `ai` | Vision-backed assertions, defect checks, and text extraction |
 | `ctx` | Per-test execution context |
 
 ### Snapshot Helpers
@@ -252,7 +251,7 @@ output:
 
 ```bash
 skeptic add github-action
-skeptic add github-action --ai --provider openai
+skeptic add github-action --dev-command "npm run dev" --dev-url http://localhost:3000
 skeptic comment --results ./skeptic-output/results.json
 ```
 

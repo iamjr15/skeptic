@@ -23,9 +23,6 @@ describe("friendlyLabel — fixture method coverage", () => {
     "observability.expectNoConsoleErrors",
     "observability.expectAccessible",
     "observability.snapshot",
-    "ai.assert",
-    "ai.assertNoDefects",
-    "ai.extract",
     "test",
   ];
 
@@ -96,7 +93,6 @@ describe("PERSISTENT_LABEL_ACTIONS", () => {
     // hides the label before the action finishes — they must be persistent.
     const required = [
       "observability.expectAccessible",
-      "ai.assert",
       "screenshot.annotated",
       "snapshot",
       "settle",

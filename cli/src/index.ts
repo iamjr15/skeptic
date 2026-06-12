@@ -36,6 +36,35 @@ function parseWaitUntil(value: string): "load" | "domcontentloaded" | "networkid
   );
 }
 
+function parseBlankFrameDetection(value: string): "off" | "warn" | "fail" {
+  if (value === "off" || value === "warn" || value === "fail") {
+    return value;
+  }
+  throw new InvalidArgumentError(`expected one of off, warn, or fail; got "${value}"`);
+}
+
+function parseWaitState(value: string): "attached" | "detached" | "visible" | "hidden" {
+  if (value === "attached" || value === "detached" || value === "visible" || value === "hidden") {
+    return value;
+  }
+  throw new InvalidArgumentError(
+    `expected one of attached, detached, visible, or hidden; got "${value}"`,
+  );
+}
+
+// `ios` gets a distinct message: it's a deliberately-unsupported target, not a
+// typo. Without this guard an unknown platform silently folds to a chromium web
+// session (see daemonOpts in browser-verbs), changing behavior with no error.
+function parsePlatform(value: string): "web" | "android" {
+  if (value === "web" || value === "android") {
+    return value;
+  }
+  if (value === "ios") {
+    throw new InvalidArgumentError("ios is not supported yet; expected one of web or android");
+  }
+  throw new InvalidArgumentError(`unknown platform "${value}"; expected one of web or android`);
+}
+
 const SHARD_MAX = 64;
 function parseShardCount(value: string): number {
   const n = parsePositiveInt(value);
@@ -99,7 +128,7 @@ const addRunOptions = (
     .option("--no-full-page-screenshot", "force fullPage=false (overrides config)")
     .option("--visual-settle", "enable the visual-settle helper before screenshots")
     .option("--no-visual-settle", "disable the visual-settle helper")
-    .option("--blank-frame-detection <mode>", "off | warn | fail")
+    .option("--blank-frame-detection <mode>", "off | warn | fail", parseBlankFrameDetection)
     .option(
       "--observability-write-sidecars",
       "write per-test perf-trace.md + console.json + network.json",
@@ -405,7 +434,11 @@ const addSessionOpts = (command: Command): Command =>
   command
     .option("--session <name>", "isolated session name", "default")
     .option("--json", "machine-readable JSON output")
-    .option("--platform <platform>", "web (default) | android (drives a device/emulator via adb)")
+    .option(
+      "--platform <platform>",
+      "web (default) | android (drives a device/emulator via adb)",
+      parsePlatform,
+    )
     .option("--headed", "run the session browser headed (default; web only)")
     .option("--headless", "run the session browser headless (web only)");
 
@@ -516,7 +549,7 @@ addSessionOpts(
 )
   .option("--ms <n>", "milliseconds to wait", parseNonNegativeInt)
   .option("--selector <sel>", "wait for a selector")
-  .option("--state <state>", "visible | hidden | attached | detached")
+  .option("--state <state>", "visible | hidden | attached | detached", parseWaitState)
   .option("--timeout-ms <n>", "wait timeout", parseNonNegativeInt)
   .action(async (opts: import("./commands/browser-verbs.js").WaitVerbOptions) => {
     const { runWait } = await import("./commands/browser-verbs.js");
@@ -538,6 +571,15 @@ addSessionOpts(program.command("list").description("List open browser sessions")
     await runList(opts);
   },
 );
+
+program
+  .command("devices")
+  .description("List connected devices/emulators (Android via adb; iOS preview via simctl)")
+  .option("--json", "machine-readable JSON output")
+  .action(async (cmdOpts: import("./commands/devices.js").DevicesCommandOptions) => {
+    const { runDevices } = await import("./commands/devices.js");
+    await runDevices(cmdOpts);
+  });
 
 // Re-export `commandUsesBrowser` so existing callers (and the
 // `auto-spawn-discipline` unit test) keep working. The implementation lives

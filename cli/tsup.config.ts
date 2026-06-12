@@ -70,7 +70,6 @@ export default defineConfig({
     "pretty-ms",
     "minimatch",
     "web-vitals",
-    "fast-xml-parser",
     "pixelmatch",
     "pngjs",
     "react",

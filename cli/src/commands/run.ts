@@ -356,13 +356,23 @@ export const ensureJsonReporter = (formats: string[]): string[] =>
  * Process exit code for a `run`. Interrupt (Ctrl-C) → 130; a run that discovered/executed zero
  * tests → 1 (an empty suite must not read as success for CI/agents); otherwise 1 on any failure,
  * else 0.
+ *
+ * Sharding exception: a sharded run (`--shard-split`/`--shard-all`) whose OWN slice is empty
+ * because the discovered tests were distributed to other shards is NOT a failure. CI matrices
+ * routinely over-provision shards (e.g. `--shard-split 8` over 5 tests, or an out-of-range
+ * `--shard-index`); the tail shards legitimately get nothing and must exit 0. Only a run that
+ * discovered no tests at all still exits 1 — so `shard.active` alone is not enough, the suite
+ * must have produced `discoveredTestCount > 0` before sharding partitioned them away.
  */
 export const resolveRunExitCode = (
   interrupted: boolean,
   summary: { total: number; failed: number },
+  shard?: { active: boolean; discoveredTestCount: number },
 ): number => {
   if (interrupted) return 130;
-  if (summary.total === 0) return 1;
+  if (summary.total === 0) {
+    return shard?.active && shard.discoveredTestCount > 0 ? 0 : 1;
+  }
   return summary.failed > 0 ? 1 : 0;
 };
 
@@ -484,6 +494,10 @@ export const runRun = async (
   process.on("SIGINT", onInterrupt);
 
   const shardIndex = opts.shardIndex ?? Number(process.env["SKEPTIC_SHARD_INDEX"] ?? "");
+  // A non-finite or non-positive index (unset env, garbage) falls back to shard 1. An index that
+  // exceeds the shard count is left as-is on purpose: it produces a legitimately-empty slice that
+  // the exit-code logic below treats as success, not the misleading "No tests found" failure.
+  const resolvedShardIndex = Number.isFinite(shardIndex) && shardIndex > 0 ? shardIndex : 1;
   const runOptions = {
     patterns: effectivePatterns,
     reporters,
@@ -492,20 +506,10 @@ export const runRun = async (
     signal: abortController.signal,
     ...(opts.tag ? { tagFilter: opts.tag } : {}),
     ...(opts.shardSplit !== undefined
-      ? {
-          shardSplit: {
-            count: opts.shardSplit,
-            index: Number.isFinite(shardIndex) && shardIndex > 0 ? shardIndex : 1,
-          },
-        }
+      ? { shardSplit: { count: opts.shardSplit, index: resolvedShardIndex } }
       : {}),
     ...(opts.shardAll !== undefined
-      ? {
-          shardAll: {
-            count: opts.shardAll,
-            index: Number.isFinite(shardIndex) && shardIndex > 0 ? shardIndex : 1,
-          },
-        }
+      ? { shardAll: { count: opts.shardAll, index: resolvedShardIndex } }
       : {}),
   };
 
@@ -544,14 +548,42 @@ export const runRun = async (
 
   printArtifactPaths(outcome.summary, outputDir);
 
+  // Only `--shard-split`/`--shard-all` actually partition the suite. `SKEPTIC_SHARD_INDEX` alone
+  // supplies an index for those flags (CI matrices) and never round-robins on its own, so it can't
+  // manufacture an empty slice — gating on the flags is the correct "is this a sharded run" signal.
+  const isShardedRun = opts.shardSplit !== undefined || opts.shardAll !== undefined;
+  // Tests that survived the tag/name filter, counted BEFORE sharding partitioned them. Lets us tell
+  // a slice that is empty because sharding sent its tests elsewhere (discovered > 0) apart from a
+  // genuinely empty / filtered-to-nothing suite (discovered === 0) — a `--tag` that matches nothing
+  // therefore still exits 1 even under sharding, because the post-filter count is 0.
+  const discoveredTestCount = outcome.discoveredCount;
+
   if (!interrupted && outcome.summary.total === 0) {
-    // Zero discovered/executed tests is a failure for `run`: CI and agents must not read an
-    // empty suite as success. results.json (total: 0) was still written by the json reporter.
-    logger.error(
-      `No tests found matching ${Array.isArray(effectivePatterns) ? effectivePatterns.join(", ") : effectivePatterns}`,
-    );
+    if (isShardedRun && discoveredTestCount > 0) {
+      // This shard's slice is legitimately empty: round-robin sharding sent every discovered test
+      // to other shards (shards out-number tests, e.g. `--shard-split 8` over 5), or `--shard-index`
+      // points past the populated shards. That is success, NOT the "No tests found" failure below.
+      const shardCount = opts.shardSplit ?? opts.shardAll;
+      const totalSuffix = `${discoveredTestCount} test${discoveredTestCount === 1 ? "" : "s"} total across shards`;
+      if (shardCount !== undefined && resolvedShardIndex > shardCount) {
+        logger.info(
+          `shard index ${resolvedShardIndex} is out of range for ${shardCount} shard${shardCount === 1 ? "" : "s"}; nothing to run (${totalSuffix}).`,
+        );
+      } else {
+        logger.info(`shard ${resolvedShardIndex}/${shardCount} has no tests (${totalSuffix}).`);
+      }
+    } else {
+      // Zero discovered/executed tests is a failure for `run`: CI and agents must not read an
+      // empty suite as success. results.json (total: 0) was still written by the json reporter.
+      logger.error(
+        `No tests found matching ${Array.isArray(effectivePatterns) ? effectivePatterns.join(", ") : effectivePatterns}`,
+      );
+    }
   }
-  process.exitCode = resolveRunExitCode(interrupted, outcome.summary);
+  process.exitCode = resolveRunExitCode(interrupted, outcome.summary, {
+    active: isShardedRun,
+    discoveredTestCount,
+  });
 
   if (opts.watch && !isCI && !interrupted) {
     const { startWatching } = await import("../runner/watch.js");

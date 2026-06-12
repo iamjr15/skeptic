@@ -10,7 +10,17 @@ Full audit report and detailed checklist: `plans/sota-readiness-plan.md`.
 - [ ] Fix .gitignore coverage/ pattern hiding ast-extraction.test.ts from CI
 - [ ] SECURITY.md; fix ws vuln; dependabot
 
-## STATUS (verified green: 89 test files, 707 passing, 1 skipped; tsc clean; real e2e run confirmed)
+## STATUS (verified green: 102 test files, 767 passing, 1 skipped; tsc clean; build clean)
+
+### Audit-driven pending-work batch — DONE & verified (2026-06-12)
+Code-verified audit (10 agents) → 8-agent file-partitioned fix → build+tsc+full-suite green (767 pass).
+- **P1 invariant residue:** `add.ts` `findBundledSkillDir` now resolves `../agent-skills` from the flat dist (so `add skill` finds the real SKILL.md), and `EMBEDDED_SKILL_MD` fallback rewritten with ZERO MCP/AI/`generate` surface (was reintroducing `browser_open`/MCP/`generate --diff` and clobbering good installs). Purged `--ai/--provider`/`ai`-fixture from AGENTS.md + README.md, and the orphaned `ai.assert/assertNoDefects/extract` labels from `api/labels.ts` (+ their 2 tests + page-proxy comment). Repo-wide `ai.*` residue now ZERO.
+- **P2 correctness:** sharded runs no longer spuriously exit 1 on empty/over-provisioned shards (precise post-filter `discoveredCount` threaded through `RunnerOutcome`; a `--tag` matching nothing still exits 1) · enum flags `--blank-frame-detection`/`wait --state`/`--platform` now validate (typo no longer silently degrades `fail`→warn or `ios`→chromium) · adb `clearField` dead busy-loop removed + reliable bounded clear · `har-capture`/`self-healing` integration tests now hard-assert (the soft-return masked a real 30s event-loop-starvation bug, now fixed; har-capture 31s→0.9s) · dialog+crash evidence capture in console-collector · benchmark repointed off the deleted MCP client onto real session verbs + warm-latency budget + daemon-isolation assert.
+- **P3 OSS hygiene:** `cli/LICENSE` ships in tarball · npm provenance/OIDC + concurrency guard + LTS Node 24 in release.yml · `.github/dependabot.yml` · dropped unused `fast-xml-parser` (matched CHANGELOG) · accessibility-checker-engine attribution (corrected to Apache-2.0, the real license) · CHANGELOG cut into 0.2.0/0.2.1 dated sections.
+- **Mobile do-ables:** `skeptic devices` verb (adb + macOS simctl preview) · adb/simctl/idb probes in `doctor` · Android `screenshot` rejects `--annotate` with a structured error instead of silently dropping it.
+- **Remaining (verified-pending, not in this batch):** P3 small cleanups (shardId label unpopulated, dead `--features` flag, HAR not linked in report.html, `scroll` verb + broader `get/is`, orphaned `nameFilter`, inspect renderer dedup, session-daemon doctor visibility); mobile parity collectors (screenrecord video, gfxinfo perf, a11y heuristics, netstats) + Android path in `skeptic run`. Blocked: iOS sim driver, live Android device proof + M0 dump-latency spike, M4 fast-lane, skill-evals harness.
+
+## (earlier) STATUS — agent-native restructure + bug/perf/hygiene baseline
 
 Done & verified this session (all with regression tests + a real linked `skeptic run`):
 - **Agent-native restructure**: MCP/ACP/AI deleted, 88 npm pkgs removed, bundle 2.33→1.74MB, then splitting → **dist 4.3M→2.0M**, startup 90→70ms.
@@ -37,11 +47,12 @@ Remaining LARGE builds — **fully planned, execution deferred by owner ("plan o
 - [ ] Skill-evals harness (real `claude -p`/`codex exec` scored on skill compliance): CLIs exist but it needs installing the new skill into a sandbox + recursive agent runs that modify `~/.claude` — do in a dedicated setup.
 
 ### Remaining (verifiable, but risky/large — pick deliberately)
-- [✗] P2 worker-reuse single-compile — **MEASURED the premise; the perf win is sub-second, not 6-11s. Recommend NOT doing it.**
+- [✗] P2 worker-reuse single-compile — **MEASURED, then IMPLEMENTED far enough to prove the premise void, then reverted. Final verdict: do NOT do it.**
   - Empirical: a 10-spec run (parallel 4, --no-daemon) is ~1.7s TOTAL. The double-import overhead can't be ~3s (275ms×10) because **discovery is already fully parallelized** (`Promise.all` over all specs) — its wall-clock is ~one worker's tsx-init (~300-500ms), not the sum. So eliminating the discovery phase saves only ~0.3-0.5s wall-clock for typical suites, regardless of spec count (it's parallel).
-  - The original "~6-11s" estimate wrongly assumed SERIAL per-spec overhead. It isn't.
-  - Doing it "properly" would still be a 6-file critical-path refactor (worker/execute/runSpecs/ipc/discover) that ALSO changes test.only from global→per-file and entangles sharding/retry/memory — high risk for a sub-second win.
-  - Verdict: not worth it. If sub-second startup ever matters, the lower-risk lever is the tsx→esbuild loader swap (no behavior change). Left as-is.
+  - **Implementation finding (2026-06-12, the decisive one):** single-import via per-file self-discovery CANNOT replace the two-phase path — `shard.ts` partitions at the **test** level (`i % shardCount` over the flat global list) and `--list` needs the full manifest, so both REQUIRE the upfront global collect. Self-discover can therefore only run *alongside* the existing path as a divergent second code path, with two behavior changes the other path wouldn't share: (a) `test.only` goes global→per-file (and would mean different things with vs without `--shard`), (b) the live TUI loses its upfront `totalTests` (built from the pre-discovered partition at `execute.ts:499`). That's strictly MORE complexity to save ~0.3s — the opposite of the "cleaner codebase" reason it was greenlit for.
+  - The current discover→execute model is the **standard collect-then-run pattern** (Vitest/Jest/Playwright). Using separate processes for the two phases is a feature: clean isolation, a discovery crash can't corrupt execution state. The "double import" is a minor, standard inefficiency, not a cleanliness defect.
+  - The only genuinely-clean single-import variant is a Vitest-style **persistent worker pool** (hold workers across collect→execute so the import is reused while keeping global `.only` + upfront count + test-level sharding). That's a moderate-risk rewrite of the runner's worker lifecycle for the same sub-second win — not worth it now; revisit only if startup latency becomes a real, measured signal. Lower-risk lever if so: tsx→esbuild loader (no behavior change).
+  - WIP reverted to the green committed state; suite re-verified 101 files / 759 passing / 1 skipped, tsc clean.
 - [ ] Phase-4 differentiators: self-healing-as-agent-loop, email/OTP + dynamic data, HAR export. New features.
 - [x] P10 flat compact render — already implemented (compactTree drops structural noise).
 

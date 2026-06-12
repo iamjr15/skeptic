@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { execFile } from "node:child_process";
 import { createRequire } from "node:module";
 import { OUTPUT_DIR_DEFAULT, PRODUCT_NAME } from "../constants.js";
 import { loadConfigWithMeta } from "../config/loader.js";
@@ -91,6 +92,33 @@ const readFirstLine = (filePath: string): string | null => {
     return null;
   }
 };
+
+// Mirror the Android driver's adb resolution (createAdb → resolveAdbPath) so the
+// doctor probes the same binary the run path will use.
+const resolveAdbBinary = (): string => {
+  const home = process.env["ANDROID_HOME"] ?? process.env["ANDROID_SDK_ROOT"];
+  return home ? path.join(home, "platform-tools", "adb") : "adb";
+};
+
+// Probe an external CLI's presence by running a cheap subcommand. Never rejects;
+// resolves { ok, line } where `line` is the first line of stdout/stderr or the
+// spawn error message — so doctor stays a read-only report even when a tool is
+// missing or hangs.
+const probeBinary = (
+  bin: string,
+  args: string[],
+  timeoutMs = 4_000,
+): Promise<{ ok: boolean; line: string }> =>
+  new Promise((resolve) => {
+    execFile(bin, args, { timeout: timeoutMs }, (err, stdout, stderr) => {
+      const out = `${stdout ?? ""}${stderr ?? ""}`.split(/\r?\n/).find((l) => l.trim()) ?? "";
+      if (err) {
+        resolve({ ok: false, line: out || (err instanceof Error ? err.message : String(err)) });
+        return;
+      }
+      resolve({ ok: true, line: out });
+    });
+  });
 
 export const collectDoctorReport = async (
   options: DoctorOptions = {},
@@ -294,6 +322,45 @@ export const collectDoctorReport = async (
       })),
     },
   );
+
+  const adbBin = resolveAdbBinary();
+  const adbProbe = await probeBinary(adbBin, ["version"]);
+  push(
+    checks,
+    "adb",
+    adbProbe.ok ? "pass" : "info",
+    "Android adb",
+    adbProbe.ok
+      ? `${adbProbe.line || "adb available"} (${adbBin})`
+      : `adb not found (${adbBin}); install Android platform-tools or set ANDROID_HOME to enable Android (mobile) QA`,
+    { adbPath: adbBin },
+  );
+
+  // iOS tooling is preview-only and macOS-exclusive; probe non-fatally so a
+  // missing simctl/idb never inflates warn/fail on a web-focused setup.
+  if (process.platform === "darwin") {
+    const simctl = await probeBinary("xcrun", ["--find", "simctl"]);
+    push(
+      checks,
+      "simctl",
+      simctl.ok ? "pass" : "info",
+      "iOS simctl (preview)",
+      simctl.ok
+        ? `xcrun simctl available (${simctl.line || "found"})`
+        : "xcrun simctl not available; iOS simulator QA is preview and needs Xcode command line tools",
+    );
+
+    const idb = await probeBinary("idb", ["--version"]);
+    push(
+      checks,
+      "idb",
+      idb.ok ? "pass" : "info",
+      "iOS idb (preview)",
+      idb.ok
+        ? `${idb.line || "idb available"}`
+        : "idb not installed; optional for physical-device iOS QA (preview) — install fb-idb to enable",
+    );
+  }
 
   const summary: Record<DoctorStatus, number> = {
     pass: 0,

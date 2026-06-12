@@ -4,9 +4,12 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
+// Drives the real built `dist/skeptic.mjs`; the workflow builds dist before tests.
+// Run locally without a build the suite is skipped (honest) rather than passing.
 const DIST = path.resolve(import.meta.dirname, "../../../dist/skeptic.mjs");
+const distAvailable = fs.existsSync(DIST);
 
-describe("self-healing capture on locator failure", () => {
+describe.skipIf(!distAvailable)("self-healing capture on locator failure", () => {
   let tmp: string;
 
   beforeAll(() => {
@@ -28,29 +31,23 @@ describe("self-healing capture on locator failure", () => {
   afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
   it("attaches the live page's interactive elements + selectorHints to a failed test", () => {
-    if (!fs.existsSync(DIST)) return;
     const out = path.join(tmp, "out");
     const r = spawnSync(
       process.execPath,
       [DIST, "run", path.join(tmp, "heal.spec.ts"), "--reporter", "json", "--output", out, "--no-daemon"],
       { encoding: "utf-8", timeout: 90_000, env: { ...process.env } },
     );
-    // The test is expected to FAIL (bad locator); status non-zero is correct.
-    if (!fs.existsSync(path.join(out, "results.json"))) {
-      console.warn("[self-healing] no results.json; chromium likely unavailable:", r.stderr?.slice(0, 200));
-      return;
-    }
+    // The test is expected to FAIL (bad locator); a non-zero exit is correct, but
+    // results.json must still be written so the healing payload can be inspected.
+    expect(fs.existsSync(path.join(out, "results.json")), `no results.json (exit ${r.status}):\n${r.stderr}`).toBe(true);
     const results = JSON.parse(fs.readFileSync(path.join(out, "results.json"), "utf-8")) as {
       tests: Array<{ status: string; healing?: { candidates: Array<{ role: string; name: string; selectorHint: string }> } }>;
     };
     const test = results.tests[0]!;
     expect(test.status).not.toBe("passed");
-    // If the run failed before the page loaded (e.g. chromium unavailable), there's
-    // nothing to heal against — skip rather than fail.
-    if (!test.healing) {
-      console.warn("[self-healing] no healing captured (page likely never loaded); skipping");
-      return;
-    }
+    // The page loaded before the locator failed, so the runner must capture a fresh
+    // snapshot of the live page's interactive elements to heal the broken locator.
+    expect(test.healing, "failed locator should capture healing candidates").toBeDefined();
     const hints = test.healing!.candidates.map((c) => c.selectorHint);
     expect(hints).toContain("role=button:Checkout");
     expect(hints).toContain("role=link:Cart");

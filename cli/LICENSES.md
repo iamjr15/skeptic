@@ -12,8 +12,8 @@ The published `skeptic-cli` bundle inlines several pure-JS dependencies at build
 time — the `noExternal` list in `tsup.config.ts` — instead of resolving them
 from `node_modules` at runtime. Their license terms are reproduced or pointed to
 here. Runtime-external dependencies (`playwright`, `playwright-core`, and the
-optional `better-sqlite3`) are installed separately and keep their own license
-files in your `node_modules`.
+optional `better-sqlite3` and `accessibility-checker-engine`) are installed
+separately and keep their own license files in your `node_modules`.
 
 ### Mozilla Public License 2.0 — axe-core, @axe-core/playwright
 
@@ -44,6 +44,16 @@ file, You can obtain one at https://mozilla.org/MPL/2.0/.
 shipped both inlined and as the standalone `dist/web-vitals.iife.js` asset.
 Source: https://github.com/GoogleChrome/web-vitals. The full Apache 2.0 text is
 reproduced in the [agent-browser section below](#apache-license-20-full-text).
+
+### Apache License 2.0 — accessibility-checker-engine
+
+**accessibility-checker-engine** (IBM Equal Access Accessibility Checker)
+© IBM, Inc. is an **optional, runtime-external** dependency — resolved from
+`node_modules` by `src/observability/collectors/accessibility-collector.ts`
+when present (the audit falls back to axe-core only when it is absent), not
+inlined into the bundle — licensed under the **Apache License 2.0**. Source:
+https://github.com/IBMa/equal-access. The full Apache 2.0 text is reproduced in
+the [agent-browser section below](#apache-license-20-full-text).
 
 ### Blue Oak Model License 1.0.0 — glob, minimatch
 

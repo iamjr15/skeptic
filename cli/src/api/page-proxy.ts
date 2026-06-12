@@ -15,7 +15,7 @@ import { friendlyLabel } from "./labels.js";
  * 3. **Documented gap** — direct `page.keyboard.press(...)`, `page.mouse.click(...)`,
  *    `page.evaluate(() => button.click())`, and frame APIs are NOT intercepted. The
  *    fixture's `runAction` fallback covers fixture-routed actions (screenshot, snapshot,
- *    ai.assert, etc.) but raw CDP / keyboard / evaluate are uncovered. See
+ *    etc.) but raw CDP / keyboard / evaluate are uncovered. See
  *    `__tests__/integration/cursor/proxy-coverage.test.ts` for the living gap report.
  */
 
