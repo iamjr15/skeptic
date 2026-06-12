@@ -143,6 +143,19 @@ export async function dispatchSession(
         return ok(result);
       }
 
+      case "session.record": {
+        const guard = requireOpen(registry, name);
+        if (guard) return fail(guard);
+        const durationSec = Number(p["durationSec"] ?? 3);
+        const result = await registry.run(name, async (s) => {
+          if (!s.recordVideo) {
+            throw new Error("video recording is only supported on the Android driver; for web use `skeptic run --video`");
+          }
+          return s.recordVideo(durationSec);
+        });
+        return ok(result);
+      }
+
       case "session.observe": {
         const guard = requireOpen(registry, name);
         if (guard) return fail(guard);

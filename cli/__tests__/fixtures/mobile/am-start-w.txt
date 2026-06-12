@@ -1,0 +1,8 @@
+Starting: Intent { cmp=app.fieldwork.android/.MainActivity }
+Warning: Activity not started, intent has been delivered to currently running top-most instance.
+Status: ok
+LaunchState: UNKNOWN (0)
+Activity: app.fieldwork.android/.MainActivity
+TotalTime: 0
+WaitTime: 11
+Complete

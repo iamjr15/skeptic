@@ -583,6 +583,26 @@ addSessionOpts(
   });
 
 addSessionOpts(
+  program.command("record").description("Record a fixed-duration screen video of the session (Android screenrecord)"),
+)
+  .option("--duration <seconds>", "recording length (1-20s, default 3)", parseNonNegativeInt)
+  .action(async (opts: import("./commands/browser-verbs.js").RecordVerbOptions) => {
+    const { runRecord } = await import("./commands/browser-verbs.js");
+    await runRecord(opts);
+  });
+
+for (const [verb, collector, desc] of [
+  ["perf", "performance", "Read performance evidence (Android: gfxinfo/meminfo/launch; web: Web Vitals)"],
+  ["a11y", "accessibility", "Read accessibility evidence (Android: uiautomator heuristics; web: axe)"],
+  ["network", "network", "Read network evidence (Android: degraded per-uid totals; web: requests)"],
+] as const) {
+  addSessionOpts(program.command(verb).description(desc)).action(async (opts: SessionVerbOpts) => {
+    const { runObserve } = await import("./commands/browser-verbs.js");
+    await runObserve(collector, opts);
+  });
+}
+
+addSessionOpts(
   program.command("wait").description("Wait for a duration (--ms) or a selector"),
 )
   .option("--ms <n>", "milliseconds to wait", parseNonNegativeInt)

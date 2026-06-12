@@ -55,17 +55,40 @@ The same verbs drive an Android app on an emulator or attached device via `adb`
 package name or deep link instead of a URL:
 
 ```bash
-skeptic open com.example.app --platform android   # launches the app
+skeptic open com.example.app --platform android   # launches the app (am start -W)
 skeptic snapshot -i                                # uiautomator tree → @eN refs
 skeptic click @e5                                  # taps the node's center
 skeptic fill @e3 "user@test.com"                   # ASCII input
+skeptic is enabled @e5                             # element state (visible|enabled)
 skeptic screenshot                                 # device screencap → file path
+skeptic record --duration 5                        # screenrecord → .mp4
+skeptic perf                                        # gfxinfo jank + meminfo PSS + launch ms
+skeptic a11y                                        # uiautomator a11y heuristics
+skeptic network                                     # per-uid byte totals (degraded)
 skeptic console --errors                           # logcat (app-filtered)
 skeptic close
 ```
 
+Device evidence (parallels the web collectors; read via the verbs above):
+
+- **perf** — `dumpsys gfxinfo` (total/janky frames, frame-time percentiles, missed
+  vsync) + `meminfo` (PSS/RSS) + `am start -W` launch timings. A distinct shape from
+  web vitals (`platform: "android"`).
+- **a11y** — STRUCTURAL uiautomator heuristics only (unlabeled clickables, sub-48dp
+  touch targets, NAF nodes). No color-contrast check — the dump has no pixels.
+- **network** — `degraded: true` by default: Android exposes only per-uid byte totals,
+  never per-request URLs/status. Per-request capture needs an opt-in proxy.
+- `is checked` / `get value` aren't available on Android (the node doesn't retain them)
+  — they return a structured `[adbQuery:*_unsupported]` error; re-`snapshot` to read state.
+
 Mobile-specific guidance:
 
+- **Emulator GPU mode matters for visual evidence.** A headless emulator launched
+  with `-no-window` and the wrong `-gpu` mode returns BLANK screencaps/recordings.
+  skeptic detects this (a near-uniform frame) and attaches a `blank-screenshot`
+  diagnostic. Fix: relaunch with software rendering —
+  `emulator -avd <name> -gpu swiftshader_indirect` (drop `-no-window` if it persists).
+  uiautomator dumps and `dumpsys` evidence are unaffected (no GPU needed).
 - Refs come from a `uiautomator` accessibility dump (~1–3s each on a healthy
   device). Re-snapshot after every screen change; prefer `res=` (resource-id)
   and `desc=` (content-description) selectorHints over `text=`/`class=`.

@@ -6,10 +6,12 @@ import { execFile } from "node:child_process";
  * one seam so the snapshot/resolve/action logic is unit-testable without a device.
  */
 export interface Adb {
-  /** Run `adb -s <serial> <args...>` and resolve stdout (utf8). Rejects on non-zero exit. */
-  text(args: string[]): Promise<string>;
-  /** Run and resolve raw stdout bytes (for screencap PNGs). */
-  bytes(args: string[]): Promise<Buffer>;
+  /** Run `adb -s <serial> <args...>` and resolve stdout (utf8). Rejects on non-zero exit.
+   *  `timeoutMs` overrides the default per-command timeout (e.g. for `screenrecord`,
+   *  which blocks for its full duration). */
+  text(args: string[], timeoutMs?: number): Promise<string>;
+  /** Run and resolve raw stdout bytes (for screencap PNGs / video pulls). */
+  bytes(args: string[], timeoutMs?: number): Promise<Buffer>;
 }
 
 export interface AdbOptions {
@@ -31,12 +33,12 @@ export const createAdb = (opts: AdbOptions): Adb => {
   const timeout = opts.timeoutMs ?? 15_000;
   const base = ["-s", opts.serial];
 
-  const run = (args: string[], encoding: "utf8" | "buffer"): Promise<Buffer> =>
+  const run = (args: string[], timeoutMs?: number): Promise<Buffer> =>
     new Promise((resolve, reject) => {
       execFile(
         bin,
         [...base, ...args],
-        { timeout, maxBuffer: 64 * 1024 * 1024, encoding: "buffer" },
+        { timeout: timeoutMs ?? timeout, maxBuffer: 64 * 1024 * 1024, encoding: "buffer" },
         (err, stdout) => {
           if (err) {
             reject(new Error(`adb ${args.join(" ")} failed: ${err.message}`));
@@ -45,12 +47,11 @@ export const createAdb = (opts: AdbOptions): Adb => {
           resolve(stdout as Buffer);
         },
       );
-      void encoding;
     });
 
   return {
-    text: async (args) => (await run(args, "utf8")).toString("utf8"),
-    bytes: (args) => run(args, "buffer"),
+    text: async (args, timeoutMs) => (await run(args, timeoutMs)).toString("utf8"),
+    bytes: (args, timeoutMs) => run(args, timeoutMs),
   };
 };
 

@@ -155,6 +155,24 @@ export const runScroll = (target: string | undefined, opts: ScrollVerbOptions): 
   );
 };
 
+export interface RecordVerbOptions extends BrowserVerbOptions {
+  duration?: number;
+}
+/** Record a fixed-duration screen video of the open session (Android `screenrecord`). */
+export const runRecord = (opts: RecordVerbOptions): Promise<void> =>
+  dispatch(
+    "session.record",
+    sessionParams(opts, { durationSec: opts.duration ?? 3 }),
+    opts,
+    (d) => {
+      const r = d as { path: string; bytes: number; durationSec: number; degraded: boolean };
+      const warn = r.degraded
+        ? " ⚠ file is tiny — the device/emulator GPU may not be compositing into the capture (see `skeptic doctor`)"
+        : "";
+      return `recorded ${r.durationSec}s → ${r.path} (${r.bytes} bytes)${warn}\n`;
+    },
+  );
+
 export interface ConsoleVerbOptions extends BrowserVerbOptions {
   errors?: boolean;
 }
@@ -165,6 +183,12 @@ export const runConsole = (opts: ConsoleVerbOptions): Promise<void> =>
     opts,
     (d) => `${JSON.stringify(d, null, 2)}\n`,
   );
+
+/** Read one evidence collector from the open session. On Android these are the
+ *  device-evidence streams (gfxinfo/meminfo perf, uiautomator a11y heuristics,
+ *  netstats degraded network); on web, the matching Playwright collector. */
+export const runObserve = (collector: string, opts: BrowserVerbOptions): Promise<void> =>
+  dispatch("session.observe", sessionParams(opts, { collector }), opts, (d) => `${JSON.stringify(d, null, 2)}\n`);
 
 export interface WaitVerbOptions extends BrowserVerbOptions {
   ms?: number;

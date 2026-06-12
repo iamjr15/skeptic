@@ -162,3 +162,70 @@ export interface AccessibilitySnapshot {
   };
   standard: string;
 }
+
+// ── Mobile (device) evidence ───────────────────────────────────────────────
+// Parallel snapshot shapes produced by the Android adb driver, kept DISTINCT
+// from the web (Web-Vitals / axe / Playwright-network) shapes above. The
+// `platform` discriminant lets a reporter render either without conflating the
+// two — mobile frame timings are not web vitals, and uiautomator heuristics are
+// not axe rules. See src/driver/mobile/device-evidence.ts.
+
+export interface MobilePerformanceSnapshot {
+  platform: "android";
+  /** `am start -W` launch timings (ms). Values are null when not measured — e.g. the
+   *  activity was already foregrounded, so the relaunch reports TotalTime 0. */
+  launch: { totalTimeMs: number | null; waitTimeMs: number | null };
+  /** `dumpsys gfxinfo <pkg>` frame stats. Null when the package rendered no frames. */
+  frames: {
+    totalFrames: number;
+    jankyFrames: number;
+    jankyPercent: number;
+    percentiles: { p50: number; p90: number; p95: number; p99: number };
+    missedVsync: number;
+    deadlineMissed: number;
+  } | null;
+  /** `dumpsys meminfo <pkg>` proportional/resident set size (KB). Null when unavailable. */
+  memory: { totalPssKb: number; totalRssKb: number } | null;
+}
+
+export type MobileAccessibilityRule =
+  | "unlabeled-clickable"
+  | "small-touch-target"
+  | "not-accessibility-friendly";
+
+export interface MobileAccessibilityIssue {
+  rule: MobileAccessibilityRule;
+  impact: "serious" | "moderate" | "minor";
+  className: string;
+  resourceId?: string;
+  bounds: { x1: number; y1: number; x2: number; y2: number };
+  detail: string;
+}
+
+export interface MobileAccessibilitySnapshot {
+  platform: "android";
+  issues: MobileAccessibilityIssue[];
+  summary: {
+    issues: number;
+    /** Interactive/clickable nodes evaluated. */
+    checked: number;
+    /** Touch-target threshold used (px), derived from `wm density` (48dp). */
+    minTouchTargetPx: number;
+    /** Honest scope: STRUCTURAL heuristics only. uiautomator exposes no pixels, so
+     *  there is no color-contrast check (the biggest web-axe category has no mobile analog). */
+    note: string;
+  };
+}
+
+export interface MobileNetworkSnapshot {
+  platform: "android";
+  /** Always true under the default: without an instrumenting proxy Android exposes
+   *  only per-uid byte totals, never per-request URLs/methods/status. `--proxy` is the
+   *  (opt-in, loudly-flagged) upgrade path — see the SKILL.md mobile section. */
+  degraded: true;
+  /** Per-uid cumulative byte totals from `dumpsys netstats`, when the uid resolved. */
+  totals: { rxBytes: number; txBytes: number } | null;
+  /** Empty under the degraded default — per-request capture needs a proxy. */
+  requests: [];
+  note: string;
+}

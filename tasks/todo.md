@@ -10,7 +10,19 @@ Full audit report and detailed checklist: `plans/sota-readiness-plan.md`.
 - [ ] Fix .gitignore coverage/ pattern hiding ast-extraction.test.ts from CI
 - [ ] SECURITY.md; fix ws vuln; dependabot
 
-## STATUS (verified green: 103 test files, 778 passing, 1 skipped; tsc clean; build clean)
+## STATUS (verified green: 104 test files, 791 passing, 1 skipped; tsc clean; build clean)
+
+### Mobile parity collectors — DONE & LIVE-VERIFIED on a real emulator (2026-06-12)
+Emulator-5554 (Android 16) running the real `app.fieldwork.android` app. The previously
+environment-blocked live verb-loop now works end-to-end (open→snapshot→click→re-snapshot,
+~2s dumps), and all four device-evidence collectors are verified against live data.
+- **New `src/driver/mobile/device-evidence.ts`** + `MobilePerformanceSnapshot`/`MobileAccessibilitySnapshot`/`MobileNetworkSnapshot` types (distinct from web shapes, `platform:"android"` discriminant). Wired into `adb-session.collectEvidence` (gathered in parallel).
+  - **perf** (gfxinfo frames/jank/percentiles/missed-vsync + meminfo PSS/RSS + `am start -W` launch) — live: `totalFrames:537, jankyPercent:2.79, p50/p90/p95/p99=16/18/18/31, PSS 112MB`.
+  - **a11y** — structural uiautomator heuristics (unlabeled-clickable, sub-48dp touch target, NAF); honest "no contrast" note. Live: 3 clickables checked, 0 issues (clean screen); unit-tested to CATCH all three rules on a fixture.
+  - **network** — `degraded:true` per-uid byte totals from netstats. Live: `rx 1.7MB, tx 3.1MB`.
+  - **video** — `recordVideo` via `screenrecord` (bounded ≤20s, +per-call adb timeout) → `record` verb. Live: real 3s mp4, `degraded:false`.
+- **New CLI verbs:** `perf` / `a11y` / `network` / `record` (+ `session.record`/`observe` RPC). `is enabled`/`screenshot`/`scroll` all live-verified on the device; `is checked`/`get value` correctly return structured `[adbQuery:*_unsupported]`.
+- **Blank-capture guard (answers "prevent recurrence"):** the AVD was launched `-no-window` with a GPU mode that doesn't composite into screencap → blank screenshots/recordings (even the system launcher captured blank). Root-caused, restarted the emulator with `-gpu swiftshader_indirect` (cold boot) → capture now real (launcher 10KB→1.3MB). skeptic now **detects** a near-uniform frame (`detectBlankCapture`, reusing `detectBlankFrame`'s variance signal — the web byte-floor rule misses full-screen blanks) and attaches a `blank-screenshot` diagnostic with the exact GPU-mode remediation. SKILL.md mobile section documents it. +13 unit tests (parsers vs real fixtures, a11y heuristics, netstats scoping, blank detection).
 
 ### Small-P3-cleanups bucket — DONE & verified (2026-06-12)
 Hybrid (3 parallel leaf agents + lead-owned entangled CLI core) → build+tsc+full-suite green (778 pass).

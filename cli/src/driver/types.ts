@@ -62,6 +62,15 @@ export interface DriverElement {
  * persist across calls) and the attached collectors. This is the deleted MCP
  * `BrowserMcpSession`, now typed platform-agnostically.
  */
+export interface VideoRecordResult {
+  path: string;
+  bytes: number;
+  durationSec: number;
+  /** True when the file is suspiciously small for its duration — the display likely
+   *  wasn't composited into the capture (headless emulator with the wrong GPU mode). */
+  degraded: boolean;
+}
+
 export interface DriverSession {
   open(url: string, opts?: DriverOpenOptions): Promise<void>;
   url(): string;
@@ -79,6 +88,9 @@ export interface DriverSession {
   close(): Promise<void>;
   /** Web-only escape hatch for callers that still need raw Playwright. Mobile leaves it undefined. */
   raw?(): { page: Page; context: BrowserContext };
+  /** Record a fixed-duration screen video. Android-only (`adb screenrecord`); web
+   *  records via the Playwright context on `skeptic run --video`, so it's undefined there. */
+  recordVideo?(durationSec: number): Promise<VideoRecordResult>;
 }
 
 export interface NewSessionOptions {

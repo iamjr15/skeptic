@@ -4,10 +4,19 @@ import type { Adb } from "./adb.js";
 import { parseUiAutomator, type NativeNode } from "./uiautomator-parse.js";
 import { AndroidAdbDriverElement } from "./adb-element.js";
 import { resolveBySelectorHint } from "./adb-resolve.js";
-import type { Collector } from "../../observability/types.js";
+import {
+  buildMobilePerformance,
+  buildMobileAccessibility,
+  buildMobileNetwork,
+  parseLaunchTimings,
+  resolveAppUid,
+} from "./device-evidence.js";
+import { detectBlankFrame } from "../../executor/visual-settle.js";
+import type { Collector, MobilePerformanceSnapshot } from "../../observability/types.js";
+import type { StepDiagnostic } from "../../executor/types.js";
 import type { ScreenshotOptions, ScreenshotResult } from "../../api/screenshot.js";
 import type { AriaRefEntry } from "../../executor/aria-ref-types.js";
-import type { CaptureOptions, CaptureResult, DriverElement, DriverOpenOptions, DriverSession } from "../types.js";
+import type { CaptureOptions, CaptureResult, DriverElement, DriverOpenOptions, DriverSession, VideoRecordResult } from "../types.js";
 
 const DUMP_RETRIES = 8;
 // Total wall-clock budget for one snapshot's dump. A healthy device dumps in
@@ -24,6 +33,9 @@ export class AndroidAdbDriverSession implements DriverSession {
   private currentTarget = "";
   private packageName = "";
   private screen: { width: number; height: number } | null = null;
+  private density: number | null = null;
+  private lastXml: string | null = null;
+  private lastLaunch: MobilePerformanceSnapshot["launch"] = { totalTimeMs: null, waitTimeMs: null };
 
   constructor(
     private readonly adb: Adb,
@@ -48,7 +60,10 @@ export class AndroidAdbDriverSession implements DriverSession {
         .filter((l) => l.includes("/"))
         .pop();
       if (component) {
-        await this.adb.text(["shell", "am", "start", "-n", component]);
+        // `-W` blocks until launch completes and prints TotalTime/WaitTime, feeding
+        // the MobilePerformanceSnapshot launch timings.
+        const out = await this.adb.text(["shell", "am", "start", "-W", "-n", component]);
+        this.lastLaunch = parseLaunchTimings(out);
       } else {
         await this.adb
           .text(["shell", "monkey", "-p", target, "-c", "android.intent.category.LAUNCHER", "1"])
@@ -78,6 +93,7 @@ export class AndroidAdbDriverSession implements DriverSession {
     this.nodes = nodes;
     this.lastEntries = capture.entries;
     this.lastYaml = capture.yaml;
+    this.lastXml = xml; // reused by the accessibility collector (no extra dump)
     return capture;
   }
 
@@ -112,7 +128,24 @@ export class AndroidAdbDriverSession implements DriverSession {
     fs.mkdirSync(this.artifactDir, { recursive: true });
     const file = path.join(this.artifactDir, `${name.replace(/[^a-zA-Z0-9_-]/g, "_")}.png`);
     fs.writeFileSync(file, png);
-    return { path: file, diagnostics: [] };
+    return { path: file, diagnostics: detectBlankCapture(png) };
+  }
+
+  async recordVideo(durationSec: number): Promise<VideoRecordResult> {
+    // screenrecord blocks on-device for the whole limit (its own cap is 180s); we cap
+    // at 20s so the recording + pull fits inside the session RPC's 30s budget.
+    const dur = Math.max(1, Math.min(20, Math.round(durationSec || 3)));
+    const remote = "/sdcard/skeptic-record.mp4";
+    const budget = (dur + 10) * 1000;
+    await this.adb.text(["shell", "screenrecord", "--time-limit", String(dur), remote], budget).catch(() => {});
+    fs.mkdirSync(this.artifactDir, { recursive: true });
+    const local = path.join(this.artifactDir, "recording.mp4");
+    const bytes = await this.adb.bytes(["exec-out", "cat", remote], budget).catch(() => Buffer.alloc(0));
+    fs.writeFileSync(local, bytes);
+    await this.adb.text(["shell", "rm", remote]).catch(() => {});
+    // A composited recording is comfortably above ~20KB even for a static screen; a
+    // tinier file means the GPU surface wasn't captured (see detectBlankCapture).
+    return { path: local, bytes: bytes.length, durationSec: dur, degraded: bytes.length < 20_000 };
   }
 
   async scroll(opts: { dx?: number; dy?: number }): Promise<void> {
@@ -137,6 +170,18 @@ export class AndroidAdbDriverSession implements DriverSession {
 
   async collectEvidence(): Promise<Record<string, unknown>> {
     const pkg = this.packageName || (await this.foregroundPackage());
+    // Gather the four device-evidence streams concurrently — each is an independent
+    // adb pull, so wall-clock is the slowest (~the a11y dump), not their sum.
+    const [console, performance, accessibility, network] = await Promise.all([
+      this.collectConsole(pkg),
+      buildMobilePerformance(this.adb, pkg, this.lastLaunch),
+      this.collectAccessibility(),
+      pkg ? resolveAppUid(this.adb, pkg).then((uid) => buildMobileNetwork(this.adb, uid)) : buildMobileNetwork(this.adb, null),
+    ]);
+    return { console, performance, accessibility, network };
+  }
+
+  private async collectConsole(pkg: string): Promise<unknown> {
     const pid = pkg ? (await this.adb.text(["shell", "pidof", "-s", pkg]).catch(() => "")).trim() : "";
     const args = pid
       ? ["shell", "logcat", "-d", "-v", "brief", `--pid=${pid}`]
@@ -148,9 +193,15 @@ export class AndroidAdbDriverSession implements DriverSession {
       .filter(Boolean)
       .slice(-200)
       .map((line) => ({ type: logcatLevel(line), text: line, timestamp: Date.now() }));
-    return {
-      console: { messages, summary: { total: messages.length, errorCount: messages.filter((m) => m.type === "error").length } },
-    };
+    return { messages, summary: { total: messages.length, errorCount: messages.filter((m) => m.type === "error").length } };
+  }
+
+  private async collectAccessibility(): Promise<unknown> {
+    if (this.density === null) this.density = await this.fetchDensity();
+    // Reuse the last snapshot's dump when present; otherwise pull a fresh one.
+    const xml = this.lastXml ?? (await this.dumpWithRetry().catch(() => ""));
+    if (!xml) return { platform: "android", issues: [], summary: { issues: 0, checked: 0, minTouchTargetPx: 0, note: "no uiautomator dump available" } };
+    return buildMobileAccessibility(xml, this.density ?? 160);
   }
 
   detachCollectors(): Promise<void> {
@@ -166,6 +217,7 @@ export class AndroidAdbDriverSession implements DriverSession {
     this.nodes = new Map();
     this.lastEntries = [];
     this.lastYaml = null;
+    this.lastXml = null;
   }
 
   private async dumpWithRetry(): Promise<string> {
@@ -200,11 +252,40 @@ export class AndroidAdbDriverSession implements DriverSession {
     return m ? { width: Number(m[1]), height: Number(m[2]) } : null;
   }
 
+  private async fetchDensity(): Promise<number> {
+    const out = await this.adb.text(["shell", "wm", "density"]).catch(() => "");
+    const m = /(?:Override|Physical) density:\s*(\d+)/.exec(out);
+    return m ? Number(m[1]) : 160;
+  }
+
   private async foregroundPackage(): Promise<string> {
     const out = await this.adb.text(["shell", "dumpsys", "window"]).catch(() => "");
     return /mCurrentFocus=Window\{[^ ]+ [^ ]+ ([\w.]+)\//.exec(out)?.[1] ?? "";
   }
 }
+
+// A real Android frame always carries a varied status/nav bar, so a near-uniform
+// capture means the device/emulator GPU isn't compositing into screencap (the
+// classic headless emulator with the wrong `-gpu` mode — frames come back blank).
+// The web blank detector ANDs variance with an 8KB byte floor, but a full-screen
+// blank PNG clears that floor, so on mobile we key on the pixel-variance signal
+// alone and surface the remediation instead of silently writing a blank image.
+const MOBILE_NEAR_UNIFORM = 8; // matches visual-settle's PIXEL_VARIANCE_THRESHOLD
+export const detectBlankCapture = (png: Buffer): StepDiagnostic[] => {
+  const { meta } = detectBlankFrame(png);
+  if (meta.channelRange >= MOBILE_NEAR_UNIFORM) return [];
+  return [
+    {
+      kind: "blank-screenshot",
+      message:
+        `[android] captured frame is near-uniform (pixel channel range ${meta.channelRange}) — the device/emulator ` +
+        "GPU is not compositing into screencap, so this image is blank. For a headless emulator relaunch with " +
+        "`-gpu swiftshader_indirect` (software rendering) or without `-no-window`; on a physical device make sure " +
+        "the screen is on and unlocked. `skeptic doctor` reports the device state.",
+      meta,
+    },
+  ];
+};
 
 const logcatLevel = (line: string): string => {
   const m = /^([VDIWEF])\//.exec(line);
