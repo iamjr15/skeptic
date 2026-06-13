@@ -12,6 +12,26 @@ Full audit report and detailed checklist: `plans/sota-readiness-plan.md`.
 
 ## STATUS (verified green: 106 test files, 806 passing, 1 skipped; tsc clean; build clean)
 
+### Skill-evals harness — DONE & verified (2026-06-13)
+The last environment-blocked item. `cli/evals/skill-evals.mjs` runs REAL host-agent
+sessions (`claude -p`, with a best-effort `codex exec` runner) against the bundled
+skeptic skill and scores SKILL.md compliance from the agent's ACTUAL tool calls — the
+standing quality gate now that the skill is the only front door (no MCP).
+- Each case runs in a throwaway temp dir with the skill installed project-local at
+  `<sandbox>/.claude/skills/skeptic` (never touches the real `~/.claude`) + a `skeptic`
+  shim on PATH → `dist/skeptic.mjs`. The agent runs autonomously; the harness parses the
+  `--output-format stream-json` tool-call stream and scores the rubric (triggered the
+  skill · ran the CLI · avoided removed MCP/AI surface · per-case verb e.g. inspect-loop /
+  `skeptic run` / `--platform android`). Exit non-zero when compliance < 100% (CI-gateable).
+- **Verified live, BOTH runners at 100%:** claude — web-smoke / web-regression / android-platform
+  all 100% (agent ran the real verb loop `skeptic open → snapshot → get → console`, authored +
+  `skeptic run` a spec, and used `--platform android` for the mobile case, zero removed surface).
+  codex — web-smoke 100% (skill injected via AGENTS.md since codex has no Skill tool; `item.command`
+  JSONL parsed). The harness also CAUGHT a real fair-test gap (an android case targeting a
+  non-installed app scored 75%) — fixed by targeting the always-present Settings app.
+- 3 starter cases (web-smoke, web-regression, android-platform); add more by extending the
+  CASES array. Not part of `npm test` (each case = a full agent session). README in evals/.
+
 ### iOS simulator driver (`--platform ios-sim`) — DONE & LIVE-VERIFIED (2026-06-13)
 The previously-blocked iOS milestone is built and verified against a real booted sim
 (iPhone 17 Pro, iOS 26.5). **Key research finding (via /research): idb is dead on Xcode 26**
