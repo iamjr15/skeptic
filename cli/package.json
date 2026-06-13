@@ -96,7 +96,7 @@
     "@types/react": "^19.2.14",
     "chalk": "^5.4.1",
     "chokidar": "^5.0.0",
-    "commander": "^13.1.0",
+    "commander": "^15.0.0",
     "fast-xml-parser": "^5.8.0",
     "glob": "^11.0.2",
     "ink-testing-library": "^4.0.0",
