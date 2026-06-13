@@ -122,10 +122,31 @@ jobs:
           node_modules/.bin/skeptic --help >/dev/null
           echo "Tarball smoke test passed: skeptic $STAMPED"
 
+      # Publish via OIDC Trusted Publishing (configured on npm for
+      # iamjr15/skeptic + release.yml). The workflow-level `id-token: write`
+      # lets npm >= 11.5.1 (Node 24 ships 11.11.x) exchange the OIDC token for
+      # a short-lived publish credential — no NPM_TOKEN needed.
+      #
+      # Cutover safety: the step env is named NPM_TOKEN (NOT NODE_AUTH_TOKEN),
+      # so the first `npm publish` leaves setup-node's `_authToken` empty and
+      # OIDC engages. Only if OIDC fails do we fall back to a token publish by
+      # setting NODE_AUTH_TOKEN inline. A *static* NODE_AUTH_TOKEN would
+      # preempt OIDC, so it must never be the step env. --provenance is kept on
+      # both paths (automatic on OIDC; the token path needs it explicitly, else
+      # that release would silently lose provenance).
+      # Once OIDC is proven on a real release, simplify to a single
+      # `npm publish --access public` and drop the NPM_TOKEN secret.
       - name: Publish main package
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --provenance --access public
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          if npm publish --provenance --access public; then
+            echo "Published via OIDC trusted publishing"
+          else
+            echo "::warning::OIDC publish failed — falling back to NPM_TOKEN"
+            NODE_AUTH_TOKEN="$NPM_TOKEN" npm publish --provenance --access public
+          fi
 
       - name: Create GitHub Release
         env:
