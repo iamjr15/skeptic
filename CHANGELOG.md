@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-06-14
+
+Release-infrastructure only — no runtime or API changes; `skeptic-cli@1.0.1` is
+functionally identical to `1.0.0`.
+
+### Changed
+
+- **npm publishing now uses OIDC Trusted Publishing** instead of a long-lived
+  `NPM_TOKEN`. The release workflow exchanges GitHub Actions' OIDC identity for a
+  short-lived, per-publish credential (provenance is generated automatically), so
+  there is no publish token to expire or leak.
+
+### Fixed
+
+- **Release CI no longer wedges on the Playwright browser download.** The release
+  workflow restores the same cached Chromium that CI builds — with `restore-keys`
+  so a version bump doesn't force a cold re-download — and bounds the install with
+  a timeout + retry, fixing a hang where `playwright install` stalled after a
+  100%-complete download under Node 24.
+
 ## [1.0.0] - 2026-06-13
 
 First stable release. skeptic now drives **web, Android, and iOS simulators** as
@@ -135,7 +155,8 @@ skeptic is now **agent-native**: a skill, a CLI, and a daemon. The built-in
   Intelligence comes from the host coding agent; skeptic is the deterministic
   execution and evidence layer it drives through the bundled skill and CLI.
 
-[Unreleased]: https://github.com/iamjr15/skeptic/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/iamjr15/skeptic/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/iamjr15/skeptic/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/iamjr15/skeptic/compare/v0.2.1...v1.0.0
 [0.2.1]: https://github.com/iamjr15/skeptic/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/iamjr15/skeptic/releases/tag/v0.2.0

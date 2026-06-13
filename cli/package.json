@@ -1,6 +1,6 @@
 {
   "name": "skeptic-cli",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Agent-native CLI for browser QA — deterministic Playwright TypeScript test runner with observability, evidence capture, and snapshot-based page discovery. No API keys, no LLM of its own.",
   "type": "module",
   "bin": {

@@ -56,8 +56,13 @@ jobs:
         with:
           path: ${{ steps.pw.outputs.dir }}
           # The Playwright version lives in package-lock.json, so an upgrade
-          # naturally busts the cache.
+          # naturally busts the exact key. restore-keys prefix-matches the
+          # latest browser cache so an unrelated lock change (e.g. a skeptic
+          # version bump) restores the still-valid Chromium instead of
+          # cold-downloading it; a real Playwright upgrade still re-downloads.
           key: ${{ runner.os }}-playwright-${{ hashFiles('cli/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
 
       - name: Install Playwright Chromium
         run: npx playwright install chromium
