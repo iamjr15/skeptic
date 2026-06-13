@@ -86,7 +86,7 @@
   },
   "optionalDependencies": {
     "accessibility-checker-engine": "^4.0.0",
-    "better-sqlite3": "^12.9.0"
+    "better-sqlite3": "^12.10.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.2",
