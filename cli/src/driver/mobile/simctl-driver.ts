@@ -1,4 +1,4 @@
-import { createIosTools, listBootedSimulators, type IosTools } from "./ios-tools.js";
+import { createIosTools, listBootedSimulators, assertIosSimReady, type IosTools } from "./ios-tools.js";
 import { IosSimDriverSession } from "./simctl-session.js";
 import type { Driver, DriverSession, NewSessionOptions } from "../types.js";
 
@@ -17,6 +17,8 @@ export class IosSimDriver implements Driver {
   ) {}
 
   static async create(opts: IosSimDriverOptions = {}): Promise<IosSimDriver> {
+    // Fail with an actionable message (not a raw ENOENT) when Xcode / axe are missing.
+    if (!opts.tools) assertIosSimReady();
     let udid = opts.udid;
     if (!udid) {
       const sims = await listBootedSimulators();

@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
+import { join } from "node:path";
 
 /**
  * Injectable runner for the two iOS-simulator host tools — `simctl` (lifecycle /
@@ -46,7 +47,7 @@ export const createIosTools = (opts: IosToolsOptions = {}): IosTools => {
     opts.simctlPath ??
     firstExisting(developerDir ? `${developerDir}/usr/bin/simctl` : undefined) ??
     "simctl";
-  const axeBin = opts.axePath ?? firstExisting("/opt/homebrew/bin/axe", "/usr/local/bin/axe") ?? "axe";
+  const axeBin = findAxeBinary(opts.axePath);
   const timeout = opts.timeoutMs ?? 30_000;
   // axe's vendored idb frameworks read `xcode-select -p`, which honors DEVELOPER_DIR;
   // setting it lets both tools find a full Xcode without `sudo xcode-select -s`.
@@ -100,5 +101,42 @@ export const listBootedSimulators = async (opts: IosToolsOptions = {}): Promise<
   }
 };
 
+/** Resolve the `axe` binary (brew default locations, else bare `axe` on PATH). */
+export const findAxeBinary = (override?: string): string =>
+  override ?? firstExisting("/opt/homebrew/bin/axe", "/usr/local/bin/axe") ?? "axe";
+
+const onPath = (bin: string): boolean =>
+  (process.env["PATH"] ?? "").split(":").some((d) => d && existsSync(join(d, bin)));
+
+/** True when `axe` is installed — an explicit `override` path must exist; otherwise
+ *  check the brew locations and PATH. */
+export const axeAvailable = (override?: string): boolean => {
+  if (override) return existsSync(override);
+  return firstExisting("/opt/homebrew/bin/axe", "/usr/local/bin/axe") !== undefined || onPath("axe");
+};
+
 /** True when a full Xcode (with simctl) is resolvable — gates `--platform ios-sim`. */
 export const isIosSimAvailable = (): boolean => process.platform === "darwin" && resolveDeveloperDir() !== undefined;
+
+/**
+ * Preflight for `--platform ios-sim`: throws an ACTIONABLE error (not a raw ENOENT)
+ * when the host is missing the externally-installed tools the driver shells out to.
+ * Called at driver creation so `run`/`open`/`scaffold` all fail with the fix.
+ */
+export const assertIosSimReady = (opts: { axePath?: string; developerDir?: string } = {}): void => {
+  if (process.platform !== "darwin") {
+    throw new Error("[ios-sim] --platform ios-sim is macOS-only.");
+  }
+  if (!resolveDeveloperDir(opts.developerDir)) {
+    throw new Error(
+      "[ios-sim] no full Xcode found — --platform ios-sim needs Xcode (Command Line Tools lack simctl). " +
+        "Install Xcode, then `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer` or set DEVELOPER_DIR.",
+    );
+  }
+  if (!axeAvailable(opts.axePath)) {
+    throw new Error(
+      "[ios-sim] the `axe` tool is required for iOS UI automation but isn't installed. " +
+        "Install it: `brew install cameroncooke/axe/axe`  (`skeptic doctor` checks this).",
+    );
+  }
+};
