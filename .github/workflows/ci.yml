@@ -52,7 +52,7 @@ jobs:
           esac
 
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ steps.pw.outputs.dir }}
           # The Playwright version lives in package-lock.json, so an upgrade
