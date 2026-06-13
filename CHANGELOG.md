@@ -4,9 +4,72 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-While skeptic is pre-1.0 (`0.x`), minor versions may carry breaking changes.
 
 ## [Unreleased]
+
+## [1.0.0] - 2026-06-13
+
+First stable release. skeptic now drives **web, Android, and iOS simulators** as
+co-equal platforms through one skill + CLI + daemon — the same `test`/`expect`, the
+same runner, the same `results.json` — with no MCP and no model of its own.
+
+### Added
+
+- **Android driver (`--platform android`)** — driver-less device automation via
+  `adb` + `uiautomator` (no Appium/Maestro). Interactive verbs, `skeptic run`
+  against a device/emulator (the `device` spec fixture), and `skeptic scaffold`.
+- **iOS simulator driver (`--platform ios-sim`)** — driver-less via `simctl` + `axe`
+  (the maintained idb-framework redistribution: reads the accessibility tree and
+  injects HID taps — no WebDriverAgent, no in-app test bundle). Same verbs, `run`,
+  and `scaffold`. macOS + full Xcode + `axe` (`brew install cameroncooke/axe/axe`)
+  required; real iOS devices are out of scope (axe/idb UI automation is sim-only).
+- **`device` spec fixture** — `test("…", async ({ device }) => …)` drives a device
+  via snapshot → `@eN`/selectorHint → act, sharing the runner/reporting/evidence
+  pipeline with the web `page` fixture. Misusing `page`/`device` across platforms
+  throws a clear, actionable error.
+- **Mobile evidence collectors** (Android) — performance (gfxinfo jank + meminfo PSS
+  + `am start -W` launch timings), accessibility (uiautomator structural heuristics),
+  network (degraded per-uid totals), console (logcat), and video (screenrecord) —
+  surfaced in `results.json` and the html/console reporters.
+- **New CLI verbs** — `scroll`, `is <visible|enabled|checked>`, broadened `get`,
+  device-evidence `perf`/`a11y`/`network`/`record`, and `devices` (lists connected
+  Android devices + booted iOS simulators). `skeptic doctor` probes adb/simctl/axe.
+- **`-t, --grep <substring>`** — run only tests whose name contains a substring.
+- **Skill-evals harness** (`cli/evals/`) — scores SKILL.md compliance by running real
+  `claude -p` / `codex exec` sessions against the bundled skill (the skill is the only
+  front door now, so it's a standing quality gate).
+- **Blank-capture detection** — flags a near-uniform device screenshot with the
+  emulator GPU-mode remediation (`-gpu swiftshader_indirect`) instead of silently
+  saving a blank image.
+
+### Changed
+
+- The runner generalized from a Playwright-only path to a shared device path
+  (`runOneTestDevice`); `--platform`/`--target` thread through `run`, the interactive
+  session daemon, `scaffold`, `devices`, and `doctor`.
+- Mobile metrics render in the html report (Device Performance/Accessibility/Network
+  cards) and the console metrics line, keyed distinctly from the web shapes.
+
+### Fixed
+
+- `skeptic add skill` resolved the wrong bundled-skill path from the flat dist and
+  rewrote a stale `EMBEDDED_SKILL_MD` fallback that reintroduced the removed
+  MCP/AI/`generate` surface (and clobbered good installs). Purged the last
+  `--ai`/`--provider`/`ai`-fixture and `ai.*` references from docs and code.
+- Sharded runs no longer spuriously exit 1 on an empty/over-provisioned shard slice.
+- Enum flags (`--blank-frame-detection`, `wait --state`, `--platform`) validate input
+  instead of silently degrading on a typo.
+- Restored `fast-xml-parser` (used by the Android driver) after it was wrongly dropped
+  as "unused"; fixed two integration tests that soft-returned green without asserting.
+
+### Known issues
+
+- `npm audit` reports transitive advisories on `esbuild` (via `tsx`, the spec loader,
+  and the `tsup`/`vitest` build/test toolchain). They are **not applicable** to
+  skeptic's usage — they concern Deno-only install integrity and the Windows
+  `esbuild serve` dev server, which skeptic never runs (it uses esbuild's transform
+  API). The patched esbuild line (≥ 0.28.1) is currently incompatible with the spec
+  loader, so it's tracked for a follow-up rather than forced.
 
 ## [0.2.1] - 2026-05-07
 
@@ -72,6 +135,7 @@ skeptic is now **agent-native**: a skill, a CLI, and a daemon. The built-in
   Intelligence comes from the host coding agent; skeptic is the deterministic
   execution and evidence layer it drives through the bundled skill and CLI.
 
-[Unreleased]: https://github.com/iamjr15/skeptic/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/iamjr15/skeptic/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/iamjr15/skeptic/compare/v0.2.1...v1.0.0
 [0.2.1]: https://github.com/iamjr15/skeptic/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/iamjr15/skeptic/releases/tag/v0.2.0
