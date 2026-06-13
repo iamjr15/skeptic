@@ -26,7 +26,7 @@ import { ConsoleCollector } from "../observability/collectors/console-collector.
 import { NetworkCollector } from "../observability/collectors/network-collector.js";
 
 /** Session-daemon identity: a web browser engine, or a mobile platform. */
-export type SessionEngine = Engine | "android";
+export type SessionEngine = Engine | "android" | "ios-sim";
 const isWebEngine = (e: SessionEngine): e is Engine =>
   e === "chromium" || e === "firefox" || e === "webkit";
 
@@ -101,14 +101,20 @@ export const startSessionDaemon = async (
   let shutdownInFlight: Promise<void> | null = null;
 
   const web = isWebEngine(opts.engine);
-  // Android sessions use an adb driver (lazily picks the attached device) and
-  // surface evidence via on-demand logcat — no web collectors to attach.
+  // Mobile sessions use a device driver (Android adb, or iOS simctl+axe) that
+  // lazily picks the attached device/sim and surfaces evidence on-demand — no web
+  // collectors to attach.
   const createDriver: (() => Promise<Driver>) | undefined = web
     ? undefined
-    : async (): Promise<Driver> => {
-        const { AdbDriver } = await import("../driver/mobile/adb-driver.js");
-        return AdbDriver.create();
-      };
+    : opts.engine === "ios-sim"
+      ? async (): Promise<Driver> => {
+          const { IosSimDriver } = await import("../driver/mobile/simctl-driver.js");
+          return IosSimDriver.create();
+        }
+      : async (): Promise<Driver> => {
+          const { AdbDriver } = await import("../driver/mobile/adb-driver.js");
+          return AdbDriver.create();
+        };
 
   const registry = new SessionRegistry({
     engine: isWebEngine(opts.engine) ? opts.engine : "chromium", // placeholder; createDriver overrides for mobile

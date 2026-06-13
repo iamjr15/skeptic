@@ -163,18 +163,14 @@ export const buildDeviceFixture = (
 };
 
 /** A Proxy that throws a clear error on any access — used for web-only fixture fields
- *  under `--platform android` (and the `device` field on web). */
-export const unavailable = (field: string, requiredPlatform: "web" | "android"): never =>
+ *  under a device platform (and the `device` field on web). `requiredPlatform` is a
+ *  human-readable hint, e.g. "web" or "android or ios-sim". */
+export const unavailable = (field: string, requiredPlatform: string): never =>
   new Proxy(
     {},
     {
       get() {
-        throw new Error(
-          `the \`${field}\` fixture is only available under --platform ${requiredPlatform}` +
-            (requiredPlatform === "android"
-              ? " (web specs use `page`)"
-              : " (android specs use `device`)"),
-        );
+        throw new Error(`the \`${field}\` fixture is only available under --platform ${requiredPlatform}`);
       },
       apply() {
         throw new Error(`the \`${field}\` fixture is only available under --platform ${requiredPlatform}`);

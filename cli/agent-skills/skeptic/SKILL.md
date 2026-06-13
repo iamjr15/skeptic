@@ -48,11 +48,15 @@ Rules:
 - The session browser defaults to headed for local debugging; pass `--headless` on the first `open` for headless environments (CI/containers).
 - Binary outputs (screenshots) come back as file paths, not inline data.
 
-## Mobile (Android)
+## Mobile (Android + iOS simulator)
 
-The same verbs drive an Android app on an emulator or attached device via `adb`
-(no installed driver, no Appium). Pass `--platform android`; `open` takes a
-package name or deep link instead of a URL:
+The same verbs drive a native app on a device. **Android** (`--platform android`)
+via `adb`; **iOS simulator** (`--platform ios-sim`) via `simctl` + `axe` (the idb
+accessibility-framework redistribution). Both are driver-less — no Appium, no
+WebDriverAgent, no in-app test bundle. `open` takes an app id (Android package /
+iOS bundle id) or a deep link instead of a URL.
+
+### Android (`--platform android`)
 
 ```bash
 skeptic open com.example.app --platform android   # launches the app (am start -W)
@@ -80,6 +84,31 @@ Device evidence (parallels the web collectors; read via the verbs above):
   never per-request URLs/status. Per-request capture needs an opt-in proxy.
 - `is checked` / `get value` aren't available on Android (the node doesn't retain them)
   — they return a structured `[adbQuery:*_unsupported]` error; re-`snapshot` to read state.
+
+### iOS simulator (`--platform ios-sim`)
+
+Same verbs, against a **booted** simulator (`skeptic devices` lists them; boot with
+`xcrun simctl boot <udid>`). Requires a full **Xcode** (not just Command Line Tools)
+and **`axe`** (`brew install cameroncooke/axe/axe`) — skeptic finds Xcode itself, so
+no `sudo xcode-select` needed.
+
+```bash
+skeptic open com.apple.Preferences --platform ios-sim   # bundle id or scheme:// link
+skeptic snapshot -i                                       # AXe accessibility tree → @eN refs
+skeptic click @e4                                         # taps the element's center
+skeptic fill @e14 "search text"                           # focuses + types (Cmd+A clear)
+skeptic screenshot
+skeptic console                                           # bounded unified-log (best-effort)
+skeptic close
+```
+
+- Refs come from `axe describe-ui` (the accessibility tree). selectorHints prefer the
+  stable `id=<accessibility identifier>` › `label=` › `type=`. `snapshot()` auto-settles
+  (re-dumps until the layout stops animating) so taps land where the element *is* — iOS
+  launch / large-title animations move elements for ~1–2s.
+- iOS evidence is deliberately thin: `console` from the unified log only. perf/a11y/network
+  parity is a follow-up (the simulator exposes far less to an unprivileged host than Android).
+- Real iOS devices are out of scope (`axe`/`idb` UI automation is simulator-only).
 
 Mobile-specific guidance:
 

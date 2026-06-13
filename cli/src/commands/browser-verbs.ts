@@ -16,9 +16,9 @@ export interface BrowserVerbOptions {
 }
 
 const daemonOpts = (opts: BrowserVerbOptions): SessionDaemonOptions => ({
-  // Platform folds into the session-daemon engine identity: android sessions use
-  // the adb driver, web sessions a browser. Fixed at the daemon's first spawn.
-  engine: opts.platform === "android" ? "android" : "chromium",
+  // Platform folds into the session-daemon engine identity: android → adb driver,
+  // ios-sim → simctl+axe driver, web → a browser. Fixed at the daemon's first spawn.
+  engine: opts.platform === "android" ? "android" : opts.platform === "ios-sim" ? "ios-sim" : "chromium",
   // Interactive sessions default headed (the dedicated slot); --headless opts out.
   headed: opts.headless !== true,
   cliVersion: __SKEPTIC_CLI_VERSION__,

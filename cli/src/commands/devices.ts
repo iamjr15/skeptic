@@ -1,9 +1,6 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import chalk from "chalk";
 import { listDevices } from "../driver/mobile/adb.js";
-
-const execFileAsync = promisify(execFile);
+import { listBootedSimulators } from "../driver/mobile/ios-tools.js";
 
 export interface DevicesCommandOptions {
   json?: boolean;
@@ -40,23 +37,13 @@ const collectAndroid = async (): Promise<AndroidResult> => {
   }
 };
 
-// Best-effort only: iOS simulators are listable on macOS but skeptic does not
-// drive them yet, so any failure (no Xcode, non-darwin) degrades to an empty list.
+// Booted iOS simulators (drivable via `--platform ios-sim`). Resolves a full Xcode
+// itself (xcode-select may point at Command Line Tools, which lacks simctl), so it
+// works without `sudo xcode-select -s`. Non-darwin / no-Xcode degrades to empty.
 const collectIos = async (): Promise<IosDevice[]> => {
   if (process.platform !== "darwin") return [];
-  try {
-    const { stdout } = await execFileAsync("xcrun", ["simctl", "list", "devices", "booted", "-j"], {
-      timeout: 10_000,
-    });
-    const parsed = JSON.parse(stdout) as {
-      devices?: Record<string, Array<{ udid: string; name: string; state: string }>>;
-    };
-    return Object.values(parsed.devices ?? {})
-      .flat()
-      .map((d) => ({ udid: d.udid, name: d.name, state: d.state }));
-  } catch {
-    return [];
-  }
+  const sims = await listBootedSimulators().catch(() => []);
+  return sims.map((d) => ({ udid: d.udid, name: d.name, state: d.state }));
 };
 
 export const runDevices = async (opts: DevicesCommandOptions): Promise<void> => {
@@ -70,7 +57,7 @@ export const runDevices = async (opts: DevicesCommandOptions): Promise<void> => 
           devices: android.devices,
           ...(android.error ? { error: android.error } : {}),
         },
-        ios: { preview: true, devices: ios },
+        ios: { available: true, devices: ios },
       })}\n`,
     );
     return;
@@ -94,7 +81,7 @@ export const runDevices = async (opts: DevicesCommandOptions): Promise<void> => 
   }
 
   console.log();
-  console.log(`${chalk.bold("iOS (simctl):")} ${chalk.dim("preview — not yet driven")}`);
+  console.log(`${chalk.bold("iOS (simctl + axe):")} ${chalk.dim("--platform ios-sim")}`);
   if (process.platform !== "darwin") {
     console.log(chalk.dim("  iOS simulators are only listable on macOS."));
   } else if (ios.length === 0) {

@@ -570,13 +570,26 @@ const resolveAndroidSerial = async (config: WorkerStartConfig): Promise<string> 
   return devices[0]!.serial;
 };
 
+/** Create the device session for the run platform — Android adb, or iOS simctl+axe. */
+const createDeviceSession = async (config: WorkerStartConfig, artifactDir: string) => {
+  if (config.platform === "ios-sim") {
+    const { IosSimDriver } = await import("../driver/mobile/simctl-driver.js");
+    const driver = await IosSimDriver.create({ ...(config.target ? { udid: config.target } : {}) });
+    return driver.newSession({ artifactDir });
+  }
+  const { createAdb } = await import("../driver/mobile/adb.js");
+  const { AndroidAdbDriverSession } = await import("../driver/mobile/adb-session.js");
+  const serial = await resolveAndroidSerial(config);
+  return new AndroidAdbDriverSession(createAdb({ serial }), serial, artifactDir);
+};
+
 /**
- * Android counterpart to runOneTest: drives an `adb` DriverSession + the `device`
- * fixture instead of a Playwright page. Shares the runner's hook/hard-timeout/result
- * skeleton verbatim; only the platform-specific bits differ (no browser/video/trace;
- * evidence comes from the mobile collectors via session.collectEvidence).
+ * Device counterpart to runOneTest: drives a mobile DriverSession (Android adb or
+ * iOS simctl+axe) + the `device` fixture instead of a Playwright page. Shares the
+ * runner's hook/hard-timeout/result skeleton verbatim; only the platform-specific
+ * bits differ (no browser/video/trace; evidence via session.collectEvidence).
  */
-const runOneTestAndroid = async (
+const runOneTestDevice = async (
   test: RegisteredTest,
   registry: FileRegistry,
   config: WorkerStartConfig,
@@ -591,11 +604,8 @@ const runOneTestAndroid = async (
   const effectiveTimeout = merged.timeout ?? config.timeout;
   const effectiveHardTimeout = merged.hardTimeout ?? config.hardTimeout;
 
-  const { createAdb } = await import("../driver/mobile/adb.js");
-  const { AndroidAdbDriverSession } = await import("../driver/mobile/adb-session.js");
   const { buildDeviceFixture, unavailable } = await import("../api/device-fixture.js");
-  const serial = await resolveAndroidSerial(config);
-  const session = new AndroidAdbDriverSession(createAdb({ serial }), serial, testDir);
+  const session = await createDeviceSession(config, testDir);
 
   const artifactConfig: ArtifactRuntimeConfig = {
     fullPageScreenshots: false,
@@ -604,7 +614,7 @@ const runOneTestAndroid = async (
     writeSidecars: false,
   };
   const ctx = new ExecutionContext(
-    unavailable("page", "android") as unknown as Page,
+    unavailable("page", "web") as unknown as Page,
     config.baseUrl ?? merged.url ?? "",
     testDir,
     path.dirname(registry.file),
@@ -747,9 +757,9 @@ const handleExecute = async (start: WorkerStartMessage): Promise<void> => {
   const allowSet = new Set(start.allowlist);
   const finished: string[] = [];
 
-  // Android path: drive an adb device session instead of a browser. The
-  // discovery/IPC/reporting pipeline above and below is shared verbatim.
-  if (start.config.platform === "android") {
+  // Device path (android adb / ios-sim simctl+axe): drive a device session instead
+  // of a browser. The discovery/IPC/reporting pipeline above and below is shared.
+  if (start.config.platform === "android" || start.config.platform === "ios-sim") {
     try {
       for (const test of registry.tests) {
         if (!allowSet.has(test.id)) continue;
@@ -763,7 +773,7 @@ const handleExecute = async (start: WorkerStartMessage): Promise<void> => {
         });
         let result: TestResult;
         try {
-          result = await runOneTestAndroid(test, registry, start.config);
+          result = await runOneTestDevice(test, registry, start.config);
         } catch (err) {
           result = {
             name: test.name,

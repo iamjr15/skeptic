@@ -168,7 +168,7 @@ export const buildFixture = (
 
   return {
     page: exposedPage,
-    device: unavailable("device", "android"),
+    device: unavailable("device", "android or ios-sim"),
     ctx,
     runAction,
     snapshot: fixtureSnapshot,

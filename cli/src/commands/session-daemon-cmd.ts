@@ -9,7 +9,7 @@ export interface SessionDaemonCmdOptions {
   sessionIdle?: number;
 }
 
-const ENGINES: SessionEngine[] = ["chromium", "firefox", "webkit", "android"];
+const ENGINES: SessionEngine[] = ["chromium", "firefox", "webkit", "android", "ios-sim"];
 
 /**
  * Entry for the hidden `skeptic session-daemon` command. Auto-spawned (detached)

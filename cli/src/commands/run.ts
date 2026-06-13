@@ -24,9 +24,9 @@ export interface RunCommandOptions {
   timeout?: number;
   hardTimeout?: number;
   device?: string;
-  /** `--platform android` drives an adb device instead of a browser. */
-  platform?: "web" | "android";
-  /** `--target <serial>` selects the device/emulator for --platform android. */
+  /** `--platform android|ios-sim` drives a device/simulator instead of a browser. */
+  platform?: "web" | "android" | "ios-sim";
+  /** `--target <serial|udid>` selects the device/emulator/simulator. */
   target?: string;
   reporter?: string[];
   output?: string;
@@ -195,8 +195,8 @@ export const buildWorkerConfig = (
   if (typeof opts.daemonIdleTimeout === "number") {
     workerConfig.daemonIdleTimeoutSeconds = opts.daemonIdleTimeout;
   }
-  if (opts.platform === "android") {
-    workerConfig.platform = "android";
+  if (opts.platform === "android" || opts.platform === "ios-sim") {
+    workerConfig.platform = opts.platform;
     if (opts.target) workerConfig.target = opts.target;
   }
   return workerConfig;
@@ -472,8 +472,8 @@ export const runRun = async (
       runUrl: resolveRunUrl(),
       useInkTui,
     }),
-    // The Android path uses no browser, so skip the BrowserServer pre-warm entirely.
-    opts.platform === "android"
+    // The device paths (android/ios-sim) use no browser, so skip the BrowserServer pre-warm.
+    opts.platform === "android" || opts.platform === "ios-sim"
       ? Promise.resolve(false)
       : prewarmDaemonIfNeeded(process.argv, {
           engine: workerConfig.browserEngine,
@@ -486,8 +486,8 @@ export const runRun = async (
         }),
   ]);
 
-  // Android runs never touch the browser daemon; keep workers off the connect path.
-  if (opts.platform === "android") workerConfig.noDaemon = true;
+  // Device runs (android/ios-sim) never touch the browser daemon; keep workers off the connect path.
+  if (opts.platform === "android" || opts.platform === "ios-sim") workerConfig.noDaemon = true;
 
   if (!prewarmed && opts.daemon !== false) {
     workerConfig.noDaemon = true;

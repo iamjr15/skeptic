@@ -10,7 +10,33 @@ Full audit report and detailed checklist: `plans/sota-readiness-plan.md`.
 - [ ] Fix .gitignore coverage/ pattern hiding ast-extraction.test.ts from CI
 - [ ] SECURITY.md; fix ws vuln; dependabot
 
-## STATUS (verified green: 105 test files, 798 passing, 1 skipped; tsc clean; build clean)
+## STATUS (verified green: 106 test files, 806 passing, 1 skipped; tsc clean; build clean)
+
+### iOS simulator driver (`--platform ios-sim`) — DONE & LIVE-VERIFIED (2026-06-13)
+The previously-blocked iOS milestone is built and verified against a real booted sim
+(iPhone 17 Pro, iOS 26.5). **Key research finding (via /research): idb is dead on Xcode 26**
+(unmaintained since 2022, won't build; the host AX API doesn't expose the iOS UIKit tree
+— verified empirically, AXError -25204). The maintained answer is **AXe** (`cameroncooke/axe`,
+v1.7.1) — a prebuilt redistribution of idb's accessibility frameworks: it reads the full
+a11y tree (`describe-ui`) + injects HID taps/type/swipe, no WDA, no test bundle. AXe is to
+iOS what `adb`+`uiautomator` is to Android.
+- **New `src/driver/mobile/` files:** `ios-tools.ts` (axe+simctl wrapper; self-resolves full
+  Xcode via DEVELOPER_DIR so no `sudo xcode-select`), `axe-describe-parse.ts` (AXe JSON →
+  CaptureResult + node map; type→role, AXLabel→name, AXUniqueId→`id=` selectorHint, frame→
+  center), `simctl-session.ts` / `simctl-element.ts` / `simctl-resolve.ts` / `simctl-driver.ts`
+  mirroring the Android driver against the shared `DriverSession` seam.
+- **`--platform ios-sim` wired through everything:** parsePlatform, run (worker `runOneTestDevice`
+  generalized from android), interactive session daemon (`SessionEngine` + createDriver branch),
+  scaffold (`discoverIos`), `skeptic devices` (lists booted sims), doctor (simctl + axe probes).
+- **Animation-settle fix (real bug found live):** iOS launch/large-title animations move elements
+  ~91px over ~2s, so a single `describe-ui` captured stale coordinates and taps missed. `snapshot()`
+  now re-dumps until the tree is positionally stable — fixed the spec from consistently failing to
+  consistently passing.
+- **Live-verified:** interactive loop (open/snapshot/click/is/screenshot), `skeptic run --platform
+  ios-sim` (a real Settings spec passes ×2, exit 0, evidence bundle: console 180 msgs + screenshot),
+  scaffold (12 elements → runnable device spec), devices lists the sim. iOS evidence is deliberately
+  thin (console only — perf/a11y/network parity is a documented follow-up). +8 parser unit tests.
+- Real iOS devices remain out of scope (axe/idb UI automation is simulator-only).
 
 ### Android follow-ups — DONE & LIVE-VERIFIED (2026-06-12)
 - **`skeptic scaffold --platform android`**: opens an app package via the adb session, snapshots, and emits a `device`-fixture spec skeleton (discovered selectorHints as commented `device.click(...)` + a starter `expect(snap.has(...))`). Live: scaffolded a runnable spec from `app.fieldwork.android` (3 elements) that then ran GREEN via `skeptic run --platform android` — full scaffold→run round-trip proven. `--platform`/`--target` flags added; shared discovery via the DriverSession abstraction.

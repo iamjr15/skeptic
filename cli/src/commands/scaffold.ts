@@ -11,9 +11,9 @@ export interface ScaffoldCommandOptions {
   output?: string;
   name?: string;
   headed?: boolean;
-  /** `--platform android` scaffolds a `device`-fixture spec against an app package. */
-  platform?: "web" | "android";
-  /** Device/emulator serial for --platform android. */
+  /** `--platform android|ios-sim` scaffolds a `device`-fixture spec against an app. */
+  platform?: "web" | "android" | "ios-sim";
+  /** Device/emulator serial or simulator UDID for --platform android|ios-sim. */
   target?: string;
 }
 
@@ -34,21 +34,25 @@ export const runScaffold = async (target: string, opts: ScaffoldCommandOptions):
   const outDir = path.resolve(process.cwd(), opts.output ?? "tests");
   fs.mkdirSync(outDir, { recursive: true });
 
-  const android = opts.platform === "android";
-  const { title, refs } = android
-    ? await discoverAndroid(target, opts, outDir)
-    : await discoverWeb(target, opts);
+  const platform = opts.platform === "android" || opts.platform === "ios-sim" ? opts.platform : "web";
+  const isDevice = platform !== "web";
+  const { title, refs } =
+    platform === "android"
+      ? await discoverAndroid(target, opts, outDir)
+      : platform === "ios-sim"
+        ? await discoverIos(target, opts, outDir)
+        : await discoverWeb(target, opts);
 
-  const base = opts.name ?? title ?? (android ? target : new URL(target).hostname);
+  const base = opts.name ?? title ?? (isDevice ? target : new URL(target).hostname);
   const slug = uniqueSlug(base || "scaffold", outDir);
   const file = path.join(outDir, `${slug}.spec.ts`);
-  const spec = android
-    ? buildDeviceSpec({ target, title, slug, refs })
+  const spec = isDevice
+    ? buildDeviceSpec({ target, title, slug, refs, platform })
     : buildSpec({ url: target, title, slug, refs });
   fs.writeFileSync(file, spec, "utf-8");
 
-  const runHint = android
-    ? `skeptic run ${path.relative(process.cwd(), file)} --platform android`
+  const runHint = isDevice
+    ? `skeptic run ${path.relative(process.cwd(), file)} --platform ${platform}`
     : `skeptic run ${path.relative(process.cwd(), file)}`;
   logger.success(`Scaffolded ${chalk.cyan(path.relative(process.cwd(), file))}`);
   logger.info(
@@ -102,6 +106,26 @@ const discoverAndroid = async (
   return { title, refs };
 };
 
+const discoverIos = async (
+  target: string,
+  opts: ScaffoldCommandOptions,
+  outDir: string,
+): Promise<{ title: string; refs: DiscoveredRef[] }> => {
+  const { IosSimDriver } = await import("../driver/mobile/simctl-driver.js");
+  const driver = await IosSimDriver.create({ ...(opts.target ? { udid: opts.target } : {}) });
+  try {
+    const session = await driver.newSession({ artifactDir: outDir });
+    await session.open(target);
+    const title = await session.title();
+    const capture = await session.snapshot();
+    const refs = renderSnapshot(capture, { interactive: true }).refs.slice(0, 12);
+    await session.close();
+    return { title, refs };
+  } finally {
+    await driver.close();
+  }
+};
+
 const titleRegex = (title: string): string => {
   const trimmed = title.trim();
   if (!trimmed) return "/.*/";
@@ -115,6 +139,7 @@ const buildDeviceSpec = (input: {
   title: string;
   slug: string;
   refs: DiscoveredRef[];
+  platform: "android" | "ios-sim";
 }): string => {
   const interactions = input.refs.length
     ? input.refs
@@ -129,9 +154,9 @@ const buildDeviceSpec = (input: {
   const firstHint = input.refs.find((r) => r.selectorHint)?.selectorHint;
   return `import { test, expect } from "skeptic-cli";
 
-// Scaffolded by \`skeptic scaffold ${input.target} --platform android\`. Fill in the
-// real interactions + assertions, then run with
-// \`skeptic run tests/${input.slug}.spec.ts --platform android\`.
+// Scaffolded by \`skeptic scaffold ${input.target} --platform ${input.platform}\`. Fill in
+// the real interactions + assertions, then run with
+// \`skeptic run tests/${input.slug}.spec.ts --platform ${input.platform}\`.
 test(${JSON.stringify(`${input.title || input.slug} smoke`)}, async ({ device }) => {
   await device.open(${JSON.stringify(input.target)});
   const snap = await device.snapshot();

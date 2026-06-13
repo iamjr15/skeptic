@@ -55,14 +55,14 @@ function parseWaitState(value: string): "attached" | "detached" | "visible" | "h
 // `ios` gets a distinct message: it's a deliberately-unsupported target, not a
 // typo. Without this guard an unknown platform silently folds to a chromium web
 // session (see daemonOpts in browser-verbs), changing behavior with no error.
-function parsePlatform(value: string): "web" | "android" {
-  if (value === "web" || value === "android") {
+function parsePlatform(value: string): "web" | "android" | "ios-sim" {
+  if (value === "web" || value === "android" || value === "ios-sim") {
     return value;
   }
   if (value === "ios") {
-    throw new InvalidArgumentError("ios is not supported yet; expected one of web or android");
+    throw new InvalidArgumentError('use "ios-sim" for the iOS simulator (real iOS devices are out of scope)');
   }
-  throw new InvalidArgumentError(`unknown platform "${value}"; expected one of web or android`);
+  throw new InvalidArgumentError(`unknown platform "${value}"; expected one of web, android, ios-sim`);
 }
 
 // Signed integer for viewport-pan deltas (dx/dy may be negative). NOT `parseInt`
@@ -112,8 +112,8 @@ const addRunOptions = (
     .option("--timeout <ms>", "soft per-action default timeout in ms", parsePositiveInt)
     .option("--hard-timeout <ms>", "hard per-test ceiling in ms", parsePositiveInt)
     .option("--device <id>", "device profile for viewport emulation")
-    .option("--platform <platform>", "web (default) | android — drive an adb device, passing specs a `device` fixture", parsePlatform)
-    .option("--target <serial>", "device/emulator serial for --platform android (defaults to the only attached device)")
+    .option("--platform <platform>", "web (default) | android | ios-sim — drive a device/simulator, passing specs a `device` fixture", parsePlatform)
+    .option("--target <serial>", "device/emulator serial or simulator UDID for --platform android|ios-sim")
     .option("--reporter <format...>", "reporter format(s): console, json, junit, html")
     .option("--output <dir>", "output directory for reports")
     .option("--cookies", "enable browser cookie extraction (opt-in)")
@@ -247,12 +247,12 @@ program
 program
   .command("scaffold")
   .description("Generate a TypeScript spec skeleton from a live page or app (deterministic, no AI)")
-  .argument("<target>", "URL (web) or app package / deep link (--platform android)")
+  .argument("<target>", "URL (web) or app package / deep link (--platform android|ios-sim)")
   .option("-o, --output <dir>", "output directory", "tests")
   .option("--name <name>", "base name for the spec file")
   .option("--headed", "show the browser")
-  .option("--platform <platform>", "web (default) | android — scaffold a `device`-fixture spec from an app", parsePlatform)
-  .option("--target <serial>", "device/emulator serial for --platform android")
+  .option("--platform <platform>", "web (default) | android | ios-sim — scaffold a `device`-fixture spec from an app", parsePlatform)
+  .option("--target <serial>", "device/emulator serial or simulator UDID for --platform android|ios-sim")
   .action(async (target: string, cmdOpts: import("./commands/scaffold.js").ScaffoldCommandOptions) => {
     const { runScaffold } = await import("./commands/scaffold.js");
     await runScaffold(target, cmdOpts);
@@ -461,7 +461,7 @@ const addSessionOpts = (command: Command): Command =>
     .option("--json", "machine-readable JSON output")
     .option(
       "--platform <platform>",
-      "web (default) | android (drives a device/emulator via adb)",
+      "web (default) | android (adb) | ios-sim (simctl+axe)",
       parsePlatform,
     )
     .option("--headed", "run the session browser headed (default; web only)")

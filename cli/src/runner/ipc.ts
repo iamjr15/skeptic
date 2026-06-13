@@ -65,11 +65,13 @@ export interface WorkerStartConfig {
   browserEngine: "chromium" | "firefox" | "webkit";
   /**
    * Execution platform. "web" (default) runs the Playwright page path; "android"
-   * drives an `adb` device session and passes the spec a `device` fixture instead
-   * of a `page`. The runner/discovery/reporting/evidence pipeline is shared.
+   * (adb) and "ios-sim" (simctl+axe) drive a device session and pass the spec a
+   * `device` fixture instead of a `page`. The runner/discovery/reporting/evidence
+   * pipeline is shared across all three.
    */
-  platform?: "web" | "android";
-  /** Device/emulator serial for `--platform android` (defaults to the only attached device). */
+  platform?: "web" | "android" | "ios-sim";
+  /** Device/emulator serial or simulator UDID for `--platform android|ios-sim`
+   *  (defaults to the only attached device / booted simulator). */
   target?: string;
   viewport?: { width: number; height: number };
   /**

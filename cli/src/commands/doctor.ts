@@ -371,26 +371,28 @@ export const collectDoctorReport = async (
   // iOS tooling is preview-only and macOS-exclusive; probe non-fatally so a
   // missing simctl/idb never inflates warn/fail on a web-focused setup.
   if (process.platform === "darwin") {
-    const simctl = await probeBinary("xcrun", ["--find", "simctl"]);
+    const { resolveDeveloperDir } = await import("../driver/mobile/ios-tools.js");
+    const devDir = resolveDeveloperDir();
     push(
       checks,
       "simctl",
-      simctl.ok ? "pass" : "info",
-      "iOS simctl (preview)",
-      simctl.ok
-        ? `xcrun simctl available (${simctl.line || "found"})`
-        : "xcrun simctl not available; iOS simulator QA is preview and needs Xcode command line tools",
+      devDir ? "pass" : "info",
+      "iOS simctl",
+      devDir
+        ? `full Xcode found (${devDir})`
+        : "no full Xcode found; --platform ios-sim needs Xcode (Command Line Tools lack simctl)",
     );
 
-    const idb = await probeBinary("idb", ["--version"]);
+    // iOS UI automation uses `axe` (the maintained idb-framework redistribution), not idb.
+    const axe = await probeBinary("axe", ["--version"]);
     push(
       checks,
-      "idb",
-      idb.ok ? "pass" : "info",
-      "iOS idb (preview)",
-      idb.ok
-        ? `${idb.line || "idb available"}`
-        : "idb not installed; optional for physical-device iOS QA (preview) — install fb-idb to enable",
+      "axe",
+      axe.ok ? "pass" : "info",
+      "iOS axe",
+      axe.ok
+        ? `axe ${axe.line || "available"} (--platform ios-sim)`
+        : "axe not installed; --platform ios-sim needs it — `brew install cameroncooke/axe/axe`",
     );
   }
 
