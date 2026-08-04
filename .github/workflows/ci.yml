@@ -90,7 +90,7 @@ jobs:
           key: browser-${{ matrix.target }}
       - name: Install cargo-zigbuild
         if: matrix.builder == 'zig'
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@v2.85.6
         with:
           tool: cargo-zigbuild
       - name: Build complete five-binary runtime
