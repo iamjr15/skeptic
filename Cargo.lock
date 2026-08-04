@@ -292,6 +292,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
+name = "base64"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b25655df2c3cdd83c5e5b293b88acd880332b2ddadd7c30ac43144fdc0033da9"
+
+[[package]]
 name = "base64-simd"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1068,7 +1074,7 @@ version = "0.408.0"
 dependencies = [
  "anyhow",
  "az",
- "base64",
+ "base64 0.22.1",
  "bincode",
  "bit-set 0.8.0",
  "bit-vec 0.8.0",
@@ -1112,7 +1118,7 @@ dependencies = [
  "aes-kw",
  "argon2",
  "aws-lc-rs",
- "base64",
+ "base64 0.22.1",
  "cbc",
  "const-oid 0.9.6",
  "ctr",
@@ -2236,7 +2242,7 @@ version = "0.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96547c2556ec9d12fb1578c4eaf448b04993e7fb79cbaad930a656880a6bdfa0"
 dependencies = [
- "base64",
+ "base64 0.22.1",
  "bytes",
  "futures-channel",
  "futures-util",
@@ -3393,7 +3399,7 @@ version = "0.100.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34d1a230c3796c820c3eb234ea74e1543a6c2fe234908f5289fa52877c549bcb"
 dependencies = [
- "base64",
+ "base64 0.22.1",
  "compact_str",
  "indexmap",
  "itoa",
@@ -4374,7 +4380,7 @@ version = "0.12.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eddd3ca559203180a307f12d114c268abf583f59b03cb906fd0b3ff8646c1147"
 dependencies = [
- "base64",
+ "base64 0.22.1",
  "bytes",
  "futures-channel",
  "futures-core",
@@ -4971,7 +4977,7 @@ version = "2.0.0"
 dependencies = [
  "aes-gcm",
  "async-trait",
- "base64",
+ "base64 0.23.0",
  "chrono",
  "dirs 5.0.1",
  "fs2",
@@ -5083,7 +5089,7 @@ name = "skeptic-mobile"
 version = "2.0.0"
 dependencies = [
  "async-trait",
- "base64",
+ "base64 0.23.0",
  "dirs 6.0.0",
  "flate2",
  "hex",
@@ -5508,7 +5514,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4676b37242ccbd1aabf56edb093a4827dc49086c0ffd764a5705899e0f35f8f7"
 dependencies = [
  "anyhow",
- "base64",
+ "base64 0.22.1",
  "bitflags 2.13.1",
  "fancy-regex",
  "filedescriptor",
