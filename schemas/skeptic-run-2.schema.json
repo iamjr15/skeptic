@@ -1,0 +1,765 @@
+{
+  "$defs": {
+    "AssertionResult": {
+      "additionalProperties": false,
+      "properties": {
+        "actual": true,
+        "evidence": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "type": "array"
+        },
+        "expected": true,
+        "matcher": {
+          "type": "string"
+        },
+        "negated": {
+          "type": "boolean"
+        },
+        "reference": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "timedOut": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "matcher",
+        "expected",
+        "actual",
+        "negated",
+        "timedOut"
+      ],
+      "type": "object"
+    },
+    "CapabilityAvailability": {
+      "enum": [
+        "available",
+        "degraded",
+        "unavailable"
+      ],
+      "type": "string"
+    },
+    "CapabilityExecution": {
+      "enum": [
+        "not-requested",
+        "skipped",
+        "succeeded",
+        "failed",
+        "timed-out"
+      ],
+      "type": "string"
+    },
+    "CapabilityRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "availability": {
+          "$ref": "#/$defs/CapabilityAvailability"
+        },
+        "backend": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "execution": {
+          "$ref": "#/$defs/CapabilityExecution"
+        },
+        "id": {
+          "type": "string"
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "availability",
+        "execution",
+        "required"
+      ],
+      "type": "object"
+    },
+    "ColorScheme": {
+      "enum": [
+        "light",
+        "dark"
+      ],
+      "type": "string"
+    },
+    "Completeness": {
+      "enum": [
+        "complete",
+        "partial",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "DiagnosticReportRef": {
+      "additionalProperties": false,
+      "properties": {
+        "report": {
+          "$ref": "#/$defs/EvidenceRef"
+        },
+        "summary": {
+          "$ref": "#/$defs/DiagnosticSummary"
+        }
+      },
+      "required": [
+        "report",
+        "summary"
+      ],
+      "type": "object"
+    },
+    "DiagnosticSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "byCategory": {
+          "additionalProperties": false,
+          "properties": {
+            "a11y": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "correctness": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maintainability": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "performance": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "security": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "visual": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
+        "bySeverity": {
+          "additionalProperties": false,
+          "properties": {
+            "P0": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "P1": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "P2": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "P3": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
+        "new": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "total": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "total",
+        "new",
+        "bySeverity",
+        "byCategory"
+      ],
+      "type": "object"
+    },
+    "EvidenceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "mediaType": {
+          "type": "string"
+        },
+        "producer": {
+          "type": "string"
+        },
+        "redaction": {
+          "$ref": "#/$defs/RedactionState"
+        },
+        "relPath": {
+          "type": "string"
+        },
+        "sensitivity": {
+          "$ref": "#/$defs/Sensitivity"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "testId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "relPath",
+        "mediaType",
+        "bytes",
+        "sha256",
+        "producer",
+        "sensitivity",
+        "redaction"
+      ],
+      "type": "object"
+    },
+    "Platform": {
+      "enum": [
+        "web",
+        "android",
+        "ios-sim"
+      ],
+      "type": "string"
+    },
+    "Project": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "root": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "root"
+      ],
+      "type": "object"
+    },
+    "RedactionState": {
+      "enum": [
+        "none",
+        "redacted"
+      ],
+      "type": "string"
+    },
+    "RunConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "configHash": {
+          "type": "string"
+        },
+        "toolVersions": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "configHash",
+        "toolVersions"
+      ],
+      "type": "object"
+    },
+    "RunOutcome": {
+      "enum": [
+        "passed",
+        "failed",
+        "cancelled",
+        "errored"
+      ],
+      "type": "string"
+    },
+    "Score": {
+      "additionalProperties": false,
+      "properties": {
+        "byCategory": {
+          "additionalProperties": false,
+          "properties": {
+            "a11y": {
+              "format": "double",
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "correctness": {
+              "format": "double",
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "maintainability": {
+              "format": "double",
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "performance": {
+              "format": "double",
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "security": {
+              "format": "double",
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "visual": {
+              "format": "double",
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "coverage": {
+          "format": "double",
+          "type": "number"
+        },
+        "formula": {
+          "type": "string"
+        },
+        "ghostGain": {
+          "format": "double",
+          "type": "number"
+        },
+        "total": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "byCategory",
+        "coverage",
+        "ghostGain",
+        "formula"
+      ],
+      "type": "object"
+    },
+    "Sensitivity": {
+      "enum": [
+        "normal",
+        "sensitive"
+      ],
+      "type": "string"
+    },
+    "SourceInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "branch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dirty": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "revision": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "SourceKind": {
+      "enum": [
+        "git",
+        "none"
+      ],
+      "type": "string"
+    },
+    "Target": {
+      "additionalProperties": false,
+      "properties": {
+        "app": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "device": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "platform": {
+          "$ref": "#/$defs/Platform"
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "platform"
+      ],
+      "type": "object"
+    },
+    "TestResult": {
+      "additionalProperties": false,
+      "properties": {
+        "artifacts": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "type": "array"
+        },
+        "assertion": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AssertionResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "durationMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "file": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/TestStatus"
+        },
+        "target": {
+          "description": "Index into `RunManifest.targets`.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "file",
+        "status",
+        "durationMs",
+        "target"
+      ],
+      "type": "object"
+    },
+    "TestStatus": {
+      "enum": [
+        "passed",
+        "failed",
+        "skipped",
+        "timed-out",
+        "errored"
+      ],
+      "type": "string"
+    },
+    "VisualKey": {
+      "additionalProperties": false,
+      "properties": {
+        "colorScheme": {
+          "$ref": "#/$defs/ColorScheme"
+        },
+        "dpr": {
+          "format": "double",
+          "type": "number"
+        },
+        "engine": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "platform": {
+          "$ref": "#/$defs/Platform"
+        },
+        "viewport": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "platform",
+        "viewport",
+        "dpr",
+        "colorScheme"
+      ],
+      "type": "object"
+    },
+    "VisualResult": {
+      "additionalProperties": false,
+      "properties": {
+        "actual": {
+          "$ref": "#/$defs/EvidenceRef"
+        },
+        "baseline": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EvidenceRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "diff": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EvidenceRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "key": {
+          "$ref": "#/$defs/VisualKey"
+        },
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/VisualStatus"
+        }
+      },
+      "required": [
+        "name",
+        "key",
+        "status",
+        "actual"
+      ],
+      "type": "object"
+    },
+    "VisualStatus": {
+      "enum": [
+        "match",
+        "diff",
+        "new"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "skeptic.run/2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "capabilities": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/CapabilityRecord"
+      },
+      "type": "array"
+    },
+    "completeness": {
+      "$ref": "#/$defs/Completeness"
+    },
+    "config": {
+      "$ref": "#/$defs/RunConfig"
+    },
+    "diagnostics": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DiagnosticReportRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "durationMs": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "finishedAt": {
+      "type": "string"
+    },
+    "journal": {
+      "$ref": "#/$defs/EvidenceRef"
+    },
+    "mobile": {
+      "items": {
+        "$ref": "#/$defs/EvidenceRef"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "outcome": {
+      "$ref": "#/$defs/RunOutcome"
+    },
+    "projects": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Project"
+      },
+      "type": "array"
+    },
+    "runId": {
+      "type": "string"
+    },
+    "schema": {
+      "const": "skeptic.run/2",
+      "type": "string"
+    },
+    "score": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Score"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sidecars": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/EvidenceRef"
+      },
+      "type": "array"
+    },
+    "source": {
+      "$ref": "#/$defs/SourceInfo"
+    },
+    "startedAt": {
+      "type": "string"
+    },
+    "targets": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Target"
+      },
+      "type": "array"
+    },
+    "tests": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/TestResult"
+      },
+      "type": "array"
+    },
+    "transcripts": {
+      "items": {
+        "$ref": "#/$defs/EvidenceRef"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "visual": {
+      "items": {
+        "$ref": "#/$defs/VisualResult"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "runId",
+    "startedAt",
+    "finishedAt",
+    "durationMs",
+    "outcome",
+    "source",
+    "config",
+    "completeness",
+    "journal"
+  ],
+  "title": "RunManifest",
+  "type": "object",
+  "x-skeptic-version": "2.0.0"
+}

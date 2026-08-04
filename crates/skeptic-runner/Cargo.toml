@@ -1,0 +1,44 @@
+[package]
+name = "skeptic-runner"
+version.workspace = true
+edition.workspace = true
+description = "Embedded V8 spec runner for Skeptic"
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "skeptic-runner"
+path = "src/main.rs"
+
+[dependencies]
+# M0 pins the released Deno API. The workspace patch advances only rusty_v8 to
+# the first release with prebuilt archives for all Skeptic release targets.
+deno_core = "=0.408.0"
+deno_crypto = "=0.269.0"
+deno_error = "0.7"
+deno_web = "=0.286.0"
+deno_webidl = "=0.255.0"
+chrono = "0.4"
+hex = "0.4"
+oxc_allocator = "=0.100.0"
+oxc_codegen = "=0.100.0"
+oxc_parser = "=0.100.0"
+oxc_semantic = "=0.100.0"
+oxc_span = "=0.100.0"
+oxc_transformer = "=0.100.0"
+regex = "1"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls-webpki-roots"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+skeptic-config = { path = "../skeptic-config" }
+skeptic-contract = { path = "../skeptic-contract" }
+skeptic-evidence = { path = "../skeptic-evidence" }
+tokio = { version = "1", features = ["rt", "macros", "sync", "time"] }
+url = "2"
+uuid = { version = "1", features = ["v4"] }
+walkdir = "2"
+
+[dev-dependencies]
+tempfile = "3"

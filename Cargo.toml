@@ -1,0 +1,41 @@
+[workspace]
+members = [
+  "crates/skeptic-cli",
+  "crates/skeptic-config",
+  "crates/skeptic-contract",
+  "crates/skeptic-daemon",
+  "crates/skeptic-doctor",
+  "crates/skeptic-evidence",
+  "crates/skeptic-mobile",
+  "crates/skeptic-report",
+  "crates/skeptic-runner",
+  "crates/skeptic-tui",
+]
+resolver = "2"
+
+[workspace.package]
+version = "2.0.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/iamjr15/skeptic"
+rust-version = "1.94"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+[profile.ci]
+inherits = "release"
+lto = "thin"
+codegen-units = 16
+
+# deno_core 0.408.0 was published against rusty_v8 149.4.0, whose release is
+# missing both Linux musl archives. These local copies apply Deno's exact
+# upstream V8 150 compatibility patch, the first release with prebuilt archives
+# for every Skeptic release target. See vendor/README.md for provenance.
+[patch.crates-io]
+deno_core = { path = "vendor/deno_core" }
+deno_crypto = { path = "vendor/deno_crypto" }
+serde_v8 = { path = "vendor/serde_v8" }

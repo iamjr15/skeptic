@@ -1,0 +1,63 @@
+Skeptic
+Copyright 2026 Skeptic contributors
+
+This product contains software derived from Agent Browser:
+
+  Project: agent-browser
+  Source: https://github.com/vercel-labs/agent-browser
+  Version: v0.32.2
+  Commit: 6ede7a9470ac4b681cabf838af8668b9aa99e957
+  License: Apache License 2.0
+  Imported paths: cli/build.rs, cli/cdp-protocol/, cli/src/, cli/tests/
+  Skeptic paths: crates/skeptic-cli/build.rs,
+                 crates/skeptic-cli/cdp-protocol/,
+                 crates/skeptic-cli/src/,
+                 crates/skeptic-cli/tests/
+
+The upstream Apache License 2.0 text is distributed at
+LICENSES/agent-browser-LICENSE. Imported files are modified for Skeptic's
+name, command contract, security model, crate boundaries, and feature set.
+
+This product also contains modified Deno runtime crates:
+
+  Project: Deno
+  Source: https://github.com/denoland/deno
+  Packages: deno_core 0.408.0, deno_crypto 0.269.0, serde_v8 0.317.0
+  deno_crypto source commit: f39575ecd50602a5b42b1ba8e93849460de9fcf4
+  V8 compatibility commit: 7e036ea12e23b4908f854730179ccf50f72041a8
+  License: MIT
+  Skeptic paths: vendor/deno_core/, vendor/deno_crypto/, vendor/serde_v8/
+
+The upstream MIT license text is distributed at LICENSES/deno-LICENSE.md.
+The exact local changes and their rationale are recorded in vendor/README.md.
+
+This product embeds unmodified browser accessibility engines:
+
+  axe-core 4.11.0, Mozilla Public License 2.0
+  Source: https://github.com/dequelabs/axe-core
+  Path: crates/skeptic-cli/assets/a11y/axe.min.js
+  License: crates/skeptic-cli/assets/a11y/axe.LICENSE
+
+  IBM Equal Access accessibility-checker-engine 4.0.16, Apache-2.0
+  Source: https://github.com/IBMa/equal-access
+  Path: crates/skeptic-cli/assets/a11y/ace.js
+  License: crates/skeptic-cli/assets/a11y/ace.js.LICENSE.txt
+
+Skeptic can optionally download AXe 1.7.1 for iOS Simulator automation from
+https://github.com/cameroncooke/AXe. The archive is checksum verified, is not
+bundled in Skeptic packages, and retains its MIT LICENSE and
+THIRD_PARTY_LICENSES files when extracted.
+
+The Doctor rule curation/fix guidance and agent QA playbooks are derived in
+part from these owner-authorized reference trees:
+
+  react-doctor, commit 7c9dbeda0db7212a98a5c0945ff1675c51806e21
+  Source: https://github.com/millionco/react-doctor
+  Skeptic paths: crates/skeptic-doctor/, skill-data/doctor/
+  Regression sources: packages/oxlint-plugin-react-doctor/src/plugin/rules/
+                      {a11y,bundle-size,correctness,react-builtins,
+                       react-native,security}/**/*.regressions.test.ts
+
+  expect, commit 39e97500725783490136a8fc7040e6e4dbaafa44
+  Source: https://github.com/millionco/expect
+  Skeptic paths: skill-data/core/references/, skill-data/core/SKILL.md

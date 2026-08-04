@@ -1,0 +1,108 @@
+name: deno_core target spike
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  archive-gate:
+    name: rusty_v8 archive coverage
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require archives for every release target
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          V8_VERSION="$(sed -n '/name = "v8"/{n;s/version = "\([^"]*\)"/\1/p;}' Cargo.lock | head -1)"
+          test -n "$V8_VERSION"
+          ASSETS="$(gh api "repos/denoland/rusty_v8/releases/tags/v${V8_VERSION}" --jq '.assets[].name')"
+          REQUIRED=(
+            "librusty_v8_simdutf_release_aarch64-apple-darwin.a.gz"
+            "librusty_v8_simdutf_release_x86_64-apple-darwin.a.gz"
+            "librusty_v8_simdutf_release_aarch64-unknown-linux-gnu.a.gz"
+            "librusty_v8_simdutf_release_x86_64-unknown-linux-gnu.a.gz"
+            "librusty_v8_simdutf_release_aarch64-unknown-linux-musl.a.gz"
+            "librusty_v8_simdutf_release_x86_64-unknown-linux-musl.a.gz"
+            "rusty_v8_simdutf_release_x86_64-pc-windows-msvc.lib.gz"
+          )
+          for asset in "${REQUIRED[@]}"; do
+            grep -Fxq "$asset" <<<"$ASSETS" || {
+              echo "::error::rusty_v8 v${V8_VERSION} is missing ${asset}"
+              exit 1
+            }
+          done
+
+  target-build:
+    name: V8 build / ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+            builder: cargo
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            builder: cargo
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            builder: cargo
+          - os: ubuntu-22.04
+            target: aarch64-unknown-linux-gnu
+            builder: zig
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-musl
+            builder: zig
+          - os: ubuntu-22.04
+            target: aarch64-unknown-linux-musl
+            builder: zig
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            builder: cargo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: deno-target-${{ matrix.target }}
+      - name: Install cargo-zigbuild
+        if: matrix.builder == 'zig'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
+      - name: Build embedded V8 runner
+        if: matrix.builder == 'cargo'
+        run: cargo build --locked --profile ci -p skeptic-runner --target ${{ matrix.target }}
+      - name: Cross-build embedded V8 runner
+        if: matrix.builder == 'zig'
+        run: cargo zigbuild --locked --profile ci -p skeptic-runner --target ${{ matrix.target }}
+
+  native-smoke:
+    name: V8 smoke / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-14, windows-2022]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: deno-spike-${{ matrix.os }}
+      - run: cargo test --locked -p skeptic-runner
+      - run: cargo run --locked --quiet -p skeptic-runner

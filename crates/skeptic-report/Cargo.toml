@@ -1,0 +1,22 @@
+[package]
+name = "skeptic-report"
+version.workspace = true
+edition.workspace = true
+description = "Evidence folding, correlation, scoring, and report output for Skeptic"
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "skeptic-report"
+path = "src/main.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+skeptic-contract = { path = "../skeptic-contract" }
+skeptic-evidence = { path = "../skeptic-evidence" }
+skeptic-tui = { path = "../skeptic-tui" }
+
+[dev-dependencies]
+tempfile = "3"

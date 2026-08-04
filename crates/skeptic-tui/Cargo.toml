@@ -1,0 +1,14 @@
+[package]
+name = "skeptic-tui"
+version.workspace = true
+edition.workspace = true
+description = "Report-oriented terminal renderer for Skeptic"
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+crossterm = "0.29"
+ratatui = "0.30"
+tui-big-text = "0.8"
+skeptic-contract = { path = "../skeptic-contract" }

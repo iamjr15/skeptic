@@ -1,0 +1,37 @@
+[package]
+name = "skeptic-doctor"
+version.workspace = true
+edition.workspace = true
+description = "In-process static diagnostics for Skeptic"
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+build = "build.rs"
+
+[[bin]]
+name = "skeptic-doctor"
+path = "src/main.rs"
+
+[dependencies]
+chrono = "0.4"
+hex = "0.4"
+ignore = "0.4"
+oxc_allocator = "=0.100.0"
+oxc_ast = "=0.100.0"
+oxc_parser = "=0.100.0"
+oxc_semantic = "=0.100.0"
+oxc_span = "=0.100.0"
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+sha2 = "0.10"
+skeptic-config = { path = "../skeptic-config" }
+skeptic-contract = { path = "../skeptic-contract" }
+walkdir = "2"
+
+[build-dependencies]
+serde_json = "1"
+
+[dev-dependencies]
+tempfile = "3"

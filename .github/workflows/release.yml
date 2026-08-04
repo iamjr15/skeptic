@@ -2,148 +2,197 @@ name: Release
 
 on:
   push:
-    tags:
-      - "v*"
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
   id-token: write
+  attestations: write
 
-# Serialize releases per tag so a second push can't race an in-flight publish.
-# cancel-in-progress is false on purpose: never abort a job that may be mid-publish.
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  publish:
-    name: Publish npm package
+  guard:
+    name: Release guard
     runs-on: ubuntu-22.04
-    defaults:
-      run:
-        shell: bash
-        working-directory: cli
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+      - id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)"
+          test -n "$VERSION"
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" && "${GITHUB_REF_NAME#v}" != "$VERSION" ]]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match workspace version ${VERSION}"
+            exit 1
+          fi
+          node npm/skeptic-cli/scripts/check-versions.mjs
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+  build:
+    name: Build / ${{ matrix.asset }}
+    needs: guard
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+            builder: cargo
+            asset: darwin-arm64
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            builder: cargo
+            asset: darwin-x64
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            builder: zig
+            asset: linux-x64
+          - os: ubuntu-22.04
+            target: aarch64-unknown-linux-gnu
+            builder: zig
+            asset: linux-arm64
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-musl
+            builder: zig
+            asset: linux-musl-x64
+          - os: ubuntu-22.04
+            target: aarch64-unknown-linux-musl
+            builder: zig
+            asset: linux-musl-arm64
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            builder: cargo
+            asset: win32-x64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+      - name: Install cargo-zigbuild
+        if: matrix.builder == 'zig'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
+      - name: Build
+        if: matrix.builder == 'cargo'
+        run: cargo build --locked --release -p skeptic-cli -p skeptic-runner -p skeptic-doctor -p skeptic-mobile -p skeptic-report --target ${{ matrix.target }}
+      - name: Cross-build
+        if: matrix.builder == 'zig'
+        run: cargo zigbuild --locked --release -p skeptic-cli -p skeptic-runner -p skeptic-doctor -p skeptic-mobile -p skeptic-report --target ${{ matrix.target }}
+      - name: Stage runtime bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXT=""
+          case "${{ matrix.target }}" in
+            *windows*) EXT=".exe" ;;
+          esac
+          mkdir -p dist
+          for NAME in skeptic skeptic-runner skeptic-doctor skeptic-mobile skeptic-report; do
+            cp "target/${{ matrix.target }}/release/${NAME}${EXT}" "dist/${NAME}-${{ matrix.asset }}${EXT}"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/*
+          if-no-files-found: error
+
+  assemble:
+    name: Checksums and attestations
+    needs: [guard, build]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: dist/skeptic-source.spdx.json
+          upload-artifact: false
+      - name: Create checksums
+        working-directory: dist
+        run: |
+          sha256sum skeptic-* | sort -k2 > BINARY_SHA256SUMS
+          node ../scripts/generate-homebrew-formula.mjs BINARY_SHA256SUMS skeptic.rb
+          sha256sum skeptic-* skeptic.rb | sort -k2 > SHA256SUMS
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/skeptic-*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: dist/*
+          if-no-files-found: error
+      - name: Create GitHub release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" dist/* --verify-tag --generate-notes
+
+  publish-npm:
+    name: Publish npm packages
+    needs: [guard, assemble]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-22.04
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
           registry-url: https://registry.npmjs.org
-          cache: npm
-          cache-dependency-path: cli/package-lock.json
-
-      # Restore the Chromium that ci.yml already cached for this exact
-      # package-lock.json (identical key), turning the install below into a
-      # no-op. This MUST run before the version bump, which rewrites
-      # package-lock.json and would change the hashFiles() key — missing
-      # ci.yml's cache and forcing a cold download that has wedged post-100%
-      # under Node 24.
-      - name: Resolve Playwright browsers cache path
-        id: pw
-        run: echo "dir=$HOME/.cache/ms-playwright" >> "$GITHUB_OUTPUT"
-
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
+      - run: node npm/skeptic-cli/scripts/check-versions.mjs
+      - uses: actions/download-artifact@v4
         with:
-          path: ${{ steps.pw.outputs.dir }}
-          key: ${{ runner.os }}-playwright-${{ hashFiles('cli/package-lock.json') }}
-          # A skeptic version bump changes package-lock.json (so the exact key
-          # misses) but NOT the Playwright version, so the cached Chromium is
-          # still valid. restore-keys prefix-matches the latest browser cache,
-          # making `playwright install` a no-op instead of a cold download
-          # (which has wedged post-100% under Node 24). A real Playwright
-          # upgrade still triggers a fresh download, as intended.
-          restore-keys: |
-            ${{ runner.os }}-playwright-
-
-      - name: Bump version to tag
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          npm version --no-git-tag-version --allow-same-version "$VERSION"
-
-      - name: Install dependencies
-        run: npm ci
-
-      # On a cache hit this is an instant no-op. On a cold miss, `playwright
-      # install` has wedged *after* a 100%-complete download under Node 24, so
-      # bound each attempt and retry instead of letting it hang the job for
-      # hours (3 × 180s, well under the 12-min step backstop).
-      - name: Install Playwright Chromium
-        timeout-minutes: 12
-        run: |
-          for attempt in 1 2 3; do
-            if timeout 180 npx playwright install chromium; then
-              exit 0
-            fi
-            echo "::warning::playwright install attempt $attempt timed out or failed; retrying"
-            sleep 5
-          done
-          echo "::error::playwright chromium install failed after 3 attempts"
-          exit 1
-
-      - name: Type-check
-        run: npm run check
-
-      - name: Build package
-        run: npm run build
-
-      - name: Test package
-        run: npx vitest run --maxWorkers=1 --minWorkers=1
-
-      - name: Verify version stamping
-        run: |
-          STAMPED="$(node dist/skeptic.mjs --version)"
-          EXPECTED="${GITHUB_REF_NAME#v}"
-          if [[ "$STAMPED" != "$EXPECTED" ]]; then
-            echo "::error::Version mismatch: bundle prints $STAMPED but tag is $EXPECTED"
-            exit 1
-          fi
-
-      - name: Validate npm pack layout
-        run: npm pack --dry-run
-
-      # Pack the real tarball and install it into a throwaway project to prove
-      # the published artifact actually runs (bin resolves, dist is present,
-      # version is stamped) before we publish it to the registry.
-      - name: Smoke-test packed tarball
+          name: release-assets
+          path: dist
+      - name: Publish platform packages then wrapper
         run: |
           set -euo pipefail
-          PKG="$(npm pack --silent)"
-          echo "Packed tarball: $PKG"
-          PKG_PATH="$PWD/$PKG"
-          WORK="$(mktemp -d)"
-          cd "$WORK"
-          npm init -y >/dev/null
-          # --ignore-scripts skips Playwright's browser download and skeptic's
-          # agent-skill postinstall; neither is needed to smoke-test the CLI.
-          npm install "$PKG_PATH" --ignore-scripts --no-audit --no-fund >/dev/null
-          EXPECTED="${GITHUB_REF_NAME#v}"
-          STAMPED="$(node_modules/.bin/skeptic --version)"
-          if [[ "$STAMPED" != "$EXPECTED" ]]; then
-            echo "::error::Installed tarball prints $STAMPED but tag is $EXPECTED"
-            exit 1
-          fi
-          node_modules/.bin/skeptic --help >/dev/null
-          echo "Tarball smoke test passed: skeptic $STAMPED"
+          node npm/skeptic-cli/scripts/stage-platform-packages.mjs dist
+          for PACKAGE in npm/platforms/*; do npm publish "$PACKAGE" --provenance --access public; done
+          npm publish npm/skeptic-cli --provenance --access public
 
-      # Publish via OIDC Trusted Publishing (configured on npm for
-      # iamjr15/skeptic + release.yml). The workflow-level `id-token: write`
-      # lets npm >= 11.5.1 (Node 24 ships 11.11.x) exchange the OIDC token for
-      # a short-lived publish credential — no long-lived NPM_TOKEN. setup-node's
-      # registry-url leaves `_authToken` empty (no token env), which does NOT
-      # block OIDC on npm >= 11.5.1. Provenance is automatic under trusted
-      # publishing; --provenance is kept as an explicit, harmless guarantee.
-      - name: Publish main package
-        run: npm publish --provenance --access public
-
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  publish-homebrew:
+    name: Update Homebrew tap
+    needs: [guard, assemble]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: dist
+      - uses: actions/checkout@v4
+        with:
+          repository: iamjr15/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+      - name: Publish formula
+        working-directory: tap
         run: |
-          gh release create "${GITHUB_REF_NAME}" \
-            --title "skeptic ${GITHUB_REF_NAME}" \
-            --generate-notes
+          mkdir -p Formula
+          cp ../dist/skeptic.rb Formula/skeptic.rb
+          git config user.name "skeptic-release"
+          git config user.email "actions@users.noreply.github.com"
+          git add Formula/skeptic.rb
+          git diff --cached --quiet || git commit -m "skeptic ${{ needs.guard.outputs.version }}"
+          git push

@@ -1,0 +1,1 @@
+{"name":"@skeptic/cli-darwin-arm64","version":"2.0.0","license":"MIT","os":["darwin"],"cpu":["arm64"],"files":["bin"],"skepticBinary":"bin/skeptic"}

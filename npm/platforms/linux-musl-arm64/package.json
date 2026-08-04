@@ -1,0 +1,1 @@
+{"name":"@skeptic/cli-linux-musl-arm64","version":"2.0.0","license":"MIT","os":["linux"],"cpu":["arm64"],"libc":["musl"],"files":["bin"],"skepticBinary":"bin/skeptic"}

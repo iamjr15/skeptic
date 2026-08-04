@@ -1,0 +1,83 @@
+{
+  "$id": "skeptic.event/1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "anyOf": [
+        {
+          "properties": {
+            "runId": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "runId"
+          ]
+        },
+        {
+          "properties": {
+            "sessionId": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "sessionId"
+          ]
+        }
+      ]
+    }
+  ],
+  "properties": {
+    "correlationId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "payload": true,
+    "runId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "schema": {
+      "const": "skeptic.event/1",
+      "type": "string"
+    },
+    "sequence": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "sessionId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "streamId": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "streamId",
+    "sequence",
+    "type",
+    "timestamp",
+    "payload"
+  ],
+  "title": "EventEnvelope",
+  "type": "object",
+  "x-skeptic-version": "2.0.0"
+}

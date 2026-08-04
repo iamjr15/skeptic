@@ -1,0 +1,13 @@
+[
+  "security/no-eval",
+  "security/no-dangerous-html",
+  "security/auth-token-in-web-storage",
+  "a11y/iframe-missing-sandbox",
+  "a11y/image-missing-alt",
+  "performance/no-full-lodash-import",
+  "performance/no-moment",
+  "performance/no-inline-list-callback",
+  "correctness/no-array-index-key",
+  "react-native/no-dimensions-get",
+  "react-native/prefer-pressable"
+]

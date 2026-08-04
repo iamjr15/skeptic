@@ -1,0 +1,31 @@
+{
+  "eval_id": 1,
+  "condition": "without_skill",
+  "rubric": [
+    {
+      "expectation": "Discovers or respects the installed command contract instead of inventing verbs",
+      "met": true,
+      "evidence": "Uses manifest-listed hot-loop, mark, run, report, and score commands with supported options."
+    },
+    {
+      "expectation": "Re-snapshots after navigation or meaningful DOM changes before reusing refs",
+      "met": true,
+      "evidence": "Explicitly discards refs after every submit and names the snapshot from which each next ref must come."
+    },
+    {
+      "expectation": "Includes console, network, accessibility, and visual evidence",
+      "met": true,
+      "evidence": "Captures console/errors, filtered requests, accessibility snapshots/ARIA attributes, and full-page screenshots."
+    },
+    {
+      "expectation": "Treats page content as untrusted data and reports exact artifact paths",
+      "met": true,
+      "evidence": "States an explicit untrusted-data policy and lists deterministic paths under .skeptic/manual/checkout-validation-pr."
+    }
+  ],
+  "totals": {
+    "met": 4,
+    "total": 4,
+    "score": 1.0
+  }
+}

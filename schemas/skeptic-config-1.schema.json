@@ -1,0 +1,292 @@
+{
+  "$defs": {
+    "AnalyzerConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "capability": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "command": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "format": {
+          "$ref": "#/$defs/AnalyzerFormat",
+          "default": "ndjson"
+        },
+        "required": {
+          "default": false,
+          "type": "boolean"
+        },
+        "timeoutMs": {
+          "default": 120000,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "trustProject": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "AnalyzerFormat": {
+      "enum": [
+        "sarif",
+        "ndjson"
+      ],
+      "type": "string"
+    },
+    "BlockingLevel": {
+      "enum": [
+        "error",
+        "warning",
+        "none"
+      ],
+      "type": "string"
+    },
+    "Category": {
+      "enum": [
+        "correctness",
+        "security",
+        "performance",
+        "a11y",
+        "maintainability",
+        "visual"
+      ],
+      "type": "string"
+    },
+    "DoctorConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "blocking": {
+          "$ref": "#/$defs/BlockingLevel",
+          "default": "error"
+        },
+        "confidenceThreshold": {
+          "default": 0.75,
+          "format": "double",
+          "type": "number"
+        },
+        "requiredCategories": {
+          "default": [
+            "correctness",
+            "security",
+            "performance",
+            "a11y",
+            "maintainability",
+            "visual"
+          ],
+          "items": {
+            "$ref": "#/$defs/Category"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "EnvironmentConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "pass": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "PolicyConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "allowProjectCommands": {
+          "default": false,
+          "type": "boolean"
+        },
+        "allowedDomains": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "RunnerConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "actionTimeoutMs": {
+          "default": 5000,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "assertionTimeoutMs": {
+          "default": 5000,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "hardTimeoutMs": {
+          "default": 35000,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pollIntervalMs": {
+          "default": 100,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "retries": {
+          "default": 0,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "shard": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "testTimeoutMs": {
+          "default": 30000,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "SessionConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "idleTtlMs": {
+          "default": 300000,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxSessions": {
+          "default": 8,
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "VisualConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "mask": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "sensitive": {
+          "default": false,
+          "type": "boolean"
+        },
+        "threshold": {
+          "default": 0.1,
+          "format": "double",
+          "type": "number"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$id": "skeptic.config/1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "description": "Frozen `skeptic.config/1` shape. Top-level extension tables are accepted\nonly when their names begin with `x-`; the loader enforces that invariant.",
+  "properties": {
+    "analyzers": {
+      "additionalProperties": {
+        "$ref": "#/$defs/AnalyzerConfig"
+      },
+      "default": {},
+      "type": "object"
+    },
+    "doctor": {
+      "$ref": "#/$defs/DoctorConfig",
+      "default": {
+        "blocking": "error",
+        "confidenceThreshold": 0.75,
+        "requiredCategories": [
+          "correctness",
+          "security",
+          "performance",
+          "a11y",
+          "maintainability",
+          "visual"
+        ]
+      }
+    },
+    "env": {
+      "$ref": "#/$defs/EnvironmentConfig",
+      "default": {
+        "pass": []
+      }
+    },
+    "policy": {
+      "$ref": "#/$defs/PolicyConfig",
+      "default": {
+        "allowProjectCommands": false,
+        "allowedDomains": []
+      }
+    },
+    "runner": {
+      "$ref": "#/$defs/RunnerConfig",
+      "default": {
+        "actionTimeoutMs": 5000,
+        "assertionTimeoutMs": 5000,
+        "hardTimeoutMs": 35000,
+        "pollIntervalMs": 100,
+        "retries": 0,
+        "shard": null,
+        "testTimeoutMs": 30000
+      }
+    },
+    "schema": {
+      "const": "skeptic.config/1",
+      "default": "skeptic.config/1",
+      "type": "string"
+    },
+    "session": {
+      "$ref": "#/$defs/SessionConfig",
+      "default": {
+        "idleTtlMs": 300000,
+        "maxSessions": 8
+      }
+    },
+    "visual": {
+      "$ref": "#/$defs/VisualConfig",
+      "default": {
+        "mask": [],
+        "sensitive": false,
+        "threshold": 0.1
+      }
+    }
+  },
+  "title": "SkepticConfig",
+  "type": "object",
+  "x-skeptic-version": "2.0.0"
+}

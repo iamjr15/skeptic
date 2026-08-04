@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .next/
+/target/
 .env
 .env.local
 *.pyc
@@ -15,22 +16,19 @@ venv/
 # Coverage-report output only — anchored so it never matches source/test
 # directories named "coverage" (e.g. __tests__/.../coverage).
 /coverage/
-/cli/coverage/
 
 # OS files
 .DS_Store
 
-# skeptic CLI output
-skeptic-output/
-# .skeptic/ is the per-project cache: AI-generation temp specs, daemon logs,
-# cookie consent file, etc. Nothing under it should be tracked. Pattern
-# matches any `.skeptic/` directory (project root, test fixtures, etc.).
+# Skeptic run bundles, daemon state, and local evidence are never source files.
 .skeptic/
-
-# CLI test artifacts
-cli/live-output/
-cli/live-tests/
+skeptic-output/
 
 # Personal agent runtime state
 last-session.json
 scheduled_tasks.lock
+
+# Internal planning blueprints — kept local, not published (discuss license
+# posture / competitive analysis; not appropriate for the public repo).
+/docs/v2/blueprint.md
+/docs/v2/reference.md

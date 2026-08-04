@@ -1,0 +1,31 @@
+{
+  "eval_id": 3,
+  "condition": "without_skill",
+  "rubric": [
+    {
+      "expectation": "Starts by listing devices and selects an explicit device",
+      "met": true,
+      "evidence": "Persists `mobile devices` output and passes `--device emulator-5554` to every device operation."
+    },
+    {
+      "expectation": "Uses ADBKeyboard for non-ASCII input and never bare adb input text",
+      "met": true,
+      "evidence": "Requires the Unicode capability and `adbkeyboard-base64` receipt, with an explicit prohibition on bare adb input."
+    },
+    {
+      "expectation": "Re-snapshots after screen changes",
+      "met": true,
+      "evidence": "Takes a new mobile snapshot after Unicode entry, password entry, login, and each swipe before resolving later refs."
+    },
+    {
+      "expectation": "Collects gfxinfo plus screenshot or screenrecord evidence",
+      "met": true,
+      "evidence": "Captures before/after gfxinfo, screenshots, a 15-second screen recording, and logcat at exact paths."
+    }
+  ],
+  "totals": {
+    "met": 4,
+    "total": 4,
+    "score": 1.0
+  }
+}

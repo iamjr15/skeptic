@@ -1,0 +1,42 @@
+{
+  "name": "skeptic-cli",
+  "version": "2.0.0",
+  "description": "Deterministic, agent-native QA for web and mobile",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iamjr15/skeptic.git"
+  },
+  "type": "module",
+  "bin": {
+    "skeptic": "bin/skeptic.js"
+  },
+  "types": "types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts"
+    }
+  },
+  "files": [
+    "bin",
+    "scripts/postinstall.js",
+    "types",
+    "README.md"
+  ],
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js",
+    "check:versions": "node scripts/check-versions.mjs"
+  },
+  "optionalDependencies": {
+    "@skeptic/cli-darwin-arm64": "2.0.0",
+    "@skeptic/cli-darwin-x64": "2.0.0",
+    "@skeptic/cli-linux-arm64": "2.0.0",
+    "@skeptic/cli-linux-musl-arm64": "2.0.0",
+    "@skeptic/cli-linux-musl-x64": "2.0.0",
+    "@skeptic/cli-linux-x64": "2.0.0",
+    "@skeptic/cli-win32-x64": "2.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

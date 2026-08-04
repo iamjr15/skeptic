@@ -1,0 +1,394 @@
+{
+  "$defs": {
+    "BaselineState": {
+      "enum": [
+        "new",
+        "existing",
+        "moved",
+        "fixed"
+      ],
+      "type": "string"
+    },
+    "Category": {
+      "enum": [
+        "correctness",
+        "security",
+        "performance",
+        "a11y",
+        "maintainability",
+        "visual"
+      ],
+      "type": "string"
+    },
+    "CorrelationLink": {
+      "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "format": "double",
+          "type": "number"
+        },
+        "correlatorId": {
+          "type": "string"
+        },
+        "correlatorVersion": {
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "type": "array"
+        },
+        "windowMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "correlatorId",
+        "correlatorVersion",
+        "evidence",
+        "confidence"
+      ],
+      "type": "object"
+    },
+    "EvidenceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "mediaType": {
+          "type": "string"
+        },
+        "producer": {
+          "type": "string"
+        },
+        "redaction": {
+          "$ref": "#/$defs/RedactionState"
+        },
+        "relPath": {
+          "type": "string"
+        },
+        "sensitivity": {
+          "$ref": "#/$defs/Sensitivity"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "testId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "relPath",
+        "mediaType",
+        "bytes",
+        "sha256",
+        "producer",
+        "sensitivity",
+        "redaction"
+      ],
+      "type": "object"
+    },
+    "EvidenceState": {
+      "enum": [
+        "unobserved",
+        "corroborated",
+        "contradicted",
+        "not-applicable"
+      ],
+      "type": "string"
+    },
+    "FindingState": {
+      "enum": [
+        "open",
+        "suppressed",
+        "fixed"
+      ],
+      "type": "string"
+    },
+    "Location": {
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "span": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Span"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "file"
+      ],
+      "type": "object"
+    },
+    "Producer": {
+      "additionalProperties": false,
+      "properties": {
+        "configHash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ruleId": {
+          "type": "string"
+        },
+        "ruleVersion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tool": {
+          "type": "string"
+        },
+        "toolVersion": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool",
+        "toolVersion",
+        "ruleId"
+      ],
+      "type": "object"
+    },
+    "RedactionState": {
+      "enum": [
+        "none",
+        "redacted"
+      ],
+      "type": "string"
+    },
+    "Sensitivity": {
+      "enum": [
+        "normal",
+        "sensitive"
+      ],
+      "type": "string"
+    },
+    "Severity": {
+      "enum": [
+        "P0",
+        "P1",
+        "P2",
+        "P3"
+      ],
+      "type": "string"
+    },
+    "Span": {
+      "additionalProperties": false,
+      "properties": {
+        "end": {
+          "$ref": "#/$defs/TextPosition"
+        },
+        "start": {
+          "$ref": "#/$defs/TextPosition"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "type": "object"
+    },
+    "Suppression": {
+      "additionalProperties": false,
+      "properties": {
+        "justification": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/SuppressionKind"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "SuppressionKind": {
+      "enum": [
+        "inline",
+        "config"
+      ],
+      "type": "string"
+    },
+    "TextPosition": {
+      "additionalProperties": false,
+      "properties": {
+        "byteOffset": {
+          "description": "Optional zero-based UTF-8 byte offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "column": {
+          "description": "One-based Unicode scalar column.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "line": {
+          "description": "One-based line number.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "line",
+        "column"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "skeptic.diagnostic/1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "baselineState": {
+      "$ref": "#/$defs/BaselineState"
+    },
+    "category": {
+      "$ref": "#/$defs/Category"
+    },
+    "confidence": {
+      "format": "double",
+      "type": "number"
+    },
+    "evidenceState": {
+      "$ref": "#/$defs/EvidenceState"
+    },
+    "file": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "fingerprint": {
+      "type": "string"
+    },
+    "fixGroupId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "help": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "links": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/CorrelationLink"
+      },
+      "type": "array"
+    },
+    "message": {
+      "type": "string"
+    },
+    "occurrenceId": {
+      "type": "string"
+    },
+    "producer": {
+      "$ref": "#/$defs/Producer"
+    },
+    "relatedLocations": {
+      "items": {
+        "$ref": "#/$defs/Location"
+      },
+      "type": "array"
+    },
+    "route": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "severity": {
+      "$ref": "#/$defs/Severity"
+    },
+    "span": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Span"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "state": {
+      "$ref": "#/$defs/FindingState"
+    },
+    "subject": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "suppression": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Suppression"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "fingerprint",
+    "occurrenceId",
+    "producer",
+    "severity",
+    "category",
+    "confidence",
+    "message",
+    "state",
+    "evidenceState",
+    "baselineState"
+  ],
+  "title": "Diagnostic",
+  "type": "object",
+  "x-skeptic-version": "2.0.0"
+}

@@ -5,73 +5,112 @@ on:
   push:
     branches: [main]
 
-# Cancel superseded runs on the same ref (e.g. rapid pushes to a PR branch).
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
 
 jobs:
+  quality:
+    name: Format and lint
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Verify published schemas are current
+        run: |
+          cargo run --locked --quiet -p skeptic-contract --bin export-schemas -- schemas
+          git diff --exit-code -- schemas
+
   test:
-    name: ${{ matrix.os }} / Node ${{ matrix.node }}
+    name: Test / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, ubuntu-22.04, windows-2022]
-        node: [22, 24]
-    defaults:
-      run:
-        # Windows runners default to pwsh; force bash everywhere so the same
-        # POSIX commands work on every platform.
-        shell: bash
-        working-directory: cli
+        os: [ubuntu-22.04, macos-14, windows-2022]
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.os }}
+      - run: cargo test --workspace
+      - name: Smoke browser CLI
+        run: cargo run --quiet -p skeptic-cli -- --version
+      - name: Smoke embedded V8 op
+        run: cargo run --quiet -p skeptic-runner
 
+  browser-targets:
+    name: Complete runtime / ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+            builder: cargo
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            builder: cargo
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            builder: cargo
+          - os: ubuntu-22.04
+            target: aarch64-unknown-linux-gnu
+            builder: zig
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-musl
+            builder: zig
+          - os: ubuntu-22.04
+            target: aarch64-unknown-linux-musl
+            builder: zig
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            builder: cargo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: browser-${{ matrix.target }}
+      - name: Install cargo-zigbuild
+        if: matrix.builder == 'zig'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
+      - name: Build complete five-binary runtime
+        if: matrix.builder == 'cargo'
+        run: cargo build --locked --profile ci -p skeptic-cli -p skeptic-runner -p skeptic-doctor -p skeptic-mobile -p skeptic-report --target ${{ matrix.target }}
+      - name: Cross-build complete five-binary runtime
+        if: matrix.builder == 'zig'
+        run: cargo zigbuild --locked --profile ci -p skeptic-cli -p skeptic-runner -p skeptic-doctor -p skeptic-mobile -p skeptic-report --target ${{ matrix.target }}
+
+  npm-wrapper:
+    name: npm wrapper
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node }}
-          cache: npm
-          cache-dependency-path: cli/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      # Playwright caches browsers in an OS-specific location; a Linux-only path
-      # means macOS/Windows never hit and re-download Chromium every run.
-      - name: Resolve Playwright browsers cache path
-        id: pw
-        run: |
-          case "${{ runner.os }}" in
-            Linux)   echo "dir=$HOME/.cache/ms-playwright" >> "$GITHUB_OUTPUT" ;;
-            macOS)   echo "dir=$HOME/Library/Caches/ms-playwright" >> "$GITHUB_OUTPUT" ;;
-            Windows) echo "dir=$LOCALAPPDATA\\ms-playwright" >> "$GITHUB_OUTPUT" ;;
-          esac
-
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.pw.outputs.dir }}
-          # The Playwright version lives in package-lock.json, so an upgrade
-          # naturally busts the exact key. restore-keys prefix-matches the
-          # latest browser cache so an unrelated lock change (e.g. a skeptic
-          # version bump) restores the still-valid Chromium instead of
-          # cold-downloading it; a real Playwright upgrade still re-downloads.
-          key: ${{ runner.os }}-playwright-${{ hashFiles('cli/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-playwright-
-
-      - name: Install Playwright Chromium
-        run: npx playwright install chromium
-
-      - name: Type-check
-        run: npm run check
-
-      - name: Build
-        run: npm run build
-
-      - name: Test
-        run: npm test
+          node-version: "24"
+      - run: node --check npm/skeptic-cli/bin/skeptic.js
+      - run: node --check npm/skeptic-cli/scripts/postinstall.js
+      - run: node npm/skeptic-cli/scripts/check-versions.mjs
+      - run: node scripts/verify-release.mjs
+      - run: npm pack --dry-run
+        working-directory: npm/skeptic-cli

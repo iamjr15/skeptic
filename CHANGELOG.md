@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-07-20
+
+Skeptic v2 is a from-scratch, Rust-native QA engine. It replaces v1 without a
+compatibility layer.
+
+### Added
+
+- Agent Browser-compatible CDP automation with live-Chrome auto-connect,
+  semantic snapshots and refs, browser actions, diffs, policy controls, and
+  structured v2 response envelopes.
+- An embedded-V8 TypeScript test runner with in-process oxc type stripping,
+  `test`/`expect`/`page`, isolation, retries, sharding, hard timeouts, JSON,
+  NDJSON, and JUnit reporting.
+- An in-process oxc Doctor with stable diagnostic identities, baselines,
+  changed-file scope, SARIF, explainable rules, optional supervised analyzers,
+  and native TypeScript, Dart, SwiftLint, Android Lint, and detekt integration.
+- Versioned run manifests, append-only journals, marker transcripts, redacted
+  console/network evidence, accessibility audits, performance evidence, video,
+  and visual baseline/diff artifacts.
+- Unified Android and iOS Simulator QA verbs, screenshots and recordings,
+  mobile performance/log evidence, and opt-in platform accessibility helpers.
+- Coverage-aware deterministic scoring, evidence correlation, terminal/JSON/SARIF
+  reports, and the report-oriented terminal UI.
+- Embedded, version-locked agent skills plus the npx-skills layout, GitHub
+  Action workflow, schemas, npm native packages for seven targets, Homebrew
+  formula generation, checksums, SBOMs, and build attestations.
+
+### Changed
+
+- Began the Skeptic v2 Rust rebuild and removed the v1 TypeScript/Playwright
+  implementation without a compatibility layer.
+- Vendored and rebranded the Agent Browser v0.32.2 Rust CDP/session foundation
+  with Apache-2.0 attribution.
+- Added the native `deno_core` runner spike, seven-platform npm package
+  skeleton, Rust CI/release workflows, and v2-only repository guidance.
+- Resolved the rusty_v8 149.4.0 musl archive gap by applying Deno's upstream
+  V8 150.2.0 compatibility delta to the vendored runtime crates; added an
+  enforced seven-target V8 build and native-smoke workflow.
+
+### Removed
+
+- Removed the standalone local web dashboard, its embedded frontend, and the
+  per-session live WebSocket viewport stream. Skeptic's human interface is the
+  report-oriented terminal UI; screenshots, video, traces, and machine-readable
+  CI evidence remain opt-in artifacts rather than alternative interfaces.
+
 ## [1.0.1] - 2026-06-14
 
 Release-infrastructure only — no runtime or API changes; `skeptic-cli@1.0.1` is
@@ -67,8 +113,8 @@ same runner, the same `results.json` — with no MCP and no model of its own.
 - The runner generalized from a Playwright-only path to a shared device path
   (`runOneTestDevice`); `--platform`/`--target` thread through `run`, the interactive
   session daemon, `scaffold`, `devices`, and `doctor`.
-- Mobile metrics render in the html report (Device Performance/Accessibility/Network
-  cards) and the console metrics line, keyed distinctly from the web shapes.
+- Mobile metrics render in the console metrics line, keyed distinctly from the
+  web shapes.
 
 ### Fixed
 
@@ -155,7 +201,8 @@ skeptic is now **agent-native**: a skill, a CLI, and a daemon. The built-in
   Intelligence comes from the host coding agent; skeptic is the deterministic
   execution and evidence layer it drives through the bundled skill and CLI.
 
-[Unreleased]: https://github.com/iamjr15/skeptic/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/iamjr15/skeptic/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/iamjr15/skeptic/compare/v1.0.1...v2.0.0
 [1.0.1]: https://github.com/iamjr15/skeptic/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/iamjr15/skeptic/compare/v0.2.1...v1.0.0
 [0.2.1]: https://github.com/iamjr15/skeptic/compare/v0.2.0...v0.2.1

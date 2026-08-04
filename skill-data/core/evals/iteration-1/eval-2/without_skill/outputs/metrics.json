@@ -1,0 +1,31 @@
+{
+  "eval_id": 2,
+  "condition": "without_skill",
+  "rubric": [
+    {
+      "expectation": "Runs Doctor in changed scope with an explicit base",
+      "met": true,
+      "evidence": "Uses `skeptic doctor . --scope changed --base origin/main`."
+    },
+    {
+      "expectation": "Exercises the relevant runtime path and collects network requests",
+      "met": true,
+      "evidence": "Clears network state, triggers the component path, captures filtered requests and HAR, and runs a focused spec."
+    },
+    {
+      "expectation": "Uses report or score explain to consume correlation and coverage",
+      "met": true,
+      "evidence": "Builds terminal/JSON reports with manifest plus Doctor diagnostics and runs `score --explain`."
+    },
+    {
+      "expectation": "Does not claim confirmation from static analysis alone",
+      "met": true,
+      "evidence": "Defines confirmed, path-limited disproved, and not-proven outcomes based on runtime coverage and correlation."
+    }
+  ],
+  "totals": {
+    "met": 4,
+    "total": 4,
+    "score": 1.0
+  }
+}

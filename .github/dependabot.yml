@@ -1,7 +1,11 @@
 version: 2
 updates:
   - package-ecosystem: "npm"
-    directory: "/cli"
+    directory: "/npm/skeptic-cli"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "cargo"
+    directory: "/"
     schedule:
       interval: "weekly"
   - package-ecosystem: "github-actions"

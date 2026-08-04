@@ -1,0 +1,1 @@
+{"name":"@skeptic/cli-win32-x64","version":"2.0.0","license":"MIT","os":["win32"],"cpu":["x64"],"files":["bin"],"skepticBinary":"bin/skeptic.exe"}

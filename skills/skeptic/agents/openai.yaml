@@ -1,0 +1,4 @@
+interface:
+  display_name: "Skeptic"
+  short_description: "Use Skeptic for evidence-backed web and mobile QA plus code/runtime diagnosis."
+  default_prompt: "Use the installed Skeptic contract to verify this UI or mobile behavior, inspect relevant findings, and report fresh evidence paths."

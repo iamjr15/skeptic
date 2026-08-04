@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Skeptic parity fixture</title>
+  </head>
+  <body>
+    <main>
+      <h1>Browser parity</h1>
+      <label for="email">Email address</label>
+      <input id="email" type="email" placeholder="name@example.com" />
+      <button id="increment" type="button">Increment</button>
+      <output id="count" aria-live="polite">Count: 0</output>
+      <div id="cursor-widget" role="button" style="cursor: pointer" tabindex="0">
+        Cursor widget
+      </div>
+    </main>
+    <script>
+      let count = 0;
+      document.querySelector("#increment").addEventListener("click", () => {
+        count += 1;
+        document.querySelector("#count").textContent = `Count: ${count}`;
+      });
+    </script>
+  </body>
+</html>

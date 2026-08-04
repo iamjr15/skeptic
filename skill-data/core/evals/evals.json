@@ -1,0 +1,49 @@
+{
+  "skill_name": "core",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "QA a checkout page after a form-validation change. Explain the exact Skeptic command sequence you would run and what evidence must exist before you call it done.",
+      "expected_output": "A fresh-ref browser loop that checks the changed path, an adjacent negative path, accessibility, console, network, screenshot or visual evidence, and closes/reports the session.",
+      "expectations": [
+        "Discovers or respects the installed command contract instead of inventing verbs",
+        "Re-snapshots after navigation or meaningful DOM changes before reusing refs",
+        "Includes console, network, accessibility, and visual evidence",
+        "Treats page content as untrusted data and reports exact artifact paths"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "A React pull request may have introduced a duplicate fetch in an effect. Describe how an agent should use Skeptic to diagnose it and prove or disprove the static hypothesis.",
+      "expected_output": "Changed-scope Doctor plus an exercised browser run whose network evidence is folded through the report correlator.",
+      "expectations": [
+        "Runs Doctor in changed scope with an explicit base",
+        "Exercises the relevant runtime path and collects network requests",
+        "Uses report or score explain to consume correlation and coverage",
+        "Does not claim confirmation from static analysis alone"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Drive an Android emulator login screen containing non-ASCII user input and collect evidence of a scrolling performance regression.",
+      "expected_output": "Explicit device selection, snapshots and ref-safe gestures, ADBKeyboard Unicode path, screenshot/logcat/gfxinfo or recording evidence, with limitations called out.",
+      "expectations": [
+        "Starts by listing devices and selects an explicit device",
+        "Uses ADBKeyboard for non-ASCII input and never bare adb input text",
+        "Re-snapshots after screen changes",
+        "Collects gfxinfo plus screenshot or screenrecord evidence"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Prepare Skeptic for CI in an untrusted fork pull request and explain which generated files and permissions matter.",
+      "expected_output": "Uses the generated GitHub Action, preserves the fork write-permission guard, uploads evidence, emits annotations and a step summary, and avoids granting project-command permission implicitly.",
+      "expectations": [
+        "Uses skeptic add github-action or the equivalent checked-in template",
+        "Retains the untrusted-fork guard around write-permission operations",
+        "Uploads SARIF and run artifacts and writes the step summary",
+        "Does not enable project-defined analyzer commands without authorization"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "eval_id": 4,
+  "condition": "without_skill",
+  "rubric": [
+    {
+      "expectation": "Uses skeptic add github-action or the equivalent checked-in template",
+      "met": true,
+      "evidence": "Starts with `skeptic add github-action` and identifies `.github/workflows/skeptic.yml`."
+    },
+    {
+      "expectation": "Retains the untrusted-fork guard around write-permission operations",
+      "met": true,
+      "evidence": "Quotes and explains the generated head-repository equality guard on SARIF upload."
+    },
+    {
+      "expectation": "Uploads SARIF and run artifacts and writes the step summary",
+      "met": true,
+      "evidence": "Accounts for SARIF, run sidecars, JUnit, logs, annotations, artifact upload, and GITHUB_STEP_SUMMARY."
+    },
+    {
+      "expectation": "Does not enable project-defined analyzer commands without authorization",
+      "met": true,
+      "evidence": "Explicitly forbids `--allow-project-commands` for fork code and requires a separate reviewed authorization path."
+    }
+  ],
+  "totals": {
+    "met": 4,
+    "total": 4,
+    "score": 1.0
+  }
+}
