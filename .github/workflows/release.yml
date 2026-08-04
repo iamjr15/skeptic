@@ -133,7 +133,7 @@ jobs:
           sha256sum skeptic-* | sort -k2 > BINARY_SHA256SUMS
           node ../scripts/generate-homebrew-formula.mjs BINARY_SHA256SUMS skeptic.rb
           sha256sum skeptic-* skeptic.rb | sort -k2 > SHA256SUMS
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@v4
         with:
           subject-path: dist/skeptic-*
       - uses: actions/upload-artifact@v4
