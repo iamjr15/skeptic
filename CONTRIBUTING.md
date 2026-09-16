@@ -69,8 +69,10 @@ private contact in `SECURITY.md`, never a public issue.
 
 ## Releases
 
-Push a tag matching the workspace version (for example `v2.0.0`) after CI passes.
-The release workflow builds all five binaries for seven targets and publishes
+Push the commit to `main`, then push a matching version tag (for example `v2.0.0`).
+Release builds can run alongside CI; publication waits for both main-branch
+validation workflows to pass on that exact commit. The release workflow builds
+all five binaries for seven targets and publishes
 GitHub assets, checksums, a Homebrew formula, an SBOM, and the `skeptic-cli` npm
 wrapper. The wrapper's trusted publisher must target `iamjr15/skeptic` and
 `release.yml` without a GitHub environment. Its installer downloads and verifies

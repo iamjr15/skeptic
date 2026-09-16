@@ -18,6 +18,41 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  verify-ci:
+    name: Require CI for release commit
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 50
+    permissions:
+      actions: read
+    steps:
+      - name: Wait for both main-branch validation workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          while (( SECONDS < 2700 )); do
+            RUNS="$(gh run list --commit "$GITHUB_SHA" --branch main --event push --limit 50 \
+              --json databaseId,workflowName,status,conclusion | jq '
+              group_by(.workflowName) | map(max_by(.databaseId)) |
+              map(select(.workflowName == "CI" or .workflowName == "deno_core target spike"))')"
+            if jq -e 'any(.[]; .status == "completed" and .conclusion != "success")' <<<"$RUNS" >/dev/null; then
+              echo "::error::A required validation workflow failed for $GITHUB_SHA"
+              jq . <<<"$RUNS"
+              exit 1
+            fi
+            if jq -e 'length == 2 and all(.[]; .status == "completed" and .conclusion == "success")' <<<"$RUNS" >/dev/null; then
+              echo "Both validation workflows passed for $GITHUB_SHA"
+              exit 0
+            fi
+            echo "Waiting for CI and V8 validation for $GITHUB_SHA"
+            sleep 30
+          done
+          echo "::error::Timed out waiting for validation workflows"
+          exit 1
+
   guard:
     name: Release guard
     runs-on: ubuntu-22.04
@@ -121,7 +156,8 @@ jobs:
 
   assemble:
     name: Checksums and attestations
-    needs: [guard, build]
+    needs: [guard, build, verify-ci]
+    if: always() && needs.guard.result == 'success' && needs.build.result == 'success' && (needs.verify-ci.result == 'success' || github.ref_type != 'tag')
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
