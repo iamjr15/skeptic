@@ -82,6 +82,11 @@ Before publication, separate macOS, Linux, and Windows jobs execute the built
 bundles with no runtime source checkout or Cargo registry present. The smoke
 script checks CLI dispatch and runs TypeScript using embedded web/crypto APIs.
 
+If GitHub publication succeeds but npm publication fails, fix the publisher and
+dispatch `release.yml` on `main` with `npm_release_tag` set to the published tag.
+This retry checks out the immutable release tag and publishes only its npm
+wrapper, leaving the existing binaries and tag intact.
+
 Additional distribution channels are opt-in repository variables:
 
 - Set `PUBLISH_NATIVE_NPM_PACKAGES=true` only after bootstrapping each package in

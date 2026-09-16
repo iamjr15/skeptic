@@ -4,6 +4,11 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      npm_release_tag:
+        description: "Retry npm publication for an already-published GitHub release (for example v2.0.0)"
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -55,6 +60,7 @@ jobs:
 
   guard:
     name: Release guard
+    if: github.event_name != 'workflow_dispatch' || inputs.npm_release_tag == ''
     runs-on: ubuntu-22.04
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -247,9 +253,43 @@ jobs:
         run: |
           set -euo pipefail
           node npm/skeptic-cli/scripts/stage-platform-packages.mjs dist
-          for PACKAGE in npm/platforms/*; do npm publish "$PACKAGE" --provenance --access public; done
+          for PACKAGE in npm/platforms/*; do npm publish "./$PACKAGE" --provenance --access public; done
       - name: Publish npm wrapper
-        run: npm publish npm/skeptic-cli --provenance --access public
+        run: npm publish --provenance --access public
+        working-directory: npm/skeptic-cli
+
+  publish-existing-npm:
+    name: Retry npm for published release
+    if: github.event_name == 'workflow_dispatch' && inputs.npm_release_tag != ''
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Require an existing published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.npm_release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          gh release view "$RELEASE_TAG" --json isDraft,isPrerelease,assets |
+            jq -e '.isDraft == false and .isPrerelease == false and any(.assets[]; .name == "SHA256SUMS")'
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.npm_release_tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+      - name: Verify the released package version
+        env:
+          RELEASE_TAG: ${{ inputs.npm_release_tag }}
+        run: |
+          node npm/skeptic-cli/scripts/check-versions.mjs
+          node --input-type=module -e 'import fs from "node:fs"; const pkg = JSON.parse(fs.readFileSync("npm/skeptic-cli/package.json")); if ("v" + pkg.version !== process.env.RELEASE_TAG) throw new Error("release tag and npm version differ");'
+      - name: Publish released npm wrapper
+        run: npm publish --provenance --access public
+        working-directory: npm/skeptic-cli
 
   publish-homebrew:
     name: Update Homebrew tap
