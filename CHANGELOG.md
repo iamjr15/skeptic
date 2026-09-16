@@ -48,6 +48,9 @@ compatibility layer.
 
 ### Fixed
 
+- Embed Deno extension JavaScript in standalone runners so downloaded binaries
+  do not depend on source files from the build machine. Release bundles are
+  tested on fresh macOS, Linux, and Windows runners before publication.
 - Test discovery skips specs importing another test framework while preserving
   helper-based specs, parse errors, and explicitly requested files.
 - Unsupported npm imports report actionable guidance; failed specs retain their

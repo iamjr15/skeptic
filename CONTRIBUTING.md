@@ -78,6 +78,10 @@ wrapper. The wrapper's trusted publisher must target `iamjr15/skeptic` and
 `release.yml` without a GitHub environment. Its installer downloads and verifies
 GitHub binaries when optional native npm packages are unavailable.
 
+Before publication, separate macOS, Linux, and Windows jobs execute the built
+bundles with no runtime source checkout or Cargo registry present. The smoke
+script checks CLI dispatch and runs TypeScript using embedded web/crypto APIs.
+
 Additional distribution channels are opt-in repository variables:
 
 - Set `PUBLISH_NATIVE_NPM_PACKAGES=true` only after bootstrapping each package in

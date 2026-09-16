@@ -20,8 +20,16 @@ selected SLH-DSA variants or behavior. Its crates.io archive records Deno
 commit `f39575ecd50602a5b42b1ba8e93849460de9fcf4` and upstream path
 `ext/crypto`.
 
-No other Deno source changes are applied. Update this ledger whenever a
-vendored crate changes. The upstream license is in `LICENSES/deno-LICENSE.md`.
+Skeptic also changes both regular and lazy extension-source macros in
+`deno_core/extensions.rs` to use the existing `mode=included` branch. Upstream
+commit `fdbe2431b13c3cbe3ea0faf0c209ccacea84132d` made these macros retain
+absolute build-machine paths for snapshot generation. Skeptic starts fresh V8
+isolates without snapshots, so it embeds those JavaScript sources at compile
+time through `ExtensionFileSource::new` and `ascii_str_include!`. This makes
+distributed runners independent of the original checkout and Cargo registry.
+
+Update this ledger whenever a vendored crate changes. The upstream license is
+in `LICENSES/deno-LICENSE.md`.
 
 Sources:
 
@@ -29,4 +37,5 @@ Sources:
 - https://crates.io/crates/deno_crypto/0.269.0
 - https://crates.io/crates/serde_v8/0.317.0
 - https://github.com/denoland/deno/commit/7e036ea12e23b4908f854730179ccf50f72041a8
+- https://github.com/denoland/deno/commit/fdbe2431b13c3cbe3ea0faf0c209ccacea84132d
 - https://github.com/denoland/rusty_v8/releases/tag/v150.2.0

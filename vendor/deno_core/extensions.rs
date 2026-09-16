@@ -943,7 +943,7 @@ macro_rules! include_lazy_loaded_js_files {
     $(with_specifier $s2:literal)?
     $(= $config:tt)?
   ),* $(,)?) => {
-    $crate::__extension_include_js_files_inner!(mode=loaded, name=$name, dir=$crate::__extension_root_dir!($($dir)?), $([
+    $crate::__extension_include_js_files_inner!(mode=included, name=$name, dir=$crate::__extension_root_dir!($($dir)?), $([
       // These entries will be parsed in __extension_include_js_files_inner
       $s1 $(with_specifier $s2)? $(= $config)?
     ]),*)
@@ -965,15 +965,13 @@ macro_rules! include_js_files_doctest {
   };
 }
 
-/// Source files declared on an extension are recorded by absolute path; their
-/// bytes are read from disk during snapshot creation and never embedded in the
-/// final binary. With a startup snapshot, the source is reachable via the
-/// snapshot bytes (for `esm`/`js`) or the residual lazy table emitted by the
-/// snapshot build (for `lazy_loaded_*`).
+/// Skeptic runs without a startup snapshot, so regular and lazy extension
+/// sources must be embedded rather than loaded from build-machine paths.
+/// Upstream's snapshot-only loading assumes a snapshot and residual lazy table.
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __extension_include_js_files_detect {
-  ($($rest:tt)*) => { $crate::__extension_include_js_files_inner!(mode=loaded, $($rest)*) };
+  ($($rest:tt)*) => { $crate::__extension_include_js_files_inner!(mode=included, $($rest)*) };
 }
 
 /// This is the core of the [`include_js_files!`] and [`include_lazy_loaded_js_files`] macros. The first

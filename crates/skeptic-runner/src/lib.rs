@@ -321,6 +321,20 @@ struct TypeScriptLoader {
     root: PathBuf,
 }
 
+fn web_extensions() -> Vec<deno_core::Extension> {
+    vec![
+        deno_webidl::deno_webidl::init(),
+        deno_web::deno_web::init(
+            Arc::new(deno_web::BlobStore::default()) as Arc<dyn deno_web::BlobStoreTrait>,
+            None,
+            Default::default(),
+            Default::default(),
+        ),
+        deno_crypto::deno_crypto::init(None),
+        skeptic_web_globals::init(),
+    ]
+}
+
 impl ModuleLoader for TypeScriptLoader {
     fn resolve(
         &self,
@@ -531,20 +545,11 @@ pub async fn execute_file(options: ExecuteOptions<'_>) -> Result<WorkerResult, S
             .canonicalize()
             .map_err(|error| error.to_string())?,
     };
+    let mut extensions = web_extensions();
+    extensions.push(skeptic_runtime::init(state));
     let mut runtime = JsRuntime::new(RuntimeOptions {
         module_loader: Some(Rc::new(loader)),
-        extensions: vec![
-            deno_webidl::deno_webidl::init(),
-            deno_web::deno_web::init(
-                Arc::new(deno_web::BlobStore::default()) as Arc<dyn deno_web::BlobStoreTrait>,
-                None,
-                Default::default(),
-                Default::default(),
-            ),
-            deno_crypto::deno_crypto::init(None),
-            skeptic_web_globals::init(),
-            skeptic_runtime::init(state),
-        ],
+        extensions,
         ..Default::default()
     });
     runtime
@@ -798,6 +803,28 @@ mod tests {
         let message = error.to_string();
         assert!(message.contains("skeptic-cli"), "message was: {message}");
         assert!(message.contains("Playwright"), "message was: {message}");
+    }
+
+    #[test]
+    fn extension_sources_are_embedded_in_the_runtime() {
+        let mut count = 0;
+        for extension in web_extensions() {
+            for source in extension
+                .js_files
+                .iter()
+                .chain(extension.esm_files.iter())
+                .chain(extension.lazy_loaded_js_files.iter())
+                .chain(extension.lazy_loaded_esm_files.iter())
+            {
+                assert!(
+                    source.is_runtime_loadable(),
+                    "{} requires a file from the build machine",
+                    source.specifier
+                );
+                count += 1;
+            }
+        }
+        assert!(count > 0, "the runtime must include its web extensions");
     }
 
     #[tokio::test(flavor = "current_thread")]

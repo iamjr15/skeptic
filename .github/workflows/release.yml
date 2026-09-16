@@ -154,10 +154,43 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  smoke-bundles:
+    name: Artifact smoke / ${{ matrix.asset }}
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            asset: linux-x64
+          - os: macos-14
+            asset: darwin-arm64
+          - os: macos-15-intel
+            asset: darwin-x64
+          - os: windows-2022
+            asset: win32-x64
+    steps:
+      # Only fetch the smoke script. The build checkout and Cargo sources must
+      # not exist here, otherwise absolute build-path dependencies go unnoticed.
+      - uses: actions/checkout@v4
+        with:
+          path: smoke-source
+          sparse-checkout: scripts/smoke-runtime.mjs
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist
+      - run: node smoke-source/scripts/smoke-runtime.mjs dist ${{ matrix.asset }}
+
   assemble:
     name: Checksums and attestations
-    needs: [guard, build, verify-ci]
-    if: always() && needs.guard.result == 'success' && needs.build.result == 'success' && (needs.verify-ci.result == 'success' || github.ref_type != 'tag')
+    needs: [guard, build, verify-ci, smoke-bundles]
+    if: always() && needs.guard.result == 'success' && needs.build.result == 'success' && needs.smoke-bundles.result == 'success' && (needs.verify-ci.result == 'success' || github.ref_type != 'tag')
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
