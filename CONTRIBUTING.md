@@ -66,3 +66,21 @@ logs with credentials.
 
 Report vulnerabilities through GitHub private vulnerability reporting or the
 private contact in `SECURITY.md`, never a public issue.
+
+## Releases
+
+Push a tag matching the workspace version (for example `v2.0.0`) after CI passes.
+The release workflow builds all five binaries for seven targets and publishes
+GitHub assets, checksums, a Homebrew formula, an SBOM, and the `skeptic-cli` npm
+wrapper. The wrapper's trusted publisher must target `iamjr15/skeptic` and
+`release.yml` without a GitHub environment. Its installer downloads and verifies
+GitHub binaries when optional native npm packages are unavailable.
+
+Additional distribution channels are opt-in repository variables:
+
+- Set `PUBLISH_NATIVE_NPM_PACKAGES=true` only after bootstrapping each package in
+  `npm/platforms` and configuring its trusted publisher for the same workflow.
+  Publishing under `@skeptic` requires access to that npm scope.
+- Set `PUBLISH_HOMEBREW_TAP=true` after creating `iamjr15/homebrew-tap` and adding
+  `HOMEBREW_TAP_TOKEN` with write access to the tap. The formula is included in
+  GitHub release assets regardless of whether automatic tap updates are enabled.

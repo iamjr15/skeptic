@@ -9,6 +9,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use chrono::{SecondsFormat, Utc};
+use oxc_allocator::Allocator;
+use oxc_parser::Parser;
+use oxc_span::SourceType;
 use regex::Regex;
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -251,7 +254,42 @@ fn is_spec(path: &Path) -> bool {
     .any(|suffix| name.ends_with(suffix))
 }
 
-fn discover(root: &Path, requested: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
+/// Spec files split into runnable Skeptic specs and skipped non-Skeptic ones.
+struct Discovered {
+    specs: Vec<PathBuf>,
+    skipped: Vec<PathBuf>,
+}
+
+/// Only skip definite foreign-framework imports. Helper-based specs and files
+/// that cannot be parsed must reach the runner instead of silently disappearing.
+fn is_skeptic_spec(path: &Path) -> bool {
+    let (Ok(source), Ok(source_type)) = (fs::read_to_string(path), SourceType::from_path(path))
+    else {
+        return true;
+    };
+    let allocator = Allocator::default();
+    let parsed = Parser::new(&allocator, &source, source_type).parse();
+    if !parsed.errors.is_empty() {
+        return true;
+    }
+    let requests = &parsed.module_record.requested_modules;
+    if requests.keys().any(|name| name.as_str() == "skeptic-cli") {
+        return true;
+    }
+    !requests.iter().any(|(name, occurrences)| {
+        matches!(
+            name.as_str(),
+            "@playwright/test"
+                | "playwright/test"
+                | "vitest"
+                | "@jest/globals"
+                | "node:test"
+                | "bun:test"
+        ) && occurrences.iter().any(|request| !request.is_type)
+    })
+}
+
+fn discover(root: &Path, requested: &[PathBuf]) -> Result<Discovered, String> {
     let starts = if requested.is_empty() {
         vec![root.to_path_buf()]
     } else {
@@ -267,11 +305,13 @@ fn discover(root: &Path, requested: &[PathBuf]) -> Result<Vec<PathBuf>, String> 
             .collect()
     };
     let mut files = Vec::new();
+    let mut explicit_files = Vec::new();
     for start in starts {
         if start.is_file() {
             if !is_spec(&start) {
                 return Err(format!("{} is not a supported spec file", start.display()));
             }
+            explicit_files.push(start.clone());
             files.push(start);
             continue;
         }
@@ -294,7 +334,10 @@ fn discover(root: &Path, requested: &[PathBuf]) -> Result<Vec<PathBuf>, String> 
     }
     files.sort();
     files.dedup();
-    Ok(files)
+    let (specs, skipped) = files
+        .into_iter()
+        .partition(|path| explicit_files.contains(path) || is_skeptic_spec(path));
+    Ok(Discovered { specs, skipped })
 }
 
 fn sibling_binary(name: &str) -> Result<PathBuf, String> {
@@ -820,7 +863,8 @@ fn run_parent(options: RunOptions) -> Result<i32, String> {
             .ok()
             .flatten()
     });
-    let mut files = discover(&root, &options.files)?;
+    let Discovered { specs, skipped } = discover(&root, &options.files)?;
+    let mut files = specs;
     if let Some((index, total)) = shard {
         files = files
             .into_iter()
@@ -829,7 +873,28 @@ fn run_parent(options: RunOptions) -> Result<i32, String> {
             .collect();
     }
     if files.is_empty() {
+        if !skipped.is_empty() {
+            let list = skipped
+                .iter()
+                .map(|path| format!("  - {}", path.strip_prefix(&root).unwrap_or(path).display()))
+                .collect::<Vec<_>>()
+                .join("\n");
+            return Err(format!(
+                "No Skeptic specs found. Skipped {} spec file(s) that import \
+                 another test framework:\n{list}\n\nSkeptic specs use `import {{ test, expect }} from \
+                 \"skeptic-cli\"` and run in embedded V8 — they are not Playwright tests. \
+                 Run `skeptic scaffold` to create one.",
+                skipped.len()
+            ));
+        }
         return Err("no Skeptic spec files found".to_string());
+    }
+    if !skipped.is_empty() {
+        eprintln!(
+            "skeptic: skipped {} spec file(s) importing another test framework; running {} Skeptic spec(s).",
+            skipped.len(),
+            files.len()
+        );
     }
 
     let started = Instant::now();
@@ -1217,6 +1282,7 @@ fn worker(args: &[String]) -> Result<i32, String> {
         .enable_all()
         .build()
         .map_err(|error| error.to_string())?;
+    let started = Instant::now();
     let mut result = match runtime.block_on(execute_file(ExecuteOptions {
         file: &file,
         project_root: &root,
@@ -1230,25 +1296,30 @@ fn worker(args: &[String]) -> Result<i32, String> {
         env,
     })) {
         Ok(result) => result,
-        Err(error) => WorkerResult {
-            tests: vec![WorkerTestResult {
-                title: file.display().to_string(),
-                status: if error.contains("execution terminated") {
-                    "timed-out"
-                } else {
-                    "errored"
-                }
-                .to_string(),
-                duration_ms: resolved.config.runner.hard_timeout_ms,
-                error: Some(error),
-                assertion: None,
-                session: None,
-                target: WorkerTarget::default(),
-                evidence: Vec::new(),
-            }],
-            console: Vec::new(),
-            sidecars: Vec::new(),
-        },
+        Err(error) => {
+            let timed_out = error.contains("execution terminated");
+            WorkerResult {
+                tests: vec![WorkerTestResult {
+                    title: file.display().to_string(),
+                    status: if timed_out { "timed-out" } else { "errored" }.to_string(),
+                    // Real elapsed time — a load/import error is near-instant, not
+                    // the hard-timeout budget. Only a genuine timeout used the full
+                    // budget.
+                    duration_ms: if timed_out {
+                        resolved.config.runner.hard_timeout_ms
+                    } else {
+                        started.elapsed().as_millis() as u64
+                    },
+                    error: Some(error),
+                    assertion: None,
+                    session: None,
+                    target: WorkerTarget::default(),
+                    evidence: Vec::new(),
+                }],
+                console: Vec::new(),
+                sidecars: Vec::new(),
+            }
+        }
     };
     let mut contexts = Vec::<(String, WorkerTarget, bool)>::new();
     for test in &result.tests {
@@ -1353,6 +1424,69 @@ mod tests {
         assert_eq!(parse_shard("2/3").unwrap(), (2, 3));
         assert!(parse_shard("0/3").is_err());
         assert!(parse_shard("4/3").is_err());
+    }
+
+    #[test]
+    fn discovery_runs_skeptic_specs_and_skips_others() {
+        let dir = tempfile::tempdir().unwrap();
+        let skeptic = dir.path().join("a.spec.ts");
+        fs::write(
+            &skeptic,
+            "import { test } from \"skeptic-cli\";\ntest(\"x\", async () => {});",
+        )
+        .unwrap();
+        let playwright = dir.path().join("b.spec.ts");
+        fs::write(
+            &playwright,
+            "import { test } from \"@playwright/test\";\ntest(\"y\", async () => {});",
+        )
+        .unwrap();
+
+        assert!(is_skeptic_spec(&skeptic));
+        assert!(!is_skeptic_spec(&playwright));
+
+        let discovered = discover(dir.path(), &[]).unwrap();
+        assert_eq!(discovered.specs, vec![skeptic]);
+        assert_eq!(discovered.skipped, vec![playwright]);
+    }
+
+    #[test]
+    fn discovery_preserves_helper_specs_and_ignores_comment_mentions() {
+        let dir = tempfile::tempdir().unwrap();
+        let helper = dir.path().join("helper.spec.ts");
+        fs::write(
+            &helper,
+            "import { test } from './fixtures.ts'; test('ok', () => {});",
+        )
+        .unwrap();
+        let foreign = dir.path().join("foreign.spec.ts");
+        fs::write(
+            &foreign,
+            "// migrate to skeptic-cli\nimport { test } from '@playwright/test';",
+        )
+        .unwrap();
+        let broken = dir.path().join("broken.spec.ts");
+        fs::write(&broken, "import { test } from 'vitest'; const =;").unwrap();
+        let discovered = discover(dir.path(), &[]).unwrap();
+        assert_eq!(discovered.specs, vec![broken, helper]);
+        assert_eq!(discovered.skipped, vec![foreign]);
+    }
+
+    #[test]
+    fn discovery_always_runs_explicit_files_and_preserves_type_only_imports() {
+        let dir = tempfile::tempdir().unwrap();
+        let foreign = dir.path().join("foreign.spec.ts");
+        fs::write(&foreign, "import { test } from 'vitest';").unwrap();
+        let discovered = discover(dir.path(), std::slice::from_ref(&foreign)).unwrap();
+        assert_eq!(discovered.specs, vec![foreign]);
+        assert!(discovered.skipped.is_empty());
+        let typed = dir.path().join("typed.spec.ts");
+        fs::write(
+            &typed,
+            "import type { TestContext } from 'vitest'; import { test } from './fixtures.ts';",
+        )
+        .unwrap();
+        assert!(is_skeptic_spec(&typed));
     }
 
     #[test]

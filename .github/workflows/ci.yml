@@ -43,14 +43,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Install NASM
+        if: runner.os == 'Windows'
+        uses: ilammy/setup-nasm@v1
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.os }}
       - run: cargo test --workspace
       - name: Smoke browser CLI
         run: cargo run --quiet -p skeptic-cli -- --version
-      - name: Smoke embedded V8 op
-        run: cargo run --quiet -p skeptic-runner
+      - name: Smoke runner CLI
+        run: cargo run --locked --quiet -p skeptic-runner -- scaffold .skeptic/smoke.spec.ts
 
   browser-targets:
     name: Complete runtime / ${{ matrix.target }}
@@ -85,9 +88,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+      - name: Install NASM
+        if: runner.os == 'Windows'
+        uses: ilammy/setup-nasm@v1
       - uses: Swatinem/rust-cache@v2
         with:
           key: browser-${{ matrix.target }}
+      - name: Install Zig
+        if: matrix.builder == 'zig'
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.14.1
       - name: Install cargo-zigbuild
         if: matrix.builder == 'zig'
         uses: taiki-e/install-action@v2

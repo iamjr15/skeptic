@@ -79,9 +79,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+      - name: Install NASM
+        if: runner.os == 'Windows'
+        uses: ilammy/setup-nasm@v1
       - uses: Swatinem/rust-cache@v2
         with:
           key: release-${{ matrix.target }}
+      - name: Install Zig
+        if: matrix.builder == 'zig'
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.14.1
       - name: Install cargo-zigbuild
         if: matrix.builder == 'zig'
         uses: taiki-e/install-action@v2
@@ -152,7 +160,6 @@ jobs:
     needs: [guard, assemble]
     if: github.ref_type == 'tag'
     runs-on: ubuntu-22.04
-    environment: npm
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -164,17 +171,21 @@ jobs:
         with:
           name: release-assets
           path: dist
-      - name: Publish platform packages then wrapper
+      # Each native package needs an initial authenticated publish and its own
+      # trusted publisher before this optional distribution path can be enabled.
+      - name: Publish platform packages
+        if: vars.PUBLISH_NATIVE_NPM_PACKAGES == 'true'
         run: |
           set -euo pipefail
           node npm/skeptic-cli/scripts/stage-platform-packages.mjs dist
           for PACKAGE in npm/platforms/*; do npm publish "$PACKAGE" --provenance --access public; done
-          npm publish npm/skeptic-cli --provenance --access public
+      - name: Publish npm wrapper
+        run: npm publish npm/skeptic-cli --provenance --access public
 
   publish-homebrew:
     name: Update Homebrew tap
     needs: [guard, assemble]
-    if: github.ref_type == 'tag'
+    if: github.ref_type == 'tag' && vars.PUBLISH_HOMEBREW_TAP == 'true'
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/download-artifact@v4

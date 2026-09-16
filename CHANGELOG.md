@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.0.0] - 2026-07-20
+## [2.0.0] - 2026-09-16
 
 Skeptic v2 is a from-scratch, Rust-native QA engine. It replaces v1 without a
 compatibility layer.
@@ -45,6 +45,18 @@ compatibility layer.
 - Resolved the rusty_v8 149.4.0 musl archive gap by applying Deno's upstream
   V8 150.2.0 compatibility delta to the vendored runtime crates; added an
   enforced seven-target V8 build and native-smoke workflow.
+
+### Fixed
+
+- Test discovery skips specs importing another test framework while preserving
+  helper-based specs, parse errors, and explicitly requested files.
+- Unsupported npm imports report actionable guidance; failed specs retain their
+  actual elapsed time.
+- Doctor and report scorecards stay in terminal history, with clearer labels,
+  contrast, and progress feedback for interactive scans.
+- CI installs Zig and Windows NASM explicitly and exercises valid runner commands.
+  npm installs can use checksum-verified GitHub bundles while optional native npm
+  packages and a Homebrew tap await publisher configuration.
 
 ### Removed
 

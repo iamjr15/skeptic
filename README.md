@@ -59,6 +59,10 @@ skeptic run
 skeptic run tests/checkout.spec.ts --format junit --output skeptic-junit.xml
 ```
 
+Directory discovery skips specs that import another test framework such as
+Playwright, Vitest, or Jest. Explicit file paths always run, so unsupported
+imports and syntax errors remain visible.
+
 Each spec file runs in its own embedded V8 isolate with no filesystem or
 subprocess API. Local TypeScript/JavaScript/JSON imports are allowed inside the
 project; the virtual `skeptic-cli` module supplies `test`, hooks, `expect`, and

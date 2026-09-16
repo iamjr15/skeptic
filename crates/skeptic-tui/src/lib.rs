@@ -6,22 +6,25 @@
 
 use std::collections::BTreeMap;
 use std::io::{self, IsTerminal};
-use std::time::{Duration, Instant};
 
-use crossterm::execute;
-use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Alignment, Constraint, Layout};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use ratatui::Terminal;
+use ratatui::{Terminal, TerminalOptions, Viewport};
 use skeptic_contract::Category;
 use tui_big_text::{BigText, PixelSize};
+
+/// How many findings the styled summary shows before "… and N more"
+/// (the full list lives in `skeptic doctor`).
+const MAX_FINDINGS_SHOWN: usize = 6;
 
 #[derive(Debug, Clone)]
 pub struct ReportView {
     pub title: String,
+    /// The word after "skeptic · " in the header (e.g. "report", "doctor").
+    pub label: String,
     pub subtitle: String,
     pub score: Option<u8>,
     pub coverage: f64,
@@ -34,8 +37,8 @@ pub struct ReportView {
 }
 
 const FG: Color = Color::Rgb(0xd3, 0xd9, 0xe2);
-const DIM: Color = Color::Rgb(0x6b, 0x76, 0x84);
-const FAINT: Color = Color::Rgb(0x39, 0x41, 0x4f);
+const DIM: Color = Color::Rgb(0x8a, 0x93, 0xa3); // readable secondary text (labels, context)
+const TRACK: Color = Color::Rgb(0x4d, 0x56, 0x66); // empty gauge squares only — recessed but visible
 const SEGMENTS: usize = 10;
 
 /// Traffic-light color for a score: red (bad) → yellow (mid) → green (good).
@@ -92,9 +95,9 @@ fn category_line(category: &Category, score: Option<f64>) -> Line<'static> {
     let name = format!("{:<16}", category.to_string());
     match score {
         None => Line::from(vec![
-            Span::styled(name, Style::new().fg(FAINT)),
-            Span::styled("▫ ".repeat(SEGMENTS), Style::new().fg(FAINT)),
-            Span::styled(" —", Style::new().fg(FAINT)),
+            Span::styled(name, Style::new().fg(DIM)),
+            Span::styled("▫ ".repeat(SEGMENTS), Style::new().fg(TRACK)),
+            Span::styled(" —", Style::new().fg(DIM)),
         ]),
         Some(value) => {
             let rounded = value.round().clamp(0.0, 100.0) as u8;
@@ -103,7 +106,7 @@ fn category_line(category: &Category, score: Option<f64>) -> Line<'static> {
             Line::from(vec![
                 Span::styled(name, Style::new().fg(DIM)),
                 Span::styled("▪ ".repeat(filled), Style::new().fg(color)),
-                Span::styled("▫ ".repeat(SEGMENTS - filled), Style::new().fg(FAINT)),
+                Span::styled("▫ ".repeat(SEGMENTS - filled), Style::new().fg(TRACK)),
                 Span::styled(
                     format!(" {rounded:>3}"),
                     Style::new().fg(color).add_modifier(Modifier::BOLD),
@@ -123,7 +126,7 @@ pub fn render_plain(view: &ReportView) -> String {
         .map(|value| value.to_string())
         .unwrap_or_else(|| "—".into());
     let grade_label = view.score.map(grade).unwrap_or("—");
-    let mut output = String::from("skeptic · report\n");
+    let mut output = format!("skeptic · {}\n", view.label);
     if !view.subtitle.is_empty() {
         output.push_str(&view.subtitle);
         output.push('\n');
@@ -180,107 +183,144 @@ fn big_number(text: String, color: Color, alignment: Alignment) -> BigText<'stat
         .build()
 }
 
+/// The body rows: the category gauges and a capped list of findings.
+fn body_lines(view: &ReportView) -> Vec<Line<'static>> {
+    let shown = view.top_findings.len().min(MAX_FINDINGS_SHOWN);
+    let mut lines = vec![
+        Line::from(Span::styled("CATEGORIES", Style::new().fg(DIM))),
+        Line::from(""),
+    ];
+    for (category, score) in &view.by_category {
+        lines.push(category_line(category, *score));
+    }
+    if !view.top_findings.is_empty() {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            format!("{} FINDINGS", view.diagnostics),
+            Style::new().fg(DIM),
+        )));
+        for finding in view.top_findings.iter().take(shown) {
+            lines.push(Line::from(vec![
+                Span::styled("• ", Style::new().fg(DIM)),
+                Span::styled(finding.clone(), Style::new().fg(FG)),
+            ]));
+        }
+        if view.top_findings.len() > shown {
+            lines.push(Line::from(Span::styled(
+                format!("  … and {} more", view.top_findings.len() - shown),
+                Style::new().fg(DIM),
+            )));
+        }
+    }
+    lines
+}
+
+/// Render the styled report **inline** in the normal terminal buffer so it
+/// persists in scrollback (no alternate screen, no plain-text fallback on top).
 pub fn render(view: &ReportView) -> Result<(), String> {
     if !should_use_tui() {
         print!("{}", render_plain(view));
         return Ok(());
     }
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen).map_err(|error| error.to_string())?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend).map_err(|error| error.to_string())?;
-    let started = Instant::now();
-    loop {
-        let progress = (started.elapsed().as_secs_f64() / 0.55).min(1.0);
-        let eased = 1.0 - (1.0 - progress).powi(3);
-        let shown = view
-            .score
-            .map(|score| (f64::from(score) * eased).round() as u8);
 
-        let score_text = shown
-            .map(|value| value.to_string())
-            .unwrap_or_else(|| "—".into());
-        let score_color = shown.map(ryg).unwrap_or(DIM);
-        let score_big = big_number(score_text, score_color, Alignment::Left);
-        let grade_big = view
-            .score
-            .map(|score| big_number(grade(score).to_string(), ryg(score), Alignment::Right));
+    let body = body_lines(view);
+    // top + spacer + score(4) + context + spacer + body, plus 1 top/bottom margin.
+    let content = 1 + 1 + 4 + 1 + 1 + body.len();
+    let needed = u16::try_from(content + 2).unwrap_or(u16::MAX);
+    let term_rows = ratatui::crossterm::terminal::size()
+        .map(|(_, rows)| rows)
+        .unwrap_or(40);
+    let height = needed.min(term_rows.saturating_sub(1)).max(6);
 
-        terminal
-            .draw(|frame| {
-                let root = Layout::vertical([
-                    Constraint::Length(1),
-                    Constraint::Length(1),
-                    Constraint::Length(4),
-                    Constraint::Length(1),
-                    Constraint::Length(1),
-                    Constraint::Min(1),
-                ])
-                .horizontal_margin(2)
-                .vertical_margin(1)
-                .split(frame.area());
+    let backend = CrosstermBackend::new(io::stdout());
+    let mut terminal = Terminal::with_options(
+        backend,
+        TerminalOptions {
+            viewport: Viewport::Inline(height),
+        },
+    )
+    .map_err(|error| error.to_string())?;
 
-                let mut top = vec![
-                    Span::styled("skeptic", Style::new().fg(FG).add_modifier(Modifier::BOLD)),
-                    Span::styled(" · report", Style::new().fg(DIM)),
-                ];
-                if !view.subtitle.is_empty() {
-                    top.push(Span::styled(
-                        format!("   {}", view.subtitle),
-                        Style::new().fg(FAINT),
-                    ));
-                }
-                frame.render_widget(Paragraph::new(Line::from(top)), root[0]);
+    // Big-text at HalfHeight is 8 cells wide per character; size each block to
+    // its digits so the score and grade sit close with a separator between them.
+    let score_text = view
+        .score
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "—".into());
+    let score_cols = u16::try_from(score_text.chars().count() * 8).unwrap_or(24);
+    let score_color = view.score.map(ryg).unwrap_or(DIM);
+    let score_big = big_number(score_text, score_color, Alignment::Left);
+    let grade_cols = view
+        .score
+        .map(|score| u16::try_from(grade(score).chars().count() * 8).unwrap_or(16))
+        .unwrap_or(0);
+    let grade_big = view
+        .score
+        .map(|score| big_number(grade(score).to_string(), ryg(score), Alignment::Left));
 
-                let columns = Layout::horizontal([Constraint::Min(10), Constraint::Length(14)])
-                    .split(root[2]);
-                frame.render_widget(score_big, columns[0]);
-                if let Some(grade_big) = grade_big {
-                    frame.render_widget(grade_big, columns[1]);
-                }
+    terminal
+        .draw(|frame| {
+            let root = Layout::vertical([
+                Constraint::Length(1),
+                Constraint::Length(1),
+                Constraint::Length(4),
+                Constraint::Length(1),
+                Constraint::Length(1),
+                Constraint::Min(1),
+            ])
+            .horizontal_margin(2)
+            .vertical_margin(1)
+            .split(frame.area());
 
-                let context = format!(
-                    "out of 100  ·  coverage {:.0}%  ·  {} findings",
-                    view.coverage * 100.0,
-                    view.diagnostics
-                );
-                frame.render_widget(
-                    Paragraph::new(Span::styled(context, Style::new().fg(DIM))),
-                    root[3],
-                );
+            let mut top = vec![
+                Span::styled("skeptic", Style::new().fg(FG).add_modifier(Modifier::BOLD)),
+                Span::styled(format!(" · {}", view.label), Style::new().fg(DIM)),
+            ];
+            if !view.subtitle.is_empty() {
+                top.push(Span::styled(
+                    format!("   {}", view.subtitle),
+                    Style::new().fg(DIM),
+                ));
+            }
+            frame.render_widget(Paragraph::new(Line::from(top)), root[0]);
 
-                let mut lines = vec![
-                    Line::from(Span::styled("CATEGORIES", Style::new().fg(FAINT))),
+            let columns = Layout::horizontal([
+                Constraint::Length(score_cols),
+                Constraint::Length(3),
+                Constraint::Length(grade_cols),
+                Constraint::Min(0),
+            ])
+            .split(root[2]);
+            frame.render_widget(score_big, columns[0]);
+            if let Some(grade_big) = grade_big {
+                // a subtle vertical divider between the score and the grade
+                let separator = Paragraph::new(vec![
                     Line::from(""),
-                ];
-                for (category, score) in &view.by_category {
-                    lines.push(category_line(category, *score));
-                }
-                if !view.top_findings.is_empty() {
-                    lines.push(Line::from(""));
-                    lines.push(Line::from(Span::styled(
-                        format!("{} FINDINGS", view.diagnostics),
-                        Style::new().fg(FAINT),
-                    )));
-                    for finding in &view.top_findings {
-                        lines.push(Line::from(vec![
-                            Span::styled("• ", Style::new().fg(DIM)),
-                            Span::styled(finding.clone(), Style::new().fg(FG)),
-                        ]));
-                    }
-                }
-                frame.render_widget(Paragraph::new(lines), root[5]);
-            })
-            .map_err(|error| error.to_string())?;
+                    Line::from(Span::styled("│", Style::new().fg(TRACK))),
+                    Line::from(Span::styled("│", Style::new().fg(TRACK))),
+                    Line::from(""),
+                ])
+                .alignment(Alignment::Center);
+                frame.render_widget(separator, columns[1]);
+                frame.render_widget(grade_big, columns[2]);
+            }
 
-        if progress >= 1.0 {
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(16));
-    }
-    execute!(terminal.backend_mut(), LeaveAlternateScreen).map_err(|error| error.to_string())?;
-    terminal.show_cursor().map_err(|error| error.to_string())?;
-    print!("{}", render_plain(view));
+            let context = format!(
+                "out of 100  ·  coverage {:.0}%  ·  {} findings",
+                view.coverage * 100.0,
+                view.diagnostics
+            );
+            frame.render_widget(
+                Paragraph::new(Span::styled(context, Style::new().fg(DIM))),
+                root[3],
+            );
+
+            frame.render_widget(Paragraph::new(body), root[5]);
+        })
+        .map_err(|error| error.to_string())?;
+
+    // Move the cursor below the inline report so the next shell prompt is clean.
+    println!();
     Ok(())
 }
 
@@ -292,6 +332,7 @@ mod tests {
     fn plain_report_exposes_score_grade_and_coverage() {
         let output = render_plain(&ReportView {
             title: "Run".into(),
+            label: "report".into(),
             subtitle: "2026-07-20 15:47 · 69ms · c85a1fce".into(),
             score: Some(87),
             coverage: 0.75,

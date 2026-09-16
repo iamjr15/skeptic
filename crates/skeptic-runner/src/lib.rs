@@ -331,6 +331,25 @@ impl ModuleLoader for TypeScriptLoader {
         if specifier == "skeptic-cli" {
             return ModuleSpecifier::parse("skeptic:api").map_err(JsErrorBox::from_err);
         }
+        // Bare package specifiers (e.g. "@playwright/test", "react") aren't
+        // supported: Skeptic specs import from "skeptic-cli" and run in embedded
+        // V8 — not Node/Playwright. Give a human error instead of deno_core's
+        // cryptic "Relative import path … not prefixed with / or ./ or ../".
+        let is_local = specifier.starts_with("./")
+            || specifier.starts_with("../")
+            || specifier.starts_with('/');
+        if !is_local && !specifier.contains("://") {
+            let hint = if specifier.contains("playwright") {
+                " — this looks like a Playwright test, which Skeptic does not run"
+            } else {
+                ""
+            };
+            return Err(JsErrorBox::generic(format!(
+                "cannot import \"{specifier}\"{hint}: Skeptic specs must \
+                 `import {{ test, expect }} from \"skeptic-cli\"`; npm package \
+                 imports are not supported"
+            )));
+        }
         let resolved = resolve_import(specifier, referrer).map_err(JsErrorBox::from_err)?;
         if resolved.scheme() != "file" {
             return Err(JsErrorBox::generic(
@@ -753,6 +772,32 @@ mod tests {
         .unwrap();
         assert!(code.contains("answer = 42"));
         assert!(!code.contains(": number"));
+    }
+
+    #[test]
+    fn resolver_maps_skeptic_cli_and_rejects_bare_npm_imports() {
+        let loader = TypeScriptLoader {
+            root: std::env::current_dir().unwrap(),
+        };
+        let mapped = loader
+            .resolve(
+                "skeptic-cli",
+                "file:///project/spec.ts",
+                ResolutionKind::Import,
+            )
+            .unwrap();
+        assert_eq!(mapped.as_str(), "skeptic:api");
+
+        let error = loader
+            .resolve(
+                "@playwright/test",
+                "file:///project/spec.ts",
+                ResolutionKind::Import,
+            )
+            .unwrap_err();
+        let message = error.to_string();
+        assert!(message.contains("skeptic-cli"), "message was: {message}");
+        assert!(message.contains("Playwright"), "message was: {message}");
     }
 
     #[tokio::test(flavor = "current_thread")]

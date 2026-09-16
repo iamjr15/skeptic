@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fs;
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -1228,7 +1228,7 @@ fn ingest_file(path: &Path, config_hash: &str) -> Result<Vec<Diagnostic>, String
     Ok(output)
 }
 
-fn render_human(report: &DoctorReport, fix_plan: bool) -> String {
+fn render_human(report: &DoctorReport, fix_plan: bool, with_header: bool) -> String {
     let open = report
         .diagnostics
         .iter()
@@ -1245,7 +1245,11 @@ fn render_human(report: &DoctorReport, fix_plan: bool) -> String {
         Completeness::Partial => " · partial (some checks did not run)".to_string(),
         Completeness::Failed => " · analysis failed".to_string(),
     };
-    let headline = if open == 0 {
+    // The styled scorecard already carries the headline summary, so the plain
+    // findings list is printed under it without repeating it.
+    let headline = if !with_header {
+        String::new()
+    } else if open == 0 {
         format!(
             "Skeptic Doctor — no issues across {} {file_word}{coverage_note}\n\n",
             report.files_scanned
@@ -1317,6 +1321,82 @@ fn render_human(report: &DoctorReport, fix_plan: bool) -> String {
     output
 }
 
+/// A brief scan spinner on stderr; it only appears after a short delay so fast
+/// scans do not flash. Progress goes to stderr, the scorecard to stdout.
+fn spin(stop: &std::sync::atomic::AtomicBool, label: &str) {
+    const FRAMES: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    let start = std::time::Instant::now();
+    let mut frame = 0usize;
+    while !stop.load(std::sync::atomic::Ordering::Acquire) {
+        if start.elapsed() >= std::time::Duration::from_millis(150) {
+            let mut err = std::io::stderr();
+            let _ = write!(
+                err,
+                "\r\x1b[2K{} scanning {label}…",
+                FRAMES[frame % FRAMES.len()]
+            );
+            let _ = err.flush();
+            frame += 1;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(80));
+    }
+    let mut err = std::io::stderr();
+    let _ = write!(err, "\r\x1b[2K");
+    let _ = err.flush();
+}
+
+/// Build the styled scorecard view for a doctor scan, reusing the frozen
+/// coverage-aware scoring formula from `skeptic-report` (Doctor never invents
+/// its own score).
+fn doctor_scorecard_view(report: &DoctorReport) -> skeptic_tui::ReportView {
+    let scored: BTreeSet<&str> = report.scored_rule_ids.iter().map(String::as_str).collect();
+    let scoring: Vec<_> = report
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| {
+            diagnostic.producer.tool != "skeptic-doctor"
+                || scored.contains(diagnostic.producer.rule_id.as_str())
+        })
+        .cloned()
+        .collect();
+    let analyzed_files = report
+        .diagnostics
+        .iter()
+        .filter_map(|diagnostic| diagnostic.file.as_deref())
+        .collect::<BTreeSet<_>>()
+        .len();
+    let covered: BTreeSet<Category> = report.covered_categories.iter().copied().collect();
+    let (score, _) = skeptic_report::calculate_score(&scoring, analyzed_files, &covered);
+    let open = report
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.state == FindingState::Open)
+        .count();
+    let subtitle = format!(
+        "{} file{} scanned{}",
+        report.files_scanned,
+        if report.files_scanned == 1 { "" } else { "s" },
+        match report.completeness {
+            Completeness::Partial => " · partial",
+            Completeness::Failed => " · analysis failed",
+            Completeness::Complete => "",
+        }
+    );
+    skeptic_tui::ReportView {
+        title: "doctor".into(),
+        label: "doctor".into(),
+        subtitle,
+        score: score.total,
+        coverage: score.coverage,
+        ghost_gain: score.ghost_gain,
+        diagnostics: open,
+        tests_passed: 0,
+        tests_failed: 0,
+        by_category: score.by_category.clone(),
+        top_findings: Vec::new(),
+    }
+}
+
 fn run(options: Options) -> Result<i32, String> {
     let requested = options
         .root
@@ -1350,6 +1430,21 @@ fn run(options: Options) -> Result<i32, String> {
             .then(|| changed_files(&root, &options.base))
             .transpose()?
     };
+    // Human, interactive terminal: show a scan spinner (delayed, so fast scans
+    // never flash it). Progress lives on stderr; the report goes to stdout.
+    let show_loader = options.format == Format::Human
+        && options.output.is_none()
+        && std::io::stderr().is_terminal();
+    let spin_stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let spin_handle = show_loader.then(|| {
+        let stop = std::sync::Arc::clone(&spin_stop);
+        let label = root
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("project")
+            .to_string();
+        std::thread::spawn(move || spin(&stop, &label))
+    });
     let mut report = scan(
         &root,
         ScanOptions {
@@ -1423,31 +1518,47 @@ fn run(options: Options) -> Result<i32, String> {
     if options.update_baseline {
         write_baseline(&baseline_path, &report)?;
     }
-    let bytes = match options.format {
-        Format::Human => render_human(&report, options.fix_plan).into_bytes(),
-        Format::Json => {
-            let mut envelope = ResponseEnvelope::success(
-                serde_json::to_value(&report).map_err(|error| error.to_string())?,
-                "skeptic.doctor-report/2",
-                0,
-            );
-            envelope.meta.side_effects = if options.update_baseline {
-                SideEffects::Committed
-            } else {
-                SideEffects::None
-            };
-            let mut bytes = serde_json::to_vec(&envelope).map_err(|error| error.to_string())?;
-            bytes.push(b'\n');
-            bytes
+    // Stop the scan spinner before any output is written.
+    spin_stop.store(true, std::sync::atomic::Ordering::Release);
+    if let Some(handle) = spin_handle {
+        let _ = handle.join();
+    }
+
+    if options.format == Format::Human && options.output.is_none() {
+        // Human, interactive stdout: the styled scorecard (score, grade, category
+        // gauges), then the findings list beneath it. Agents use --format json.
+        skeptic_tui::render(&doctor_scorecard_view(&report))?;
+        let findings = render_human(&report, options.fix_plan, false);
+        if !findings.trim().is_empty() {
+            print!("\n{findings}");
         }
-        Format::Sarif => {
-            let mut bytes =
-                serde_json::to_vec_pretty(&sarif(&report)).map_err(|error| error.to_string())?;
-            bytes.push(b'\n');
-            bytes
-        }
-    };
-    write_output(options.output.as_deref(), &bytes)?;
+    } else {
+        let bytes = match options.format {
+            Format::Human => render_human(&report, options.fix_plan, true).into_bytes(),
+            Format::Json => {
+                let mut envelope = ResponseEnvelope::success(
+                    serde_json::to_value(&report).map_err(|error| error.to_string())?,
+                    "skeptic.doctor-report/2",
+                    0,
+                );
+                envelope.meta.side_effects = if options.update_baseline {
+                    SideEffects::Committed
+                } else {
+                    SideEffects::None
+                };
+                let mut bytes = serde_json::to_vec(&envelope).map_err(|error| error.to_string())?;
+                bytes.push(b'\n');
+                bytes
+            }
+            Format::Sarif => {
+                let mut bytes = serde_json::to_vec_pretty(&sarif(&report))
+                    .map_err(|error| error.to_string())?;
+                bytes.push(b'\n');
+                bytes
+            }
+        };
+        write_output(options.output.as_deref(), &bytes)?;
+    }
     let blocking = options.blocking.unwrap_or(resolved.config.doctor.blocking);
     let confidence_threshold = options
         .confidence

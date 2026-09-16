@@ -665,6 +665,7 @@ fn human_subtitle(manifest: &skeptic_contract::RunManifest) -> String {
 pub fn view(report: &UnifiedReport) -> skeptic_tui::ReportView {
     skeptic_tui::ReportView {
         title: human_title(&report.manifest),
+        label: "report".into(),
         subtitle: human_subtitle(&report.manifest),
         score: report.score.total,
         coverage: report.score.coverage,
