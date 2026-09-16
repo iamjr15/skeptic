@@ -2280,7 +2280,7 @@ mod tests {
 
         // Keep sending requests so idle is never reached
         tokio::spawn(async move {
-            for i in 0u64.. {
+            for i in 0u64..=u64::MAX {
                 let _ = tx.send(cdp_event(
                     "Network.requestWillBeSent",
                     session,
